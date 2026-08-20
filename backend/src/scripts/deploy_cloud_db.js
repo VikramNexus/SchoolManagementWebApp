@@ -63,21 +63,59 @@ async function deployDatabase() {
       console.log('✅ Default Admin User created: username "admin", password "admin123"');
     }
 
-    // Ensure admission & family fields migration
-    console.log('🔄 Verifying student columns for admission & family receipts...');
-    const [cols] = await conn.query("SHOW COLUMNS FROM students");
-    const colNames = cols.map(c => c.Field);
+    // Ensure admission & family fields migration on students
+    console.log('🔄 Verifying student columns...');
+    const [sCols] = await conn.query("SHOW COLUMNS FROM students");
+    const sColNames = sCols.map(c => c.Field);
 
-    if (!colNames.includes('admission_receipt_no')) {
+    if (!sColNames.includes('admission_receipt_no')) {
       await conn.query("ALTER TABLE students ADD COLUMN admission_receipt_no VARCHAR(50) DEFAULT NULL");
     }
-    if (!colNames.includes('family_id')) {
+    if (!sColNames.includes('family_id')) {
       await conn.query("ALTER TABLE students ADD COLUMN family_id VARCHAR(50) DEFAULT NULL");
     }
-    if (!colNames.includes('whatsapp_number')) {
+    if (!sColNames.includes('whatsapp_number')) {
       await conn.query("ALTER TABLE students ADD COLUMN whatsapp_number VARCHAR(20) DEFAULT NULL");
     }
+    if (!sColNames.includes('father_name')) {
+      await conn.query("ALTER TABLE students ADD COLUMN father_name VARCHAR(160) DEFAULT NULL");
+    }
+    if (!sColNames.includes('mother_name')) {
+      await conn.query("ALTER TABLE students ADD COLUMN mother_name VARCHAR(160) DEFAULT NULL");
+    }
+    if (!sColNames.includes('gender')) {
+      await conn.query("ALTER TABLE students ADD COLUMN gender ENUM('male', 'female', 'other') DEFAULT 'male'");
+    }
     console.log('✅ Student columns verified!');
+
+    // Ensure payments table has payment_category & family_id
+    console.log('🔄 Verifying payments columns...');
+    const [pCols] = await conn.query("SHOW COLUMNS FROM payments");
+    const pColNames = pCols.map(c => c.Field);
+
+    if (!pColNames.includes('payment_category')) {
+      await conn.query("ALTER TABLE payments ADD COLUMN payment_category ENUM('MONTHLY_FEE', 'ADMISSION_CHARGE', 'FAMILY_FEE', 'ADDITIONAL_FEE') NOT NULL DEFAULT 'MONTHLY_FEE'");
+    }
+    if (!pColNames.includes('family_id')) {
+      await conn.query("ALTER TABLE payments ADD COLUMN family_id VARCHAR(50) DEFAULT NULL");
+    }
+    console.log('✅ Payments columns verified!');
+
+    // Ensure seeders.sql runs if classes are empty
+    const [classes] = await conn.query("SELECT COUNT(*) as cnt FROM classes");
+    if (classes[0].cnt === 0) {
+      const seederPath = path.join(__dirname, '../../../database/seeders.sql');
+      if (fs.existsSync(seederPath)) {
+        console.log('🌱 Seeding initial classes, sections, fee structures, and templates...');
+        const seederSql = fs.readFileSync(seederPath, 'utf8');
+        // Clean out USE statements for cloud databases
+        const cleanSeederSql = seederSql.replace(/USE `[^`]+`;/gi, '');
+        await conn.query('SET FOREIGN_KEY_CHECKS = 0;');
+        await conn.query(cleanSeederSql);
+        await conn.query('SET FOREIGN_KEY_CHECKS = 1;');
+        console.log('✅ Default seed data inserted!');
+      }
+    }
 
     // Verify tables
     const [tables] = await conn.query('SHOW TABLES');
