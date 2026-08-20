@@ -1,0 +1,119 @@
+/**
+ * WhatsApp Direct Dispatch Button Styles
+ * Sleek WhatsApp Emerald Styling, Glowing Success Animation & Micro-States
+ */
+
+.btn-whatsapp-direct {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  background: #16a34a;
+  color: #ffffff;
+  border: 1px solid #15803d;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.28);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn-whatsapp-direct:hover:not(:disabled) {
+  background: #15803d;
+  border-color: #166534;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);
+}
+
+.btn-whatsapp-direct:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.btn-whatsapp-direct:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Sizes */
+.btn-whatsapp-direct.sm {
+  padding: 0.32rem 0.65rem;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}
+
+.btn-whatsapp-direct.md {
+  padding: 0.5rem 0.95rem;
+  font-size: 0.85rem;
+}
+
+.btn-whatsapp-direct.lg {
+  padding: 0.68rem 1.25rem;
+  font-size: 0.95rem;
+  border-radius: 10px;
+}
+
+.btn-whatsapp-direct.compact {
+  padding: 0.4rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.btn-whatsapp-direct.compact.sm {
+  width: 28px;
+  height: 28px;
+  padding: 0.25rem;
+}
+
+/* State: Sending */
+.btn-whatsapp-direct.sending {
+  background: #0d9488;
+  border-color: #0f766e;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+  cursor: wait;
+}
+
+.wa-spinner {
+  animation: wa-spin 0.85s linear infinite;
+}
+
+@keyframes wa-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* State: Sent (Success) */
+.btn-whatsapp-direct.sent {
+  background: #059669 !important;
+  border-color: #047857 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 14px rgba(5, 150, 105, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+  cursor: default;
+  animation: wa-pulse 0.4s ease-out;
+}
+
+.wa-check-icon {
+  stroke-width: 2.8;
+  animation: wa-scale-pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes wa-scale-pop {
+  0% { transform: scale(0.3); opacity: 0; }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes wa-pulse {
+  0% { transform: scale(0.96); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+/* State: Error */
+.btn-whatsapp-direct.error {
+  background: #dc2626 !important;
+  border-color: #b91c1c !important;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
+}

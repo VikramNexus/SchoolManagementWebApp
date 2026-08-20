@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Environment variables (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Database backups (generated at runtime)
+*.sql.dump
+backups/
+
+# Vite
+*.local
+
+# Portable JDK and Android Build
+jdk-21/
+.gradle/
+*.apk
+frontend/android/app/build/
+frontend/android/.gradle/

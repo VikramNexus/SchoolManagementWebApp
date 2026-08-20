@@ -1,0 +1,119 @@
+/**
+ * App-level Styles — School Management System
+ *
+ * Day 4: Layout with Sidebar, Topbar, and responsive design.
+ */
+
+:root {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  color-scheme: light;
+
+  /* Layout dimensions */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 72px;
+  --topbar-height: 64px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root, .app-root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f3f4f6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* App loading state */
+.app-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 1rem;
+  color: #64748b;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #0ea5e9;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Main layout */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Main content area */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-width: 0; /* prevents flex overflow */
+  transition: margin-left 0.80s cubic-bezier(0.2, 0.9, 0.25, 1);
+  margin-left: var(--sidebar-width);
+}
+
+/* Sidebar collapsed state */
+.sidebar.collapsed ~ .main-content,
+.sidebar.collapsed + .main-content {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+/* Page content */
+.page-content {
+  flex: 1;
+  padding-top: var(--topbar-height);
+  padding-bottom: 2rem;
+  width: 100%;
+}
+
+/* Coming soon placeholder */
+.coming-soon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #64748b;
+  font-size: 1.125rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* Mobile sidebar adjustments */
+@media (max-width: 1024px) {
+  .main-content {
+    margin-left: 0;
+  }
+
+  .sidebar.collapsed ~ .main-content,
+  .sidebar.collapsed + .main-content {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-content {
+    padding: calc(var(--topbar-height) + 1rem) 1rem 2rem;
+  }
+}

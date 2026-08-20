@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: aryavart-portal-api
+    env: node
+    plan: free
+    region: singapore
+    buildCommand: npm install
+    startCommand: node src/scripts/deploy_cloud_db.js && node src/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: 3306
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: JWT_SECRET
+        value: "aryavart-portal-secret-key-2026-super-secure"
