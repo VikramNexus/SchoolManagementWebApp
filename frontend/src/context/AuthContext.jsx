@@ -16,15 +16,11 @@ export const SERVER_URL_KEY = 'sms_server_url';
 export const DEFAULT_SERVER_URL = import.meta.env.VITE_API_URL || 'https://schoolmanagementwebapp-pf7m.onrender.com';
 
 export function getBaseURL() {
-  const isNative = window.Capacitor || window.location.protocol === 'capacitor:' || (window.location.hostname === 'localhost' && window.location.port !== '3000');
   const saved = localStorage.getItem(SERVER_URL_KEY);
   if (saved) {
     return `${saved.replace(/\/$/, '')}/api`;
   }
-  if (isNative) {
-    return `${DEFAULT_SERVER_URL.replace(/\/$/, '')}/api`;
-  }
-  return import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api` : '/api';
+  return `${DEFAULT_SERVER_URL.replace(/\/$/, '')}/api`;
 }
 
 const AuthContext = createContext(null);

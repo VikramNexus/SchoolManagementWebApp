@@ -1,21 +1,27 @@
+/**
+ * Login Component — Aryavart School Management System
+ * Ultra-Modern Glassmorphism UI with Cloud & Local Connectivity
+ */
+
 import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import {
   GraduationCap,
-  Loader2,
-  AlertCircle,
   Eye,
   EyeOff,
-  ShieldCheck,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
   Zap,
   Key,
-  CheckCircle2,
   X,
-  Lock,
-  Wifi,
   Server,
+  Wifi,
+  Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
-import { useAuth, api, SERVER_URL_KEY, DEFAULT_SERVER_URL, updateApiBaseUrl } from '../context/AuthContext';
+import { useAuth, SERVER_URL_KEY, DEFAULT_SERVER_URL, updateApiBaseUrl } from '../context/AuthContext';
+import axios from 'axios';
 import './Login.css';
 
 export default function Login() {
@@ -27,7 +33,7 @@ export default function Login() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
-  // Server IP config modal state (for Android APK)
+  // Server IP config modal state (for Android APK & Cloud backend)
   const [showServerModal, setShowServerModal] = useState(false);
   const [serverUrl, setServerUrl] = useState(() => localStorage.getItem(SERVER_URL_KEY) || DEFAULT_SERVER_URL);
   const [serverTestStatus, setServerTestStatus] = useState(null); // 'testing' | 'success' | 'error'
@@ -41,16 +47,16 @@ export default function Login() {
   });
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMsg, setForgotMsg] = useState({ type: '', text: '' });
-  const [showForgotPw, setShowForgotPw] = useState(false);
 
+  // If already authenticated, redirect to dashboard
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
 
   const validate = () => {
     const errs = {};
-    if (!form.username.trim()) errs.username = 'Username is required.';
-    if (!form.password) errs.password = 'Password is required.';
+    if (!form.username.trim()) errs.username = 'Username or Admin ID is required';
+    if (!form.password) errs.password = 'Password is required';
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -66,16 +72,20 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-
     setSubmitting(true);
     try {
-      await login(form.username.trim(), form.password);
-      navigate('/dashboard', { replace: true });
-    } catch {
-      // Surfaced via auth context error
+      const ok = await login(form.username.trim(), form.password);
+      if (ok) {
+        navigate('/dashboard', { replace: true });
+      }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const fillDemoCredentials = () => {
+    setForm({ username: 'admin', password: 'admin123' });
+    setFieldErrors({});
   };
 
   const handleForgotSubmit = async (e) => {
@@ -83,11 +93,11 @@ export default function Login() {
     setForgotMsg({ type: '', text: '' });
 
     if (!forgotForm.identifier.trim()) {
-      setForgotMsg({ type: 'error', text: 'Please enter your username or registered email.' });
+      setForgotMsg({ type: 'error', text: 'Please enter your username or email address.' });
       return;
     }
     if (forgotForm.new_password.length < 6) {
-      setForgotMsg({ type: 'error', text: 'New password must be at least 6 characters long.' });
+      setForgotMsg({ type: 'error', text: 'New password must be at least 6 characters.' });
       return;
     }
     if (forgotForm.new_password !== forgotForm.confirm_password) {
@@ -95,25 +105,23 @@ export default function Login() {
       return;
     }
 
+    setForgotLoading(true);
     try {
-      setForgotLoading(true);
-      const res = await api.post('/auth/forgot-password', {
+      const res = await axios.post('/api/auth/reset-password', {
         identifier: forgotForm.identifier.trim(),
         new_password: forgotForm.new_password,
       });
 
       if (res.data.success) {
-        setForgotMsg({ type: 'success', text: res.data.message });
-        setForm((prev) => ({
-          ...prev,
-          username: forgotForm.identifier.trim(),
-          password: forgotForm.new_password,
-        }));
+        setForgotMsg({
+          type: 'success',
+          text: 'Password updated successfully! You can now log in with your new password.',
+        });
         setTimeout(() => {
           setShowForgotModal(false);
-          setForgotMsg({ type: '', text: '' });
           setForgotForm({ identifier: '', new_password: '', confirm_password: '' });
-        }, 1800);
+          setForgotMsg({ type: '', text: '' });
+        }, 2000);
       }
     } catch (err) {
       setForgotMsg({
@@ -149,7 +157,7 @@ export default function Login() {
 
   return (
     <div className="login-genz-wrapper">
-      {/* Animated ambient glow spheres */}
+      {/* Ambient background glow */}
       <div className="glow-blob blob-1" />
       <div className="glow-blob blob-2" />
       <div className="glow-blob blob-3" />
@@ -157,18 +165,29 @@ export default function Login() {
       <div className="login-genz-card">
         {/* Top Tag */}
         <div className="genz-badge">
-          <Zap size={14} className="zap-icon" />
-          <span>ARYAVART PORTAL</span>
+          <Zap size={13} className="zap-icon" />
+          <span>ARYAVART SHIKSHAN SANSTHAN</span>
         </div>
 
         {/* Brand header */}
-        <div className="genz-header">
-          <div className="genz-icon-holder">
-            <GraduationCap size={36} />
+        <div className="genz-brand">
+          <div className="genz-logo-wrap">
+            <GraduationCap size={32} />
           </div>
           <h1 className="genz-title">Admin Sign In</h1>
-          <p className="genz-subtitle">Aryavart Shikshan Sansthan • Management Suite</p>
+          <p className="genz-subtitle">School &amp; Fee Management Suite</p>
         </div>
+
+        {/* Quick Demo Fill Pill */}
+        <button
+          type="button"
+          className="demo-credentials-bar"
+          onClick={fillDemoCredentials}
+          title="Click to auto-fill default admin credentials"
+        >
+          <Sparkles size={14} />
+          <span>Quick Fill: <strong>admin</strong> / <strong>admin123</strong></span>
+        </button>
 
         {error && (
           <div className="genz-alert">
@@ -178,7 +197,7 @@ export default function Login() {
         )}
 
         <form className="genz-form" onSubmit={handleSubmit} noValidate>
-          <div className="form-group">
+          <div className="genz-field">
             <label htmlFor="username">Username / Admin ID</label>
             <div className="input-wrap">
               <input
@@ -186,7 +205,7 @@ export default function Login() {
                 name="username"
                 type="text"
                 autoComplete="username"
-                placeholder="Enter username"
+                placeholder="Enter admin username"
                 value={form.username}
                 onChange={handleChange}
                 disabled={submitting}
@@ -197,12 +216,12 @@ export default function Login() {
             )}
           </div>
 
-          <div className="form-group">
-            <div className="label-with-action">
+          <div className="genz-field">
+            <div className="label-with-forgot">
               <label htmlFor="password">Password</label>
               <button
                 type="button"
-                className="forgot-pw-link"
+                className="forgot-pw-btn"
                 onClick={() => {
                   setForgotMsg({ type: '', text: '' });
                   setForgotForm({ identifier: '', new_password: '', confirm_password: '' });
@@ -228,6 +247,7 @@ export default function Login() {
                 className="eye-toggle-btn"
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex="-1"
+                aria-label="Toggle password visibility"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -240,20 +260,25 @@ export default function Login() {
           <button type="submit" className="genz-submit-btn" disabled={submitting || loading}>
             {submitting ? (
               <>
-                <Loader2 size={20} className="spin" /> Authenticating…
+                <Loader2 size={18} className="spin" /> Authenticating…
               </>
             ) : (
-              <span>Sign In to Dashboard →</span>
+              <>
+                <span>Sign In to Dashboard</span>
+                <span className="btn-arrow">→</span>
+              </>
             )}
           </button>
         </form>
 
         <div className="genz-footer">
-          <p>🔒 256-bit Encrypted Session • Authorized Admin Access Only</p>
+          <div className="footer-secure-tag">
+            <ShieldCheck size={14} />
+            <span>256-bit Encrypted Session • 24/7 Cloud Active</span>
+          </div>
           <button
             type="button"
-            className="forgot-pw-link"
-            style={{ marginTop: '8px', fontSize: '12px', opacity: 0.8 }}
+            className="server-settings-btn"
             onClick={() => {
               setServerTestStatus(null);
               setShowServerModal(true);
@@ -264,7 +289,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Server IP Settings Modal (for APK / Remote Access) */}
+      {/* Server IP Settings Modal */}
       {showServerModal && (
         <div className="forgot-modal-overlay" onClick={() => setShowServerModal(false)}>
           <div className="forgot-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -274,8 +299,8 @@ export default function Login() {
                   <Server size={20} />
                 </div>
                 <div>
-                  <h3 className="modal-title">Backend Server Address</h3>
-                  <p className="modal-subtitle">Configure the laptop IP address for this Android APK.</p>
+                  <h3 className="modal-title">Cloud Backend Server</h3>
+                  <p className="modal-subtitle">Configure backend API address.</p>
                 </div>
               </div>
               <button
@@ -289,52 +314,49 @@ export default function Login() {
             </div>
 
             <form className="forgot-form" onSubmit={handleSaveServer}>
-              <div className="form-group">
+              <div className="genz-field">
                 <label>Backend Server URL</label>
-                <input
-                  type="text"
-                  value={serverUrl}
-                  onChange={(e) => {
-                    setServerUrl(e.target.value);
-                    setServerTestStatus(null);
-                  }}
-                  placeholder="https://schoolmanagementwebapp-pf7m.onrender.com"
-                  required
-                />
-                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
-                  Default Cloud Server: <code>https://schoolmanagementwebapp-pf7m.onrender.com</code>
+                <div className="input-wrap">
+                  <input
+                    type="text"
+                    value={serverUrl}
+                    onChange={(e) => {
+                      setServerUrl(e.target.value);
+                      setServerTestStatus(null);
+                    }}
+                    placeholder="https://schoolmanagementwebapp-pf7m.onrender.com"
+                    required
+                  />
+                </div>
+                <span className="field-hint">
+                  Default 24/7 Cloud: <code>https://schoolmanagementwebapp-pf7m.onrender.com</code>
                 </span>
               </div>
 
               {serverTestStatus === 'success' && (
-                <div className="forgot-alert success">
+                <div className="genz-alert success">
                   <CheckCircle2 size={16} />
-                  <span>✅ Connected to 24/7 Cloud Backend Successfully!</span>
+                  <span>Connected to 24/7 Cloud Backend Successfully!</span>
                 </div>
               )}
               {serverTestStatus === 'error' && (
-                <div className="forgot-alert error">
+                <div className="genz-alert">
                   <AlertCircle size={16} />
-                  <span>❌ Cannot reach server. Please verify your internet connection.</span>
+                  <span>Cannot reach server. Please verify your internet connection.</span>
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <div className="modal-btn-row">
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1, padding: '10px' }}
+                  className="modal-sec-btn"
                   onClick={handleTestServer}
                   disabled={serverTestStatus === 'testing'}
                 >
-                  {serverTestStatus === 'testing' ? <Loader2 size={16} className="spin" /> : <Wifi size={16} />}
-                  <span>Test Connection</span>
+                  {serverTestStatus === 'testing' ? <Loader2 size={15} className="spin" /> : <Wifi size={15} />}
+                  <span>Test Server</span>
                 </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ flex: 1, padding: '10px' }}
-                >
+                <button type="submit" className="modal-pri-btn">
                   Save &amp; Connect
                 </button>
               </div>
@@ -354,7 +376,7 @@ export default function Login() {
                 </div>
                 <div>
                   <h3 className="modal-title">Reset Admin Password</h3>
-                  <p className="modal-subtitle">Verify your account identifier and set a new password.</p>
+                  <p className="modal-subtitle">Verify your username &amp; set a new password.</p>
                 </div>
               </div>
               <button
@@ -367,99 +389,66 @@ export default function Login() {
               </button>
             </div>
 
-            {forgotMsg.text && (
-              <div className={`forgot-alert ${forgotMsg.type}`}>
-                {forgotMsg.type === 'error' ? (
-                  <AlertCircle size={16} />
-                ) : (
-                  <CheckCircle2 size={16} />
-                )}
-                <span>{forgotMsg.text}</span>
-              </div>
-            )}
-
             <form className="forgot-form" onSubmit={handleForgotSubmit}>
-              <div className="forgot-field">
-                <label htmlFor="forgot_identifier">Username or Registered Email</label>
-                <div className="forgot-input-wrap">
+              {forgotMsg.text && (
+                <div className={`genz-alert ${forgotMsg.type === 'success' ? 'success' : ''}`}>
+                  {forgotMsg.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  <span>{forgotMsg.text}</span>
+                </div>
+              )}
+
+              <div className="genz-field">
+                <label>Admin Username / Email</label>
+                <div className="input-wrap">
                   <input
-                    id="forgot_identifier"
                     type="text"
-                    placeholder="e.g. admin or aryavart@gmail.com"
+                    placeholder="e.g. admin or admin@aryavart.edu"
                     value={forgotForm.identifier}
-                    onChange={(e) =>
-                      setForgotForm((prev) => ({ ...prev, identifier: e.target.value }))
-                    }
+                    onChange={(e) => setForgotForm({ ...forgotForm, identifier: e.target.value })}
                     required
                   />
                 </div>
               </div>
 
-              <div className="forgot-field">
-                <label htmlFor="forgot_new_password">New Password (Min 6 chars)</label>
-                <div className="forgot-input-wrap">
+              <div className="genz-field">
+                <label>New Password</label>
+                <div className="input-wrap">
                   <input
-                    id="forgot_new_password"
-                    type={showForgotPw ? 'text' : 'password'}
-                    placeholder="Enter new strong password"
+                    type="password"
+                    placeholder="Min 6 characters"
                     value={forgotForm.new_password}
-                    onChange={(e) =>
-                      setForgotForm((prev) => ({ ...prev, new_password: e.target.value }))
-                    }
+                    onChange={(e) => setForgotForm({ ...forgotForm, new_password: e.target.value })}
                     required
-                    minLength={6}
                   />
-                  <button
-                    type="button"
-                    className="forgot-eye-btn"
-                    onClick={() => setShowForgotPw(!showForgotPw)}
-                  >
-                    {showForgotPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
                 </div>
               </div>
 
-              <div className="forgot-field">
-                <label htmlFor="forgot_confirm_password">Confirm New Password</label>
-                <div className="forgot-input-wrap">
+              <div className="genz-field">
+                <label>Confirm New Password</label>
+                <div className="input-wrap">
                   <input
-                    id="forgot_confirm_password"
-                    type={showForgotPw ? 'text' : 'password'}
-                    placeholder="Re-enter new password"
+                    type="password"
+                    placeholder="Repeat new password"
                     value={forgotForm.confirm_password}
-                    onChange={(e) =>
-                      setForgotForm((prev) => ({ ...prev, confirm_password: e.target.value }))
-                    }
+                    onChange={(e) => setForgotForm({ ...forgotForm, confirm_password: e.target.value })}
                     required
-                    minLength={6}
                   />
                 </div>
               </div>
 
-              <div className="forgot-actions">
-                <button
-                  type="button"
-                  className="btn-forgot-cancel"
-                  onClick={() => setShowForgotModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-forgot-submit"
-                  disabled={forgotLoading}
-                >
-                  {forgotLoading ? (
-                    <>
-                      <Loader2 size={16} className="spin" /> Resetting…
-                    </>
-                  ) : (
-                    <>
-                      <Key size={16} /> Reset Password
-                    </>
-                  )}
-                </button>
-              </div>
+              <button
+                type="submit"
+                className="genz-submit-btn"
+                disabled={forgotLoading}
+              >
+                {forgotLoading ? (
+                  <>
+                    <Loader2 size={16} className="spin" /> Updating…
+                  </>
+                ) : (
+                  'Reset & Save Password'
+                )}
+              </button>
             </form>
           </div>
         </div>
