@@ -31,7 +31,10 @@ export default function WhatsAppDirectButton({
     try {
       if (onSend) {
         const res = await onSend();
-        toast.success(res?.data?.message || 'WhatsApp message sent successfully in background!');
+        if (res?.data?.direct_link) {
+          window.open(res.data.direct_link, '_blank');
+        }
+        toast.success(res?.data?.message || 'WhatsApp message processed!');
       }
       setStatus('sent');
     } catch (err) {

@@ -405,14 +405,16 @@ Thank you for your payment!
 _${school.school_name}_`;
 
     const { sendWhatsApp } = require('../services/whatsappService');
-    await sendWhatsApp(recipientPhone, messageText, {
+    const result = await sendWhatsApp(recipientPhone, messageText, {
       student_id: payment.student_id,
       payment_id: payment.id,
     });
 
     return res.json({
       success: true,
-      message: `WhatsApp receipt sent to ${recipientPhone}`,
+      mode: result?.mode || 'background',
+      direct_link: result?.direct_link || null,
+      message: result?.mode === 'direct_link' ? `Opening WhatsApp for ${recipientPhone}...` : `WhatsApp receipt sent to ${recipientPhone}`,
       recipient: recipientPhone,
     });
   } catch (err) {
@@ -483,13 +485,15 @@ Kindly clear the pending dues at your earliest convenience to ensure uninterrupt
 _${school.school_name}_`;
 
     const { sendWhatsApp } = require('../services/whatsappService');
-    await sendWhatsApp(recipientPhone, messageText, {
+    const result = await sendWhatsApp(recipientPhone, messageText, {
       student_id: student.id,
     });
 
     return res.json({
       success: true,
-      message: `WhatsApp dues notice sent to ${recipientPhone}`,
+      mode: result?.mode || 'background',
+      direct_link: result?.direct_link || null,
+      message: result?.mode === 'direct_link' ? `Opening WhatsApp for ${recipientPhone}...` : `WhatsApp dues notice sent to ${recipientPhone}`,
       recipient: recipientPhone,
     });
   } catch (err) {

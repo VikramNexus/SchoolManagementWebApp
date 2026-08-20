@@ -333,27 +333,45 @@
   z-index: 999;
 }
 
-/* Mobile Breakpoints */
 @media (max-width: 1024px) {
   .mobile-menu-hamburger {
     display: flex;
   }
 
   .sidebar {
-    transform: translateX(-100%);
-    width: var(--sidebar-width) !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    width: 290px !important;
+    max-width: 85vw;
+    transform: translateX(-100%) !important;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    z-index: 10000;
+    box-shadow: none;
   }
 
   .sidebar.mobile-open {
-    transform: translateX(0);
-    box-shadow: 16px 0 40px rgba(0, 0, 0, 0.65);
+    transform: translateX(0) !important;
+    box-shadow: 20px 0 50px rgba(0, 0, 0, 0.75);
   }
 
   .sidebar.mobile-open .brand-text-col,
   .sidebar.mobile-open .nav-group-heading,
   .sidebar.mobile-open .nav-label-wrapper {
-    opacity: 1;
-    transform: translateX(0);
+    opacity: 1 !important;
+    transform: none !important;
+    pointer-events: auto !important;
+    display: flex !important;
+  }
+
+  .sidebar.mobile-open .nav-group-heading {
+    display: block !important;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin: 0.75rem 0 0.5rem 0.5rem;
+    letter-spacing: 0.08em;
   }
 
   .mobile-close-drawer-btn {
@@ -361,8 +379,8 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: #f8fafc;
     border-radius: 8px;
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -377,13 +395,36 @@
   }
 
   .mobile-curated-group {
-    padding-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
   }
 
   .mobile-curated-group .nav-pill-link {
-    padding: 0.85rem 1rem;
-    margin-bottom: 0.35rem;
-    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.95rem 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-curated-group .nav-pill-link.active {
+    background: linear-gradient(135deg, rgba(2, 132, 199, 0.35) 0%, rgba(56, 189, 248, 0.18) 100%);
+    border-color: rgba(56, 189, 248, 0.45);
+    box-shadow: 0 4px 16px rgba(2, 132, 199, 0.25);
+  }
+
+  .mobile-curated-group .nav-label-text {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+
+  .mobile-curated-group .nav-pill-link.active .nav-label-text {
+    color: #38bdf8;
   }
 
   .sidebar-overlay {

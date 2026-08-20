@@ -61,12 +61,12 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(true);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
   // Monitor window resize for responsive mode detection
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
+      setIsMobile(window.innerWidth < 1024);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -96,7 +96,7 @@ export default function Sidebar() {
 
       {/* Sidebar Navigation */}
       <aside
-        className={`sidebar ${collapsed ? 'collapsed' : ''} ${hoverExpanded ? 'hover-expanded' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
+        className={`sidebar ${!isMobile && collapsed ? 'collapsed' : ''} ${!isMobile && hoverExpanded ? 'hover-expanded' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
         onMouseEnter={() => {
           if (collapsed && !isMobile) setHoverExpanded(true);
         }}
