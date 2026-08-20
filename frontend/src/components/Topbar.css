@@ -624,14 +624,17 @@
 @media (max-width: 768px) {
   .topbar {
     left: 0 !important;
-    padding: 0 0.875rem 0 4.25rem;
+    height: 56px;
+    padding: 0 0.75rem 0 3.5rem;
   }
 
   .page-title {
-    font-size: 1.05rem;
-    max-width: 160px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .topbar-center {
@@ -643,18 +646,29 @@
   }
 
   .user-btn {
-    padding: 0.25rem;
+    padding: 0.2rem;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+  }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    padding: 0;
   }
 
   .notification-dropdown {
-    min-width: 300px;
-    max-width: calc(100vw - 2rem);
-    right: -60px;
+    min-width: 280px;
+    max-width: calc(100vw - 1.5rem);
+    right: -45px;
+    top: calc(100% + 8px);
   }
 
   .user-dropdown-menu {
     min-width: 220px;
-    max-width: calc(100vw - 2rem);
+    max-width: calc(100vw - 1.5rem);
     right: 0;
+    top: calc(100% + 8px);
   }
 }
