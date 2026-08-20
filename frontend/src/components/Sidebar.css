@@ -356,6 +356,36 @@
     transform: translateX(0);
   }
 
+  .mobile-close-drawer-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-left: auto;
+    transition: background 0.15s ease;
+  }
+
+  .mobile-close-drawer-btn:hover {
+    background: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+  }
+
+  .mobile-curated-group {
+    padding-top: 0.5rem;
+  }
+
+  .mobile-curated-group .nav-pill-link {
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.35rem;
+    border-radius: 12px;
+  }
+
   .sidebar-overlay {
     display: block;
   }

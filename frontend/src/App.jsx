@@ -12,13 +12,15 @@
  *   * (fallback)     → redirect to /dashboard
  */
 
-import React, { Component } from 'react';
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import React, { Component, useEffect } from 'react';
+import { Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { App as CapApp } from '@capacitor/app';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './components/Toast';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
+import MobileBottomNav from './components/MobileBottomNav';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
@@ -63,8 +65,50 @@ class ErrorBoundary extends Component {
   }
 }
 
+function useAndroidBackGesture() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    let listener;
+    try {
+      listener = CapApp.addListener('backButton', () => {
+        // 1. Check if any open modal / backdrop exists and close it
+        const openModal = document.querySelector('.modal-overlay, .forgot-modal-overlay, .sidebar-overlay');
+        if (openModal) {
+          const closeBtn =
+            openModal.querySelector('.modal-close-btn, .btn-close, .forgot-close-btn, .mobile-close-drawer-btn') ||
+            openModal;
+          if (closeBtn && typeof closeBtn.click === 'function') {
+            closeBtn.click();
+            return;
+          }
+        }
+
+        // 2. Check if on root or dashboard or login
+        const path = window.location.hash ? window.location.hash.replace(/^#/, '') : window.location.pathname;
+        if (path === '/dashboard' || path === '/login' || path === '/' || path === '') {
+          CapApp.exitApp();
+        } else {
+          // Standard backward navigation
+          navigate(-1);
+        }
+      });
+    } catch {
+      // Running in standard desktop browser
+    }
+
+    return () => {
+      if (listener && listener.remove) {
+        listener.remove();
+      }
+    };
+  }, [navigate, location]);
+}
+
 function Layout() {
   const { isAuthenticated, loading } = useAuth();
+  useAndroidBackGesture();
 
   if (loading) {
     return (
@@ -88,6 +132,8 @@ function Layout() {
           <Outlet />
         </main>
       </div>
+      {/* Phone-optimized Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 }

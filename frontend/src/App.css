@@ -114,6 +114,6 @@ body {
 
 @media (max-width: 768px) {
   .page-content {
-    padding: calc(var(--topbar-height) + 1rem) 1rem 2rem;
+    padding: calc(var(--topbar-height) + 0.75rem) 0.85rem calc(80px + env(safe-area-inset-bottom));
   }
 }

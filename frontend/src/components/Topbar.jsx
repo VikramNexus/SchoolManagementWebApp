@@ -138,38 +138,8 @@ export default function Topbar() {
 
   return (
     <header className="topbar" role="banner">
-      {/* Left: Navigation Controls & Page title */}
+      {/* Left: Brand / Current Section title */}
       <div className="topbar-left">
-        <div className="app-nav-controls" role="group" aria-label="Page navigation">
-          <button
-            type="button"
-            className="nav-arrow-btn back-btn"
-            onClick={handleGoBack}
-            title="Go Back (Alt + ←)"
-            aria-label="Go Back"
-          >
-            <ArrowLeft size={17} className="nav-btn-icon back-icon" />
-          </button>
-          <button
-            type="button"
-            className="nav-arrow-btn forward-btn"
-            onClick={handleGoForward}
-            title="Go Forward (Alt + →)"
-            aria-label="Go Forward"
-          >
-            <ArrowRight size={17} className="nav-btn-icon forward-icon" />
-          </button>
-          <button
-            type="button"
-            className="nav-arrow-btn reload-btn"
-            onClick={handleReloadPage}
-            title="Reload Page (Ctrl + R)"
-            aria-label="Reload Page"
-          >
-            <RotateCcw size={15} className="nav-btn-icon reload-icon" />
-          </button>
-        </div>
-        <div className="topbar-divider" />
         <h1 className="page-title">{pageTitle}</h1>
       </div>
 
