@@ -129,15 +129,32 @@ app.get(['/ping', '/api/ping'], (req, res) => {
 // ---------------------------------------------------------------------------
 app.use('/api', apiRoutes);
 
-app.get('/', (req, res) => {
-  res.json({
-    message: 'School Student & Fee Management System API',
-    docs: '/api/health',
+// ---------------------------------------------------------------------------
+// Static Web App Serving & SPA Fallback (Live Auto-Sync)
+// ---------------------------------------------------------------------------
+const frontendDist = path.join(__dirname, '../../frontend/dist');
+const backendPublic = path.join(__dirname, '../public');
+const staticDir = fs.existsSync(frontendDist) ? frontendDist : (fs.existsSync(backendPublic) ? backendPublic : null);
+
+if (staticDir) {
+  app.use(express.static(staticDir));
+  app.get('*', (req, res, next) => {
+    if (req.originalUrl.startsWith('/api') || req.originalUrl === '/ping') {
+      return next();
+    }
+    res.sendFile(path.join(staticDir, 'index.html'));
   });
-});
+} else {
+  app.get('/', (req, res) => {
+    res.json({
+      message: 'Aryavart School Management System API',
+      docs: '/api/health',
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------
-// 404 handler for unknown routes
+// 404 handler for unknown API routes
 // ---------------------------------------------------------------------------
 app.use((req, res) => {
   res.status(404).json({

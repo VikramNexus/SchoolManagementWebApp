@@ -4,6 +4,7 @@
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
+    "url": "https://schoolmanagementwebapp-pf7m.onrender.com",
     "cleartext": true,
     "androidScheme": "https"
   },
