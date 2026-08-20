@@ -856,8 +856,17 @@
   }
 
   .quick-stats-grid {
-    grid-template-columns: 1fr !important;
-    gap: 0.75rem !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.65rem !important;
+  }
+
+  .stat-card {
+    padding: 0.85rem 0.75rem !important;
+    border-radius: 10px !important;
+  }
+
+  .stat-value {
+    font-size: 1.25rem !important;
   }
 
   .table-wrapper {

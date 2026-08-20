@@ -113,7 +113,58 @@ body {
 }
 
 @media (max-width: 768px) {
+  html {
+    font-size: 14.5px;
+  }
+
+  h1 { font-size: 1.25rem !important; }
+  h2 { font-size: 1.08rem !important; }
+  h3 { font-size: 0.95rem !important; }
+  h4 { font-size: 0.85rem !important; }
+
   .page-content {
-    padding: calc(var(--topbar-height) + 0.75rem) 0.85rem calc(80px + env(safe-area-inset-bottom));
+    padding: calc(56px + 0.65rem) 0.65rem calc(75px + env(safe-area-inset-bottom));
+  }
+
+  /* Universal Touch Card Styling */
+  .card,
+  .dashboard-header-card,
+  .students-header-card,
+  .admissions-header-card,
+  .pending-header-card,
+  .receipts-header-card,
+  .backup-header-card,
+  .profile-header {
+    border-radius: 12px !important;
+    padding: 0.85rem 1rem !important;
+  }
+
+  /* Universal Touch Button Styling */
+  button,
+  .btn,
+  .btn-primary,
+  .btn-secondary {
+    font-size: 0.825rem !important;
+    border-radius: 8px !important;
+  }
+
+  /* Universal Input Scaling */
+  input,
+  select,
+  textarea {
+    font-size: 0.85rem !important;
+    border-radius: 8px !important;
+  }
+
+  /* Responsive Modal Layout */
+  .modal-overlay {
+    padding: 0.5rem !important;
+  }
+
+  .modal-dialog,
+  .modal {
+    max-width: 96vw !important;
+    max-height: 88vh !important;
+    border-radius: 14px !important;
   }
 }

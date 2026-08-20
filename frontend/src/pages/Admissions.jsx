@@ -1078,7 +1078,7 @@ export default function Admissions() {
                     className="btn-cancel-adm"
                     onClick={handleResetForm}
                   >
-                    Clear Form
+                    <RotateCcw size={14} /> Clear Form
                   </button>
 
                   <button
@@ -1086,8 +1086,8 @@ export default function Admissions() {
                     className="btn-complete-admission"
                     disabled={submitting}
                   >
-                    {submitting ? <Loader2 size={18} className="spin" /> : <Check size={18} />}
-                    <span>{submitting ? 'Enrolling & Billing...' : 'Complete Admission & Generate Receipt'}</span>
+                    {submitting ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+                    <span>{submitting ? 'Enrolling...' : 'Complete Admission'}</span>
                   </button>
                 </div>
               </div>
