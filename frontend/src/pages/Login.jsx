@@ -290,7 +290,7 @@ export default function Login() {
 
             <form className="forgot-form" onSubmit={handleSaveServer}>
               <div className="form-group">
-                <label>Laptop Backend Server URL</label>
+                <label>Backend Server URL</label>
                 <input
                   type="text"
                   value={serverUrl}
@@ -298,24 +298,24 @@ export default function Login() {
                     setServerUrl(e.target.value);
                     setServerTestStatus(null);
                   }}
-                  placeholder="e.g. http://10.192.246.93:5000"
+                  placeholder="https://schoolmanagementwebapp-pf7m.onrender.com"
                   required
                 />
                 <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
-                  Default on current Wi-Fi: <code>http://10.192.246.93:5000</code>
+                  Default Cloud Server: <code>https://schoolmanagementwebapp-pf7m.onrender.com</code>
                 </span>
               </div>
 
               {serverTestStatus === 'success' && (
                 <div className="forgot-alert success">
                   <CheckCircle2 size={16} />
-                  <span>✅ Connected to Laptop Backend Successfully!</span>
+                  <span>✅ Connected to 24/7 Cloud Backend Successfully!</span>
                 </div>
               )}
               {serverTestStatus === 'error' && (
                 <div className="forgot-alert error">
                   <AlertCircle size={16} />
-                  <span>❌ Cannot reach server. Please ensure your laptop & phone are on the same Wi-Fi.</span>
+                  <span>❌ Cannot reach server. Please verify your internet connection.</span>
                 </div>
               )}
 

@@ -13,7 +13,7 @@ import axios from 'axios';
 const TOKEN_KEY = 'sms_token';
 const USER_KEY = 'sms_user';
 export const SERVER_URL_KEY = 'sms_server_url';
-export const DEFAULT_SERVER_URL = import.meta.env.VITE_API_URL || 'http://10.192.246.93:5000';
+export const DEFAULT_SERVER_URL = import.meta.env.VITE_API_URL || 'https://schoolmanagementwebapp-pf7m.onrender.com';
 
 export function getBaseURL() {
   const isNative = window.Capacitor || window.location.protocol === 'capacitor:' || (window.location.hostname === 'localhost' && window.location.port !== '3000');
