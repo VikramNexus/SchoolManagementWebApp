@@ -142,39 +142,6 @@ async function sendWhatsApp(to, body, options = {}) {
   };
 }
 
-  try {
-    let result;
-    if (mode === 'twilio') {
-      result = await sendViaTwilio(to, body, apiKey, phoneNumberId);
-    } else if (mode === 'meta') {
-      result = await sendViaMetaCloud(to, body, apiKey, phoneNumberId);
-    } else {
-      result = await sendViaMetaCloud(to, body, apiKey, phoneNumberId);
-    }
-
-    return logMessage({
-      student_id,
-      template_id,
-      channel: 'whatsapp',
-      recipient: to,
-      message: body,
-      status: 'sent',
-      error_message: null,
-    });
-  } catch (err) {
-    console.error('[whatsappService.sendWhatsApp] Error:', err);
-    return logMessage({
-      student_id,
-      template_id,
-      channel: 'whatsapp',
-      recipient: to,
-      message: body,
-      status: 'failed',
-      error_message: err.message,
-    });
-  }
-}
-
 /**
  * Send WhatsApp via Twilio
  */
