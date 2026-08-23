@@ -328,6 +328,68 @@
   cursor: not-allowed;
 }
 
+/* Server Endpoint Settings Button (Ultra-Sleek Glassmorphism Pill) */
+.login-footer-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.btn-server-config {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 1.15rem;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(56, 189, 248, 0.28);
+  border-radius: 9999px;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-server-config .server-icon-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  animation: pulseGreenDot 2s infinite;
+}
+
+@keyframes pulseGreenDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 8px #22c55e;
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+    box-shadow: 0 0 2px #22c55e;
+  }
+}
+
+.btn-server-config:hover {
+  background: rgba(14, 165, 233, 0.16);
+  border-color: #38bdf8;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.35);
+}
+
+.btn-server-config:active {
+  transform: translateY(0);
+}
+
 .btn-arrow {
   transition: transform 0.2s ease;
 }

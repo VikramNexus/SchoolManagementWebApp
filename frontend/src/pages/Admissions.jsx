@@ -35,6 +35,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import WhatsAppDirectButton from '../components/WhatsAppDirectButton';
+import JpgReceiptModal from '../components/JpgReceiptModal';
 import './Admissions.css';
 
 const MONTH_OPTIONS = [
@@ -125,6 +126,7 @@ export default function Admissions() {
   const [formData, setFormData] = useState(initialFormState);
   const [submitting, setSubmitting] = useState(false);
   const [enrollmentSuccess, setEnrollmentSuccess] = useState(null);
+  const [showJpgReceiptModal, setShowJpgReceiptModal] = useState(false);
 
   // Sibling live search results
   const [siblingSearchResults, setSiblingSearchResults] = useState([]);
@@ -508,6 +510,16 @@ export default function Admissions() {
               )}
 
               <div className="success-actions-row">
+                <button
+                  type="button"
+                  className="btn-success-profile"
+                  style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#fff' }}
+                  onClick={() => setShowJpgReceiptModal(true)}
+                >
+                  <Receipt size={17} />
+                  <span>View &amp; Share JPG Receipt</span>
+                </button>
+
                 <WhatsAppDirectButton
                   onSend={() => api.post(`/admissions/send-whatsapp/${enrollmentSuccess.student_id}`)}
                   phone={formData.whatsapp_number || formData.phone}
@@ -1223,6 +1235,33 @@ export default function Admissions() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Official Admission JPG Receipt Modal */}
+      {enrollmentSuccess && (
+        <JpgReceiptModal
+          isOpen={showJpgReceiptModal}
+          onClose={() => setShowJpgReceiptModal(false)}
+          data={{
+            student: {
+              full_name: enrollmentSuccess.full_name,
+              admission_no: enrollmentSuccess.admission_no,
+              class_name: classes.find(c => c.id === Number(formData.class_id))?.class_name || 'Assigned Class',
+              category: formData.student_category,
+              father_name: formData.father_name,
+              phone: formData.whatsapp_number || formData.phone,
+            },
+            payment: enrollmentSuccess.payment || {
+              amount: formData.paid_amount,
+              payment_mode: formData.payment_mode,
+              receipt_number: enrollmentSuccess.payment?.receipt_number || `ADM-${Date.now().toString().slice(-6)}`,
+            },
+            summary: {
+              total_amount: formData.paid_amount,
+            },
+          }}
+          type="admission"
+        />
       )}
     </div>
   );

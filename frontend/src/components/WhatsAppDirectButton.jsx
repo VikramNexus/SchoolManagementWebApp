@@ -5,7 +5,7 @@ import './WhatsAppDirectButton.css';
 
 /**
  * WhatsAppDirectButton
- * Direct background WhatsApp dispatch button with status transitions (idle -> sending -> sent)
+ * Direct WhatsApp dispatch button with auto-fallback for Desktop & Mobile devices
  */
 export default function WhatsAppDirectButton({
   onSend,
@@ -32,19 +32,32 @@ export default function WhatsAppDirectButton({
       if (onSend) {
         const res = await onSend();
         if (res?.data?.direct_link) {
-          window.open(res.data.direct_link, '_blank');
+          const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+          if (isMobile) {
+            window.location.href = res.data.direct_link;
+          } else {
+            window.open(res.data.direct_link, '_blank');
+          }
         }
-        toast.success(res?.data?.message || 'WhatsApp message processed!');
+        toast.success(res?.data?.message || 'WhatsApp dispatched successfully!');
       }
       setStatus('sent');
     } catch (err) {
       console.error('[WhatsAppDirectButton]', err);
-      setStatus('error');
-      const msg = err?.response?.data?.message || err?.message || 'Failed to send WhatsApp message';
-      setErrorMessage(msg);
-      toast.error(msg);
-      // Reset to idle after 4s so user can retry
-      setTimeout(() => setStatus('idle'), 4000);
+      const cleanPhone = (phone || '').replace(/\D/g, '');
+      if (cleanPhone) {
+        // Safe direct fallback
+        const waNum = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+        window.open(`https://wa.me/${waNum}`, '_blank');
+        toast.info('Opened WhatsApp chat directly with parent');
+        setStatus('sent');
+      } else {
+        setStatus('error');
+        const msg = err?.response?.data?.message || err?.message || 'Failed to send WhatsApp message';
+        setErrorMessage(msg);
+        toast.error(msg);
+        setTimeout(() => setStatus('idle'), 4000);
+      }
     }
   };
 

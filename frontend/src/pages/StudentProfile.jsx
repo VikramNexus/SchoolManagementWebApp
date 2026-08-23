@@ -47,6 +47,8 @@ import RecordPaymentModal from '../components/RecordPaymentModal';
 import EditMonthlyRateModal from '../components/EditMonthlyRateModal';
 import DeleteStudentModal from '../components/DeleteStudentModal';
 import StudentModal from '../components/StudentModal';
+import StudentFeeLedgerModal from '../components/StudentFeeLedgerModal';
+import JpgReceiptModal from '../components/JpgReceiptModal';
 import './StudentProfile.css';
 
 const MONTH_NAMES = [
@@ -75,6 +77,11 @@ export default function StudentProfile() {
   const [showEditRateModal, setShowEditRateModal] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Fee Statement & Receipt Modals
+  const [showLedgerModal, setShowLedgerModal] = useState(false);
+  const [selectedReceiptData, setSelectedReceiptData] = useState(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   // Family & Sibling Account State
   const [familyData, setFamilyData] = useState(null);
@@ -631,6 +638,9 @@ export default function StudentProfile() {
           >
             {student.status ? String(student.status).toUpperCase() : 'ACTIVE'}
           </span>
+          <button className="btn btn-primary btn-ledger-statement" onClick={() => setShowLedgerModal(true)}>
+            <Receipt size={16} /> Fee Ledger &amp; Statement
+          </button>
           <button className="btn btn-secondary" onClick={() => setShowEditProfileModal(true)}>
             <Edit2 size={16} /> Edit Profile
           </button>
@@ -640,16 +650,7 @@ export default function StudentProfile() {
           <button className="btn btn-secondary" onClick={() => setShowAddFeeModal(true)}>
             <Plus size={16} /> Add Extra Expense
           </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={handleDownloadDuesNotice}
-            disabled={downloadingDuesNotice}
-            title="Download Official Dues Receipt PDF"
-          >
-            {downloadingDuesNotice ? <Loader2 size={16} className="spin" /> : <FileText size={16} />} Dues Receipt
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowRecordPaymentModal(true)}>
+          <button className="btn btn-success-pay" onClick={() => setShowRecordPaymentModal(true)}>
             <CreditCard size={16} /> Record Payment
           </button>
           <button className="btn btn-danger-outline" onClick={() => setShowDeleteModal(true)} title="Delete or Mark as Left">
@@ -1596,6 +1597,31 @@ export default function StudentProfile() {
           }}
         />
       )}
+
+      {/* Monthly Fee Ledger & Account Statement Modal (High-Res JPG + WhatsApp Share) */}
+      <StudentFeeLedgerModal
+        isOpen={showLedgerModal}
+        onClose={() => setShowLedgerModal(false)}
+        student={student}
+        monthlyLedger={monthlyFees}
+        paymentHistory={recentPayments}
+        totals={{
+          total_assessed: (monthlyFees || []).reduce((sum, f) => sum + Number(f.fee_amount || 0), 0) + (additionalFees || []).reduce((sum, f) => sum + Number(f.amount || 0), 0),
+          total_paid: (monthlyFees || []).reduce((sum, f) => sum + Number(f.paid_amount || 0), 0) + (additionalFees || []).reduce((sum, f) => sum + Number(f.paid_amount || 0), 0),
+          total_due: totalOverallDue,
+        }}
+      />
+
+      {/* Single Payment Receipt Modal */}
+      <JpgReceiptModal
+        isOpen={showReceiptModal && !!selectedReceiptData}
+        onClose={() => {
+          setShowReceiptModal(false);
+          setSelectedReceiptData(null);
+        }}
+        data={selectedReceiptData}
+        type="payment"
+      />
     </div>
   );
 }

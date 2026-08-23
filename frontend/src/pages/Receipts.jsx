@@ -35,6 +35,7 @@ import { useToast } from '../components/Toast';
 import EditPaymentModal from '../components/EditPaymentModal';
 import RecordPaymentModal from '../components/RecordPaymentModal';
 import WhatsAppDirectButton from '../components/WhatsAppDirectButton';
+import JpgReceiptModal from '../components/JpgReceiptModal';
 import './Receipts.css';
 
 export default function Receipts() {
@@ -612,187 +613,16 @@ export default function Receipts() {
         />
       )}
 
-      {/* View Receipt Modal */}
-      {viewModalOpen && (
-        <div className="modal-overlay" onClick={() => setViewModalOpen(false)}>
-          <div className="modal modal-lg receipt-view-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title-wrap">
-                <Receipt size={20} className="modal-receipt-icon" />
-                <h2>Official Fee Payment Receipt</h2>
-              </div>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setViewModalOpen(false)}
-                aria-label="Close"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              {loadingReceipt || !selectedReceipt ? (
-                <div className="modal-loading">
-                  <Loader2 size={32} className="spin" />
-                  <span>Loading official receipt details…</span>
-                </div>
-              ) : (
-                <div className="receipt-details">
-                  {/* School Header */}
-                  <div className="receipt-school-header">
-                    <h3>{selectedReceipt.school?.school_name || 'Aryavart Shikshan Sansthan'}</h3>
-                    <p>{selectedReceipt.school?.address || 'School Campus Address'}</p>
-                    {selectedReceipt.school?.phone && <p>📞 Phone: {selectedReceipt.school?.phone}</p>}
-                  </div>
-
-                  {/* Receipt Meta */}
-                  <div className="receipt-meta">
-                    <div>
-                      <span className="label">Receipt Number:</span>
-                      <code className="receipt-code-highlight">
-                        {selectedReceipt.receipt?.receipt_number || `RCP-${selectedReceipt.payment?.id}`}
-                      </code>
-                    </div>
-                    <div>
-                      <span className="label">Payment Date:</span>
-                      <strong>
-                        {new Date(selectedReceipt.payment?.payment_date).toLocaleDateString('en-IN', {
-                          day: '2-digit',
-                          month: 'long',
-                          year: 'numeric',
-                        })}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {/* Student Info */}
-                  <div className="receipt-student">
-                    <h4>Student Information</h4>
-                    <div className="info-grid">
-                      <div>
-                        <span className="label">Full Name</span>
-                        <strong>{selectedReceipt.student?.full_name}</strong>
-                      </div>
-                      <div>
-                        <span className="label">Admission No</span>
-                        <strong>{selectedReceipt.student?.admission_no}</strong>
-                      </div>
-                      <div>
-                        <span className="label">Class &amp; Section</span>
-                        <strong>
-                          {selectedReceipt.student?.class_name || 'N/A'}
-                          {selectedReceipt.student?.section_name ? ` - ${selectedReceipt.student?.section_name}` : ''}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="label">Category</span>
-                        <span className={`category-badge ${selectedReceipt.student?.category}`}>
-                          {selectedReceipt.student?.category === 'hosteller' ? 'Hosteller' : 'Day Scholar'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Payment Breakdown */}
-                  {selectedReceipt.allocations && selectedReceipt.allocations.length > 0 && (
-                    <div className="receipt-breakdown">
-                      <h4>Fee Allocation Breakdown</h4>
-                      <table className="data-table compact">
-                        <thead>
-                          <tr>
-                            <th>Month / Fee Item</th>
-                            <th className="text-right">Fee Rate</th>
-                            <th className="text-right">Allocated Amount</th>
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedReceipt.allocations.map((a, i) => (
-                            <tr key={i}>
-                              <td>
-                                <strong>
-                                  {a.fee_month
-                                    ? `${new Date(2000, a.fee_month - 1).toLocaleString('en-IN', { month: 'long' })} ${a.fee_year} Monthly Fee`
-                                    : (a.description || 'Custom Fee')}
-                                </strong>
-                              </td>
-                              <td className="text-right">{formatCurrency(a.fee_amount || a.amount)}</td>
-                              <td className="text-right text-success font-semibold">{formatCurrency(a.allocated_amount)}</td>
-                              <td>
-                                <span className="status-pill full-paid">Cleared</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  {/* Summary */}
-                  <div className="receipt-summary">
-                    <div className="summary-row">
-                      <span>Total Amount Collected:</span>
-                      <strong className="text-success text-lg">
-                        {formatCurrency(selectedReceipt.payment?.amount)}
-                      </strong>
-                    </div>
-                    <div className="summary-row">
-                      <span>Collection Channel:</span>
-                      <span className="font-semibold">
-                        {selectedReceipt.payment?.payment_mode === 'IN_ACCOUNT' ? '🏦 In Account (Bank/Online)' : '💵 Cash (Hand)'}
-                      </span>
-                    </div>
-                    {selectedReceipt.payment?.notes && (
-                      <div className="summary-row">
-                        <span>Notes / Remarks:</span>
-                        <span>{selectedReceipt.payment?.notes}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer">
-              <WhatsAppDirectButton
-                onSend={() => api.post(`/receipts/send-whatsapp/${selectedReceipt.payment?.id}`)}
-                defaultLabel="Send Receipt via WhatsApp"
-                successLabel="✓ WhatsApp Sent"
-                size="md"
-              />
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => window.print()}
-                title="Print Receipt"
-              >
-                <Printer size={16} /> Print
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => handleDownload(selectedReceipt.payment?.id, selectedReceipt.receipt?.receipt_number)}
-                disabled={downloadingId === selectedReceipt.payment?.id}
-              >
-                {downloadingId === selectedReceipt.payment?.id ? (
-                  <Loader2 size={16} className="spin" />
-                ) : (
-                  <Download size={16} />
-                )}
-                <span>Download Official PDF</span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setViewModalOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Universal JPG Receipt Modal with WhatsApp Sharing & JPG Download */}
+      <JpgReceiptModal
+        isOpen={viewModalOpen && !loadingReceipt && !!selectedReceipt}
+        onClose={() => {
+          setViewModalOpen(false);
+          setSelectedReceipt(null);
+        }}
+        data={selectedReceipt}
+        type="payment"
+      />
     </div>
   );
 }

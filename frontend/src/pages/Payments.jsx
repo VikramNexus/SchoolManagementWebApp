@@ -34,6 +34,7 @@ import CashCollectionSummary from '../components/CashCollectionSummary';
 import RecordPaymentModal from '../components/RecordPaymentModal';
 import AssignFeeModal from '../components/AssignFeeModal';
 import EditPaymentModal from '../components/EditPaymentModal';
+import JpgReceiptModal from '../components/JpgReceiptModal';
 import './Payments.css';
 
 export default function Payments() {
@@ -42,6 +43,11 @@ export default function Payments() {
   const [summaryData, setSummaryData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Receipt Modal State
+  const [selectedReceiptData, setSelectedReceiptData] = useState(null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [loadingReceiptId, setLoadingReceiptId] = useState(null);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -199,6 +205,21 @@ export default function Payments() {
   const formatMonthName = (m, y) => {
     const date = new Date(y, m - 1, 1);
     return date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  };
+
+  const handleViewReceipt = async (paymentId) => {
+    try {
+      setLoadingReceiptId(paymentId);
+      const res = await api.get(`/receipts/${paymentId}`);
+      if (res.data.success) {
+        setSelectedReceiptData(res.data);
+        setReceiptModalOpen(true);
+      }
+    } catch (err) {
+      toast.error('Failed to load receipt details.');
+    } finally {
+      setLoadingReceiptId(null);
+    }
   };
 
   return (
@@ -472,6 +493,16 @@ export default function Payments() {
                     </td>
                     <td className="col-actions">
                       <div className="action-btns">
+                        <button
+                          type="button"
+                          className="btn-action receipt-btn"
+                          onClick={() => handleViewReceipt(p.id)}
+                          disabled={loadingReceiptId === p.id}
+                          title="View & Download Official JPG Receipt & WhatsApp Share"
+                        >
+                          {loadingReceiptId === p.id ? <Loader2 size={13} className="spin" /> : <Receipt size={13} />}
+                          <span>Receipt</span>
+                        </button>
                         <button
                           type="button"
                           className="btn-action view"
@@ -754,6 +785,17 @@ export default function Payments() {
           </div>
         </div>
       )}
+
+      {/* Universal JPG Receipt Modal with WhatsApp Sharing & JPG Download */}
+      <JpgReceiptModal
+        isOpen={receiptModalOpen && !!selectedReceiptData}
+        onClose={() => {
+          setReceiptModalOpen(false);
+          setSelectedReceiptData(null);
+        }}
+        data={selectedReceiptData}
+        type="payment"
+      />
     </div>
   );
 }

@@ -347,7 +347,9 @@ export default function Login() {
               setServerTestStatus(null);
               setShowServerModal(true);
             }}
+            title="Configure and switch between Cloud and Local backend server"
           >
+            <span className="server-icon-dot" />
             <Server size={14} />
             <span>Server Endpoint Settings</span>
           </button>

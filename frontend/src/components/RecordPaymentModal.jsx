@@ -27,6 +27,7 @@ import {
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import WhatsAppDirectButton from './WhatsAppDirectButton';
+import JpgReceiptModal from './JpgReceiptModal';
 import './RecordPaymentModal.css';
 
 const MONTH_NAMES = [
@@ -39,6 +40,7 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [showJpgModal, setShowJpgModal] = useState(false);
   const [students, setStudents] = useState([]);
   const [filteredStudents, setFilteredStudents] = useState([]);
   const [searchQuery, setSearchQuery] = useState(
@@ -326,6 +328,14 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
             </div>
 
             <div className="success-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-lg"
+                style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#fff' }}
+                onClick={() => setShowJpgModal(true)}
+              >
+                <Download size={18} /> View &amp; Download JPG Receipt
+              </button>
               <WhatsAppDirectButton
                 onSend={() => api.post(`/receipts/send-whatsapp/${recordedPaymentSuccess.id}`)}
                 phone={selectedStudent?.phone}
@@ -333,15 +343,6 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
                 successLabel="✓ WhatsApp Sent to Parent"
                 size="lg"
               />
-              <button
-                type="button"
-                className="btn btn-primary btn-lg download-receipt-btn"
-                onClick={handleDownloadReceipt}
-                disabled={downloading}
-              >
-                {downloading ? <Loader2 size={18} className="spin" /> : <Download size={18} />}
-                Download Official PDF Receipt
-              </button>
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -667,6 +668,29 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
           </form>
         )}
       </div>
+
+      {/* Official JPG Receipt Modal with WhatsApp Sharing */}
+      {recordedPaymentSuccess && (
+        <JpgReceiptModal
+          isOpen={showJpgModal}
+          onClose={() => setShowJpgModal(false)}
+          data={{
+            student: selectedStudent || {},
+            payment: {
+              ...recordedPaymentSuccess,
+              amount: formData.amount,
+              payment_mode: formData.payment_mode,
+              payment_date: formData.payment_date,
+              notes: formData.notes,
+            },
+            allocations: recordedPaymentSuccess.allocations || allocationPreview || [],
+            summary: {
+              total_amount: formData.amount,
+            },
+          }}
+          type="payment"
+        />
+      )}
     </div>
   );
 }
