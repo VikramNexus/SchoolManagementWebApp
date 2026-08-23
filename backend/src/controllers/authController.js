@@ -312,16 +312,13 @@ async function sendForgotPasswordOtp(req, res) {
     );
 
     // Send email
-    const emailResult = await sendPasswordResetOtpEmail(user.email, otpCode, user.username);
+    await sendPasswordResetOtpEmail(user.email, otpCode, user.username);
 
     const masked = maskEmail(user.email);
     return res.json({
       success: true,
-      message: emailResult.mode === 'smtp'
-        ? `A 6-digit verification code has been sent to ${masked}. Please check your inbox.`
-        : `Verification code generated for ${masked}: ${otpCode}`,
+      message: `A 6-digit verification code has been securely sent to your email (${masked}). Please check your inbox.`,
       masked_email: masked,
-      otp_code_preview: otpCode,
     });
   } catch (err) {
     console.error('[authController.sendForgotPasswordOtp]', err);

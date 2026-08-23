@@ -108,9 +108,6 @@ export default function Login() {
           type: 'success',
           text: res.data.message || 'Verification code sent to your email!',
         });
-        if (res.data.otp_code_preview) {
-          setForgotForm((prev) => ({ ...prev, otp_code: res.data.otp_code_preview }));
-        }
         setForgotStep(2);
       }
     } catch (err) {
