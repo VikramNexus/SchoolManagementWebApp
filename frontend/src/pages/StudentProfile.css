@@ -129,44 +129,50 @@
   flex-wrap: wrap;
 }
 
-/* Dues Breakdown Summary Bar */
+/* Dues Breakdown Summary Bar Wrap */
+.dues-summary-section-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
 .dues-summary-bar {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
 }
 
 .dues-card {
-  padding: 1.25rem 1.5rem;
+  padding: 1rem 1.25rem;
   background: #ffffff;
-  border-radius: 0.875rem;
+  border-radius: 0.75rem;
   border: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .dues-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.08);
 }
 
 .dues-card.red {
-  border-left: 5px solid #ef4444;
+  border-left: 4px solid #ef4444;
 }
 
 .dues-card.orange {
-  border-left: 5px solid #f97316;
+  border-left: 4px solid #f97316;
 }
 
 .dues-card.dark-red {
-  border-left: 5px solid #dc2626;
+  border-left: 4px solid #dc2626;
   background: #fff5f5;
 }
 
 .dues-card .card-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
@@ -174,84 +180,198 @@
 }
 
 .dues-card .card-value {
-  font-size: 1.6rem;
+  font-size: 1.45rem;
   font-weight: 800;
   color: #0f172a;
-  margin-top: 0.3rem;
+  margin-top: 0.25rem;
 }
 
 .dues-card.dark-red .card-value {
   color: #dc2626;
 }
 
-/* Quick Info Cards Grid */
-.info-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.25rem;
-}
-
-.info-card {
+/* Large Prominent Fee Ledger & Statement Banner Button */
+.btn-fee-ledger-large-banner {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1.25rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.875rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  justify-content: space-between;
+  width: 100%;
+  padding: 1rem 1.35rem;
+  background: linear-gradient(135deg, #0b2238 0%, #0f3554 100%);
+  border: 1.5px solid #1e507b;
+  border-radius: 0.75rem;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(11, 34, 56, 0.22);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
 }
 
-.info-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.08);
-  border-color: #cbd5e1;
+.btn-fee-ledger-large-banner:hover {
+  background: linear-gradient(135deg, #0e2b47 0%, #15456f 100%);
+  border-color: #38bdf8;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(56, 189, 248, 0.25);
 }
 
-.card-icon {
+.ledger-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.ledger-banner-icon-box {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 50px;
-  height: 50px;
-  border-radius: 0.65rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
   flex-shrink: 0;
 }
 
-.card-icon.blue { background: #dbeafe; color: #2563eb; }
-.card-icon.green { background: #dcfce7; color: #16a34a; }
-.card-icon.teal { background: #ccfbf1; color: #0d9488; }
-.card-icon.orange { background: #ffedd5; color: #ea580c; }
-.card-icon.purple { background: #f3e8ff; color: #9333ea; }
-
-.card-info {
+.ledger-banner-text {
   display: flex;
   flex-direction: column;
+  gap: 0.15rem;
 }
 
-.card-info .card-label {
-  font-size: 0.75rem;
+.ledger-banner-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.2px;
+}
+
+.ledger-banner-sub {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.ledger-banner-right {
+  display: flex;
+  align-items: center;
+}
+
+.ledger-banner-cta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.95rem;
+  background: #38bdf8;
+  color: #0c4a6e;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-fee-ledger-large-banner:hover .ledger-banner-cta-badge {
+  background: #7dd3fc;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+}
+
+/* Compact Student Overview Info Cards Grid at the Top */
+.compact-info-cards-top {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.65rem;
+}
+
+.compact-info-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.85rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.65rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  transition: all 0.18s ease;
+  min-height: 52px;
+}
+
+.compact-info-card:hover {
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.compact-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 0.45rem;
+  flex-shrink: 0;
+}
+
+.compact-card-icon.blue { background: #dbeafe; color: #2563eb; }
+.compact-card-icon.green { background: #dcfce7; color: #16a34a; }
+.compact-card-icon.teal { background: #ccfbf1; color: #0d9488; }
+.compact-card-icon.orange { background: #ffedd5; color: #ea580c; }
+.compact-card-icon.purple { background: #f3e8ff; color: #9333ea; }
+
+.compact-card-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.compact-card-label {
+  font-size: 0.68rem;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
-.card-info .card-value {
-  font-size: 1.15rem;
+.compact-card-value {
+  font-size: 0.9rem;
   font-weight: 800;
   color: #0f172a;
-  margin-top: 0.2rem;
+  margin-top: 0.05rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
-.section-tag {
+.section-tag-compact {
   background: #e0f2fe;
   color: #0369a1;
-  padding: 0.15rem 0.4rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  margin-left: 0.3rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.icon-btn-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.icon-btn-compact:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
 }
 
 .rate-value-text {
@@ -896,4 +1016,94 @@
     width: 100%;
     justify-content: center;
   }
+
+  .pending-dues-actions-row {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pending-dues-actions-row .btn-action-dues {
+    width: 100%;
+  }
+}
+
+/* Pending Dues Header Box & Parallel Action Buttons (Image 3) */
+.pending-dues-header-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.pending-dues-text-left {
+  flex: 1;
+  min-width: 260px;
+}
+
+.pending-dues-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.btn-action-dues {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.45rem !important;
+  height: 38px !important;
+  padding: 0 1rem !important;
+  border-radius: 8px !important;
+  font-size: 0.825rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-action-dues.btn-action-wa {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border: 1.5px solid #15803d !important;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25) !important;
+}
+
+.btn-action-dues.btn-action-wa:hover {
+  background: #15803d !important;
+  border-color: #166534 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.35) !important;
+}
+
+.btn-action-dues.btn-action-download {
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+.btn-action-dues.btn-action-download:hover:not(:disabled) {
+  background: #f8fafc !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+.btn-action-dues.btn-action-pay {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  color: #ffffff !important;
+  border: 1.5px solid #0284c7 !important;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25) !important;
+}
+
+.btn-action-dues.btn-action-pay:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%) !important;
+  border-color: #0369a1 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35) !important;
 }

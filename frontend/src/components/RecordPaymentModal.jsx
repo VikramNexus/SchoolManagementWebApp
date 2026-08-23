@@ -541,7 +541,11 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
                 <button
                   type="button"
                   className={`mode-card ${formData.payment_mode === 'CASH' ? 'active-cash' : ''}`}
-                  onClick={() => setFormData(prev => ({ ...prev, payment_mode: 'CASH' }))}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFormData(prev => ({ ...prev, payment_mode: 'CASH' }));
+                  }}
                 >
                   <div className="mode-card-header">
                     <div className="mode-badge-circle cash-circle">
@@ -566,7 +570,11 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
                 <button
                   type="button"
                   className={`mode-card ${formData.payment_mode === 'IN_ACCOUNT' ? 'active-account' : ''}`}
-                  onClick={() => setFormData(prev => ({ ...prev, payment_mode: 'IN_ACCOUNT' }))}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFormData(prev => ({ ...prev, payment_mode: 'IN_ACCOUNT' }));
+                  }}
                 >
                   <div className="mode-card-header">
                     <div className="mode-badge-circle account-circle">

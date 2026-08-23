@@ -483,6 +483,10 @@
   min-height: 100px;
 }
 
+.mode-card * {
+  pointer-events: none;
+}
+
 .mode-card:hover {
   border-color: #cbd5e1;
   transform: translateY(-2px);

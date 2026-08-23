@@ -614,14 +614,32 @@ export default function StudentProfile() {
               {student.full_name?.charAt(0)?.toUpperCase() || 'S'}
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-                <h1 style={{ margin: 0 }}>{student.full_name}</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>{student.full_name}</h1>
+                <span
+                  className="status-badge-compact"
+                  style={{
+                    backgroundColor: `${getStatusColor(student.status)}18`,
+                    color: getStatusColor(student.status),
+                    border: `1px solid ${getStatusColor(student.status)}40`,
+                    fontSize: '0.7rem',
+                    fontWeight: 800,
+                    padding: '0.15rem 0.55rem',
+                    borderRadius: '9999px',
+                    letterSpacing: '0.4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                  }}
+                >
+                  <span style={{ fontSize: '0.55rem' }}>●</span> {student.status ? String(student.status).toUpperCase() : 'ACTIVE'}
+                </span>
                 <span
                   className="gender-badge-inline"
                   style={{
-                    fontSize: '0.8125rem',
+                    fontSize: '0.72rem',
                     fontWeight: 700,
-                    padding: '0.2rem 0.6rem',
+                    padding: '0.15rem 0.5rem',
                     borderRadius: '9999px',
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -634,121 +652,128 @@ export default function StudentProfile() {
                   {student.gender === 'female' ? '♀ Female' : student.gender === 'other' ? '⚧ Other' : '♂ Male'}
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
-                <p className="admission-no" style={{ margin: 0 }}>Admission No. {student.admission_no}</p>
-                <span style={{ fontSize: '0.8125rem', color: '#0284c7', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: '#f0f9ff', padding: '0.15rem 0.5rem', borderRadius: '0.375rem', border: '1px solid #bae6fd' }}>
-                  <Calendar size={13} /> Admission Date: {formatDateSafe(student.admission_date || student.created_at)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                <p className="admission-no" style={{ margin: 0, fontSize: '0.82rem' }}>Admission No. {student.admission_no}</p>
+                <span style={{ fontSize: '0.78rem', color: '#0284c7', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: '#f0f9ff', padding: '0.12rem 0.45rem', borderRadius: '0.375rem', border: '1px solid #bae6fd' }}>
+                  <Calendar size={12} /> Admission Date: {formatDateSafe(student.admission_date || student.created_at)}
                 </span>
               </div>
             </div>
           </div>
         </div>
         <div className="header-right">
-          <span
-            className="status-badge"
-            style={{ backgroundColor: `${getStatusColor(student.status)}20`, color: getStatusColor(student.status) }}
-          >
-            {student.status ? String(student.status).toUpperCase() : 'ACTIVE'}
-          </span>
-          <button className="btn btn-primary btn-ledger-statement" onClick={() => setShowLedgerModal(true)}>
-            <Receipt size={16} /> Fee Ledger &amp; Statement
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowEditProfileModal(true)}>
+            <Edit2 size={14} /> Edit Profile
           </button>
-          <button className="btn btn-secondary" onClick={() => setShowEditProfileModal(true)}>
-            <Edit2 size={16} /> Edit Profile
-          </button>
-          <button className="btn btn-secondary" onClick={handleOpenAssignMonthModal}>
-            <CalendarPlus size={16} /> Assign Month Fee
-          </button>
-          <button className="btn btn-secondary" onClick={() => setShowAddFeeModal(true)}>
-            <Plus size={16} /> Add Extra Expense
-          </button>
-          <button className="btn btn-success-pay" onClick={() => setShowRecordPaymentModal(true)}>
-            <CreditCard size={16} /> Record Payment
-          </button>
-          <button className="btn btn-danger-outline" onClick={() => setShowDeleteModal(true)} title="Delete or Mark as Left">
-            <Trash2 size={16} /> Delete
+          <button className="btn btn-danger-outline btn-sm" onClick={() => setShowDeleteModal(true)} title="Delete or Mark as Left">
+            <Trash2 size={14} /> Delete
           </button>
         </div>
       </header>
 
       <div className="profile-content">
-        {/* Dues Breakdown Summary Bar */}
-        <section className="dues-summary-bar">
-          <div className="dues-card red">
-            <span className="card-label">Monthly Fees Outstanding</span>
-            <span className="card-value">{formatCurrency(totalMonthlyDue)}</span>
-          </div>
-          <div className="dues-card orange">
-            <span className="card-label">Other Expenses &amp; Extra Charges</span>
-            <span className="card-value">{formatCurrency(totalOtherExpenseDue)}</span>
-          </div>
-          <div className="dues-card dark-red">
-            <span className="card-label">Total Outstanding Dues</span>
-            <span className="card-value">{formatCurrency(totalOverallDue)}</span>
-          </div>
-        </section>
-
-        {/* Quick Info Cards */}
-        <section className="info-cards">
-          <div className="info-card">
-            <div className="card-icon blue"><User size={24} /></div>
-            <div className="card-info">
-              <span className="card-label">Class / Section</span>
-              <span className="card-value">
-                {student.class_name} {student.section_name && <span className="section-tag">{student.section_name}</span>}
+        {/* Compact Overview Info Cards Grid at the Top */}
+        <section className="compact-info-cards-top">
+          <div className="compact-info-card">
+            <div className="compact-card-icon blue"><User size={16} /></div>
+            <div className="compact-card-info">
+              <span className="compact-card-label">Class / Section</span>
+              <span className="compact-card-value">
+                {student.class_name} {student.section_name && <span className="section-tag-compact">{student.section_name}</span>}
               </span>
             </div>
           </div>
-          <div className="info-card">
-            <div className="card-icon green"><Building2 size={24} /></div>
-            <div className="card-info">
-              <span className="card-label">Category</span>
-              <span className="card-value">{formatCategory(student.category)}</span>
+          <div className="compact-info-card">
+            <div className="compact-card-icon green"><Building2 size={16} /></div>
+            <div className="compact-card-info">
+              <span className="compact-card-label">Category</span>
+              <span className="compact-card-value">{formatCategory(student.category)}</span>
             </div>
           </div>
-          <div className="info-card highlight-rate">
-            <div className="card-icon teal"><DollarSign size={24} /></div>
-            <div className="card-info">
-              <span className="card-label">Monthly Fee Rate</span>
-              <span className="card-value rate-value-text">
+          <div className="compact-info-card highlight-rate">
+            <div className="compact-card-icon teal"><DollarSign size={16} /></div>
+            <div className="compact-card-info">
+              <span className="compact-card-label">Monthly Fee Rate</span>
+              <span className="compact-card-value rate-value-text">
                 {formatCurrency(
                   Number(student.monthly_fee_rate) > 0
                     ? Number(student.monthly_fee_rate)
                     : student.category === 'hosteller' ? 5000 : 3000
                 )}
                 <button
-                  className="icon-btn edit-rate-btn"
+                  className="icon-btn-compact edit-rate-btn-compact"
                   onClick={() => setShowEditRateModal(true)}
                   title="Edit Monthly Rate"
                 >
-                  <Edit2 size={14} /> Edit
+                  <Edit2 size={11} />
                 </button>
               </span>
             </div>
           </div>
-          <div className="info-card">
-            <div className="card-icon blue"><Calendar size={24} /></div>
-            <div className="card-info">
-              <span className="card-label">Admission Date</span>
-              <span className="card-value">
+          <div className="compact-info-card">
+            <div className="compact-card-icon blue"><Calendar size={16} /></div>
+            <div className="compact-card-info">
+              <span className="compact-card-label">Admission Date</span>
+              <span className="compact-card-value">
                 {formatDateSafe(student.admission_date || student.created_at)}
               </span>
             </div>
           </div>
-          <div className="info-card">
-            <div className="card-icon purple"><User size={24} /></div>
-            <div className="card-info">
-              <span className="card-label">Father's Name</span>
-              <span className="card-value">{student.father_name || student.parent_name || '—'}</span>
+          <div className="compact-info-card">
+            <div className="compact-card-icon purple"><User size={16} /></div>
+            <div className="compact-card-info">
+              <span className="compact-card-label">Father's Name</span>
+              <span className="compact-card-value">{student.father_name || student.parent_name || '—'}</span>
             </div>
           </div>
-          <div className="info-card">
-            <div className="card-icon purple"><User size={24} /></div>
-            <div className="card-info">
-              <span className="card-label">Mother's Name</span>
-              <span className="card-value">{student.mother_name || '—'}</span>
+          <div className="compact-info-card">
+            <div className="compact-card-icon purple"><User size={16} /></div>
+            <div className="compact-card-info">
+              <span className="compact-card-label">Mother's Name</span>
+              <span className="compact-card-value">{student.mother_name || '—'}</span>
             </div>
           </div>
+        </section>
+
+        {/* Dues Breakdown Summary Bar & Large Fee Ledger Button */}
+        <section className="dues-summary-section-wrap">
+          <div className="dues-summary-bar">
+            <div className="dues-card red">
+              <span className="card-label">Monthly Fees Outstanding</span>
+              <span className="card-value">{formatCurrency(totalMonthlyDue)}</span>
+            </div>
+            <div className="dues-card orange">
+              <span className="card-label">Other Expenses &amp; Extra Charges</span>
+              <span className="card-value">{formatCurrency(totalOtherExpenseDue)}</span>
+            </div>
+            <div className="dues-card dark-red">
+              <span className="card-label">Total Outstanding Dues</span>
+              <span className="card-value">{formatCurrency(totalOverallDue)}</span>
+            </div>
+          </div>
+
+          {/* Large prominent Fee Ledger & Statement Banner Button shifted below Dues */}
+          <button
+            type="button"
+            className="btn-fee-ledger-large-banner"
+            onClick={() => setShowLedgerModal(true)}
+            title="Open Complete Student Monthly Fee Ledger, Download PDF/JPG, and Share on WhatsApp"
+          >
+            <div className="ledger-banner-left">
+              <div className="ledger-banner-icon-box">
+                <Receipt size={22} />
+              </div>
+              <div className="ledger-banner-text">
+                <span className="ledger-banner-title">📜 Student Monthly Fee Ledger &amp; Account Statement</span>
+                <span className="ledger-banner-sub">
+                  Month-by-month fee schedule (Apr–Mar), paid receipts history, official PDF statement &amp; 1-click WhatsApp share
+                </span>
+              </div>
+            </div>
+            <div className="ledger-banner-right">
+              <span className="ledger-banner-cta-badge">View &amp; Share Statement →</span>
+            </div>
+          </button>
         </section>
 
         {/* Contact Information */}
@@ -1055,34 +1080,38 @@ export default function StudentProfile() {
 
         {/* Pending Dues & Payment Actions Section */}
         <section className="pending-dues-section">
-          <div className="section-header-box">
-            <div>
+          <div className="section-header-box pending-dues-header-box">
+            <div className="pending-dues-text-left">
               <h2 className="dark-title"><CreditCard size={20} /> Pending Dues &amp; Payment Action</h2>
               <p className="subtitle">Download official dues receipt PDF or receive payment directly from student</p>
             </div>
-            <div className="header-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="pending-dues-actions-row">
               <WhatsAppDirectButton
                 onSend={() => api.post(`/receipts/send-dues-whatsapp/${student.id}`)}
                 phone={student.whatsapp_number || student.phone}
                 defaultLabel="Send Dues Bill via WhatsApp"
                 successLabel="✓ Dues Notice Sent"
-                size="sm"
+                size="md"
+                className="btn-action-dues btn-action-wa"
               />
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="btn-action-dues btn-action-download"
                 onClick={handleDownloadDuesNotice}
                 disabled={downloadingDuesNotice}
+                title="Download Dues Bill PDF"
               >
                 {downloadingDuesNotice ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
-                Download Dues Receipt PDF
+                <span>Download Dues Receipt PDF</span>
               </button>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="btn-action-dues btn-action-pay"
                 onClick={() => setShowRecordPaymentModal(true)}
+                title="Receive Fee Payment from Student"
               >
-                <CreditCard size={16} /> Receive Money from Student
+                <CreditCard size={16} />
+                <span>Receive Money from Student</span>
               </button>
             </div>
           </div>
