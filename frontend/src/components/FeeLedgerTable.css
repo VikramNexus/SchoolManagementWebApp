@@ -371,95 +371,122 @@
   color: #ffffff;
 }
 
-.parts-badge {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  background: rgba(56, 189, 248, 0.15);
+/* Status Pills */
+.ledger-status-pill {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-align: center;
+}
+
+.ledger-status-pill.status-cleared {
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.ledger-status-pill.status-partial {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.ledger-status-pill.status-due {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.month-tag-pill {
+  font-weight: 800;
   color: #38bdf8;
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.25rem;
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-size: 0.88rem;
 }
 
-.installments-subrow-dark {
-  background: #041421 !important;
+.paid-amount-highlight {
+  color: #22c55e;
+  font-weight: 800;
 }
 
-.installments-container-dark {
-  padding: 0.75rem 1.5rem;
-  background: #041421;
-  border-bottom: 1px solid #0f3554;
-  border-top: 1px solid #08263f;
+.text-due-orange {
+  color: #f97316 !important;
+}
+
+/* Installments / Receipts Drawer */
+.installments-drawer-cell {
+  background: #031422 !important;
+  padding: 0.75rem 1.25rem !important;
+  border-bottom: 1px solid #133956;
+}
+
+.installments-drawer-content {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
-.installments-title-dark {
-  font-size: 0.8125rem;
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: #38bdf8;
 }
 
-.installments-chips-wrap {
+.drawer-receipts-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
-.installment-chip-dark {
+.drawer-receipt-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: #082236;
-  border: 1px solid #133c5e;
-  padding: 0.4rem 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.8125rem;
+  gap: 0.65rem;
+  background: #09263e;
+  border: 1px solid #1a456c;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
   color: #f1f5f9;
 }
 
-.chip-part-badge {
+.inst-rcp-num {
+  font-family: monospace;
   font-weight: 800;
   color: #38bdf8;
-  font-size: 0.75rem;
 }
 
-.chip-date-text {
+.inst-rcp-amount {
   color: #cbd5e1;
 }
 
-.chip-amount-text {
+.inst-rcp-amount strong {
+  color: #4ade80;
+}
+
+.btn-view-rcp-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 4px;
+  color: #38bdf8;
+  font-size: 0.72rem;
   font-weight: 700;
-  color: #34d399;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.chip-mode-badge {
-  font-size: 0.6875rem;
-  font-weight: 800;
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.25rem;
-}
-
-.chip-mode-badge.in-acc {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-}
-
-.chip-mode-badge.cash {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-}
-
-.chip-receipt-text {
-  font-size: 0.75rem;
-  color: #94a3b8;
-}
-
-.chip-notes-text {
-  font-size: 0.75rem;
-  color: #64748b;
-  font-style: italic;
+.btn-view-rcp-mini:hover {
+  background: #0284c7;
+  color: #ffffff;
 }
 
 .empty-register-cell-dark {

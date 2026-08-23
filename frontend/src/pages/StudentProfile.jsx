@@ -502,6 +502,18 @@ export default function StudentProfile() {
     }
   };
 
+  const handleOpenReceipt = async (paymentId) => {
+    try {
+      const res = await api.get(`/receipts/${paymentId}`);
+      if (res.data.success) {
+        setSelectedReceiptData(res.data);
+        setShowReceiptModal(true);
+      }
+    } catch (err) {
+      toast.error('Failed to load receipt details.');
+    }
+  };
+
   // Calculate totals
   const totalMonthlyDue = (monthlyFees || [])
     .filter(f => f && f.status !== 'PAID')
@@ -1036,6 +1048,8 @@ export default function StudentProfile() {
             onAssignMonth={handleQuickAssignMonth}
             onUpdateMonthFee={handleUpdateMonthFee}
             onDeleteMonthFee={handleDeleteMonthFee}
+            onViewReceipt={handleOpenReceipt}
+            onRecordPayment={() => setShowRecordPaymentModal(true)}
           />
         </section>
 
@@ -1111,12 +1125,11 @@ export default function StudentProfile() {
                           <button
                             type="button"
                             className="btn btn-secondary btn-xs"
-                            onClick={() => handleDownloadPaymentReceipt(p.id, receiptNum)}
-                            disabled={downloadingPaymentReceiptId === p.id}
-                            title="Download Payment Receipt PDF"
+                            onClick={() => handleOpenReceipt(p.id)}
+                            title="View & Download Official JPG Receipt & WhatsApp Share"
                             style={{ gap: '0.3rem', display: 'inline-flex', alignItems: 'center' }}
                           >
-                            {downloadingPaymentReceiptId === p.id ? <Loader2 size={13} className="spin" /> : <Receipt size={13} />}
+                            <Receipt size={13} />
                             {receiptNum}
                           </button>
                         </td>
@@ -1584,6 +1597,18 @@ export default function StudentProfile() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Record Payment Modal */}
+      {showRecordPaymentModal && (
+        <RecordPaymentModal
+          initialStudent={student}
+          onClose={() => setShowRecordPaymentModal(false)}
+          onSaved={() => {
+            setShowRecordPaymentModal(false);
+            fetchProfile();
+          }}
+        />
       )}
 
       {/* Delete Student Modal */}

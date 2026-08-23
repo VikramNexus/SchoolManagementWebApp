@@ -1,13 +1,28 @@
 /**
  * FeeLedgerTable — School Management System (Frontend)
  *
- * Exact Excel-Style School Fee Register matching attached photo spec.
- * Columns: Month, Opening Balance, Other Charges, Monthly Fee, Total, Paid, Closing Balance, Payment Date, Remark, Actions.
- * Admin Features: Edit Monthly Fee, Delete Month Entry, 1-Click + Assign Next Month.
+ * Professional School Fee Register & Ledger.
+ * Columns: Month, Opening Balance, Other Charges, Monthly Fee, Total Due, Amount Paid, Closing Balance, Status, Payment Date, Remark, Actions.
+ * Features: Edit Monthly Fee, Delete Month Entry, 1-Click + Assign Next Month, Direct Receipt Viewing.
  */
 
 import React, { useState } from 'react';
-import { Loader2, CalendarPlus, BookOpen, Edit2, Trash2, Check, X, ChevronDown, ChevronRight, Receipt } from 'lucide-react';
+import {
+  Loader2,
+  CalendarPlus,
+  BookOpen,
+  Edit2,
+  Trash2,
+  Check,
+  X,
+  ChevronDown,
+  ChevronRight,
+  Receipt,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  CreditCard,
+} from 'lucide-react';
 import './FeeLedgerTable.css';
 
 const SHORT_MONTHS = [
@@ -52,6 +67,8 @@ export default function FeeLedgerTable({
   onAssignMonth = null,
   onUpdateMonthFee = null,
   onDeleteMonthFee = null,
+  onViewReceipt = null,
+  onRecordPayment = null,
 }) {
   const [assigning, setAssigning] = useState(false);
   const [editingFeeId, setEditingFeeId] = useState(null);
@@ -68,7 +85,7 @@ export default function FeeLedgerTable({
     return (
       <div className="register-loading-dark">
         <Loader2 size={24} className="spin" />
-        <span>Loading fee register…</span>
+        <span>Loading fee register &amp; ledger records…</span>
       </div>
     );
   }
@@ -79,7 +96,7 @@ export default function FeeLedgerTable({
     return a.fee_month - b.fee_month;
   });
 
-  // Determine next month and year to assign automatically (starts AFTER admission month if no entries exist)
+  // Determine next month and year to assign automatically
   let nextMonth;
   let nextYear;
 
@@ -112,7 +129,7 @@ export default function FeeLedgerTable({
 
   const nextMonthLabel = `${SHORT_MONTHS[nextMonth - 1]}-${String(nextYear).slice(-2)}`;
 
-  // Calculate dynamic running balances (including advance credit carry-forward)
+  // Calculate dynamic running balances
   let runningOpeningBalance = 0;
   let sumTotalFees = 0;
   let sumTotalPaid = 0;
@@ -123,9 +140,8 @@ export default function FeeLedgerTable({
     const otherCharges = Number(fee.other_charges || 0);
     const total = openingBalance + monthlyFee + otherCharges;
 
-    // Use payments made IN this specific month (month_actual_paid) or fallback
-    const paidInMonth = fee.month_actual_paid !== undefined ? Number(fee.month_actual_paid) : Number(fee.paid_amount || 0);
-    const paid = paidInMonth;
+    // Use exact paid amount recorded/allocated to this monthly fee
+    const paid = Number(fee.paid_amount || 0);
 
     // Net balance (positive = dues, negative = advance credit)
     const netBalance = total - paid;
@@ -137,7 +153,7 @@ export default function FeeLedgerTable({
     sumTotalFees += monthlyFee + otherCharges;
     sumTotalPaid += paid;
 
-    // Month label format: e.g. "Sep-25", "Oct-25"
+    // Month label format: e.g. "Apr-25", "May-25"
     const monthName = SHORT_MONTHS[fee.fee_month - 1] || `M${fee.fee_month}`;
     const yearShort = String(fee.fee_year).slice(-2);
     const monthLabel = `${monthName}-${yearShort}`;
@@ -159,6 +175,11 @@ export default function FeeLedgerTable({
       remark = 'advance';
     }
 
+    // Clearance status
+    const isCleared = (monthlyFee + otherCharges) > 0 && closingBalance === 0;
+    const isPartial = paid > 0 && closingBalance > 0;
+    const statusLabel = isCleared ? 'PAID' : (isPartial ? 'PARTIAL' : 'DUE');
+
     return {
       id: fee.id,
       fee_month: fee.fee_month,
@@ -173,6 +194,9 @@ export default function FeeLedgerTable({
       closingBalance,
       paymentDate: paymentDateFormatted,
       remark,
+      statusLabel,
+      isCleared,
+      isPartial,
       installments: fee.installments || [],
     };
   });
@@ -232,14 +256,16 @@ export default function FeeLedgerTable({
         </div>
 
         <div className="summary-box-dark">
-          <span className="box-label">Total Paid</span>
+          <span className="box-label">Total Paid &amp; Cleared</span>
           <span className="box-value text-green">{formatCurrency(sumTotalPaid)}</span>
         </div>
 
         {/* Most Prominent Current Balance Card */}
         <div className="summary-box-dark prominent-balance-box-dark">
-          <span className="box-label">Current Balance</span>
-          <span className="box-value prominent-value">{formatCurrency(finalCurrentBalance)}</span>
+          <span className="box-label">Current Outstanding Balance</span>
+          <span className={`box-value prominent-value ${finalCurrentBalance > 0 ? 'text-due-orange' : 'text-green'}`}>
+            {formatCurrency(finalCurrentBalance)}
+          </span>
         </div>
       </div>
 
@@ -248,19 +274,21 @@ export default function FeeLedgerTable({
         <div className="register-header-dark">
           <div className="header-left">
             <BookOpen size={20} className="register-icon-teal" />
-            <span className="register-title">Student Fee Register</span>
+            <span className="register-title">Student Fee Register &amp; Ledger</span>
           </div>
-          {onAssignMonth && (
-            <button
-              className="btn btn-assign-next"
-              onClick={handleQuickAssignNextMonth}
-              disabled={assigning}
-              title={`Assign fee for ${FULL_MONTHS[nextMonth - 1]} ${nextYear}`}
-            >
-              {assigning ? <Loader2 size={15} className="spin" /> : <CalendarPlus size={15} />}
-              + Assign Next Month ({nextMonthLabel})
-            </button>
-          )}
+          <div className="header-right-actions">
+            {onAssignMonth && (
+              <button
+                className="btn btn-assign-next"
+                onClick={handleQuickAssignNextMonth}
+                disabled={assigning}
+                title={`Assign fee for ${FULL_MONTHS[nextMonth - 1]} ${nextYear}`}
+              >
+                {assigning ? <Loader2 size={15} className="spin" /> : <CalendarPlus size={15} />}
+                + Assign Next Month ({nextMonthLabel})
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="register-table-responsive">
@@ -272,8 +300,9 @@ export default function FeeLedgerTable({
                 <th className="text-right">Other Charge</th>
                 <th className="text-right">Monthly Fee</th>
                 <th className="text-right">Total</th>
-                <th className="text-right">Paid</th>
+                <th className="text-right">Amount Paid</th>
                 <th className="text-right">Closing Balance</th>
+                <th className="text-center">Status</th>
                 <th className="text-center">Payment Date</th>
                 <th className="text-left">Remark</th>
                 <th className="text-center">Actions</th>
@@ -282,8 +311,8 @@ export default function FeeLedgerTable({
             <tbody>
               {ledgerRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="empty-register-cell-dark">
-                    No fee records generated yet. Click <strong>"+ Assign Next Month"</strong> to assign first month.
+                  <td colSpan={11} className="empty-register-cell-dark">
+                    No fee records generated yet. Click <strong>"+ Assign Next Month"</strong> to generate the first month fee schedule.
                   </td>
                 </tr>
               ) : (
@@ -301,14 +330,16 @@ export default function FeeLedgerTable({
                                 type="button"
                                 className="expand-toggle-btn"
                                 onClick={() => toggleRowExpansion(row.id)}
-                                title={isExpanded ? 'Hide installment breakdown' : 'View installment breakdown'}
+                                title={isExpanded ? 'Hide payment receipts breakdown' : 'View payment receipts breakdown'}
                               >
                                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                               </button>
                             )}
-                            <span>{row.monthLabel}</span>
-                            {hasInstallments && row.installments.length > 1 && (
-                              <span className="parts-badge">{row.installments.length} parts</span>
+                            <span className="month-tag-pill">{row.monthLabel}</span>
+                            {hasInstallments && (
+                              <span className="parts-badge" title="Validated receipts allocated to this month">
+                                {row.installments.length} receipt{row.installments.length > 1 ? 's' : ''}
+                              </span>
                             )}
                           </div>
                         </td>
@@ -328,23 +359,34 @@ export default function FeeLedgerTable({
                               />
                             </div>
                           ) : (
-                            <span>{formatCurrency(row.monthlyFee)}</span>
+                            <span className="font-semibold">{formatCurrency(row.monthlyFee)}</span>
                           )}
                         </td>
                         <td className={`text-right font-medium ${row.total < 0 ? 'text-advance-green' : ''}`}>
                           {row.total < 0 ? `-₹${Math.abs(row.total).toLocaleString('en-IN')}` : formatCurrency(row.total)}
                         </td>
-                        <td className="text-right text-light-paid">
-                          {row.paid > 0 ? formatCurrency(row.paid) : '—'}
+                        <td className="text-right text-light-paid font-bold">
+                          {row.paid > 0 ? (
+                            <span className="paid-amount-highlight">{formatCurrency(row.paid)}</span>
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td className={`text-right closing-cell-dark ${row.closingBalance > 0 ? 'has-balance-red' : 'zero-balance-white'}`}>
                           {formatCurrency(row.closingBalance)}
                         </td>
+                        <td className="text-center">
+                          <span className={`ledger-status-pill ${row.isCleared ? 'status-cleared' : (row.isPartial ? 'status-partial' : 'status-due')}`}>
+                            {row.isCleared && '🟢 PAID'}
+                            {row.isPartial && '🟡 PARTIAL'}
+                            {!row.isCleared && !row.isPartial && '🔴 DUE'}
+                          </span>
+                        </td>
                         <td className="text-center date-cell-dark">{row.paid > 0 ? row.paymentDate : '—'}</td>
                         <td className="text-left remark-cell-dark">
-                          {row.remark === 'in acc.' && <span className="remark-in-account">{row.remark}</span>}
-                          {row.remark === 'cash' && <span className="remark-cash">{row.remark}</span>}
-                          {row.remark === 'advance' && <span className="remark-advance">advance</span>}
+                          {row.remark === 'in acc.' && <span className="remark-in-account">🏦 in acc.</span>}
+                          {row.remark === 'cash' && <span className="remark-cash">💵 cash</span>}
+                          {row.remark === 'advance' && <span className="remark-advance">💎 advance</span>}
                           {row.remark === '—' && <span className="remark-dash">—</span>}
                         </td>
                         <td className="text-center action-cell-dark">
@@ -379,7 +421,7 @@ export default function FeeLedgerTable({
                                 className="btn-icon delete-btn"
                                 onClick={() => handleDeleteMonth(row)}
                                 disabled={deletingId === row.id || row.paid > 0}
-                                title={row.paid > 0 ? "Cannot delete month with payments" : "Delete Month Entry"}
+                                title={row.paid > 0 ? "Cannot delete month with recorded payments" : "Delete Month Entry"}
                               >
                                 {deletingId === row.id ? <Loader2 size={13} className="spin" /> : <Trash2 size={14} />}
                               </button>
@@ -388,33 +430,40 @@ export default function FeeLedgerTable({
                         </td>
                       </tr>
 
-                      {/* Expandable Sub-Row for Half-Month / Multi-Installment Breakdown */}
+                      {/* Expandable Installment / Receipts Row */}
                       {isExpanded && hasInstallments && (
-                        <tr key={`${row.id}-installments`} className="installments-subrow-dark">
-                          <td colSpan={10}>
-                            <div className="installments-container-dark">
-                              <span className="installments-title-dark">
-                                🗓️ Installment Payment Breakdown for {row.monthLabel}:
-                              </span>
-                              <div className="installments-chips-wrap">
-                                {row.installments.map((inst, idx) => {
-                                  const instMode = (inst.payment_mode || inst.mode || 'CASH').toLowerCase();
-                                  const isAccount = instMode.includes('account') || instMode.includes('bank') || instMode.includes('online');
-                                  return (
-                                    <div key={inst.id || idx} className="installment-chip-dark">
-                                      <span className="chip-part-badge">Part #{idx + 1}</span>
-                                      <span className="chip-date-text">{formatDateDDMMYY(inst.payment_date || inst.created_at)}</span>
-                                      <span className="chip-amount-text">{formatCurrency(inst.amount)}</span>
-                                      <span className={`chip-mode-badge ${isAccount ? 'in-acc' : 'cash'}`}>
-                                        {isAccount ? 'in acc.' : 'cash'}
-                                      </span>
-                                      {inst.receipt_number && (
-                                        <span className="chip-receipt-text">📄 {inst.receipt_number}</span>
-                                      )}
-                                      {inst.notes && <span className="chip-notes-text">({inst.notes})</span>}
-                                    </div>
-                                  );
-                                })}
+                        <tr className="installments-subrow">
+                          <td colSpan={11} className="installments-drawer-cell">
+                            <div className="installments-drawer-content">
+                              <div className="drawer-header">
+                                <Receipt size={14} className="drawer-icon" />
+                                <span>Validated Payment Receipts Allocated to {row.monthLabel}</span>
+                              </div>
+                              <div className="drawer-receipts-list">
+                                {row.installments.map((inst, idx) => (
+                                  <div key={idx} className="drawer-receipt-item">
+                                    <span className="inst-rcp-num">{inst.receipt_number || `RCP-${inst.id}`}</span>
+                                    <span className="inst-rcp-date">
+                                      📅 {inst.payment_date ? formatDateDDMMYY(inst.payment_date) : '—'}
+                                    </span>
+                                    <span className="inst-rcp-mode">
+                                      {inst.payment_mode === 'IN_ACCOUNT' ? '🏦 In Account' : '💵 Cash'}
+                                    </span>
+                                    <span className="inst-rcp-amount">
+                                      Allocated: <strong>{formatCurrency(inst.allocated_amount || inst.amount)}</strong>
+                                    </span>
+                                    {onViewReceipt && (
+                                      <button
+                                        type="button"
+                                        className="btn-view-rcp-mini"
+                                        onClick={() => onViewReceipt(inst.id)}
+                                        title="View Official JPG Receipt & WhatsApp Share"
+                                      >
+                                        <Receipt size={12} /> View Receipt
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           </td>

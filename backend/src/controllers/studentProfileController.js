@@ -32,27 +32,25 @@ async function getStudentProfile(req, res) {
     // Get monthly fee ledger
     const monthlyFees = await db.query(
       `SELECT mf.*,
+         COALESCE(
+           (SELECT SUM(pa.\`allocated_amount\`) FROM \`payment_allocations\` pa WHERE pa.\`monthly_fee_id\` = mf.\`id\`),
+           mf.\`paid_amount\`,
+           0
+         ) as paid_amount,
          (SELECT COALESCE(SUM(saf.\`amount\`), 0)
           FROM \`student_additional_fees\` saf
           WHERE saf.\`student_id\` = mf.\`student_id\`
             AND MONTH(saf.\`due_date\`) = mf.\`fee_month\`
             AND YEAR(saf.\`due_date\`) = mf.\`fee_year\`) as other_charges,
-         (SELECT COALESCE(SUM(p.\`amount\`), 0)
-          FROM \`payments\` p
-          WHERE p.\`student_id\` = mf.\`student_id\`
-            AND MONTH(p.\`payment_date\`) = mf.\`fee_month\`
-            AND YEAR(p.\`payment_date\`) = mf.\`fee_year\`) as month_actual_paid,
          (SELECT p.\`payment_date\`
-          FROM \`payments\` p
-          WHERE p.\`student_id\` = mf.\`student_id\`
-            AND MONTH(p.\`payment_date\`) = mf.\`fee_month\`
-            AND YEAR(p.\`payment_date\`) = mf.\`fee_year\`
+          FROM \`payment_allocations\` pa
+          JOIN \`payments\` p ON p.\`id\` = pa.\`payment_id\`
+          WHERE pa.\`monthly_fee_id\` = mf.\`id\`
           ORDER BY p.\`payment_date\` DESC LIMIT 1) as actual_payment_date,
          (SELECT p.\`payment_mode\`
-          FROM \`payments\` p
-          WHERE p.\`student_id\` = mf.\`student_id\`
-            AND MONTH(p.\`payment_date\`) = mf.\`fee_month\`
-            AND YEAR(p.\`payment_date\`) = mf.\`fee_year\`
+          FROM \`payment_allocations\` pa
+          JOIN \`payments\` p ON p.\`id\` = pa.\`payment_id\`
+          WHERE pa.\`monthly_fee_id\` = mf.\`id\`
           ORDER BY p.\`payment_date\` DESC LIMIT 1) as actual_payment_mode
        FROM \`monthly_fees\` mf
        WHERE mf.\`student_id\` = ?
@@ -70,30 +68,43 @@ async function getStudentProfile(req, res) {
       [id]
     );
 
-    // Get recent payments & attach installments by month
+    // Get recent payments & attach installments by monthly_fee_id
     const payments = await db.query(
-      `SELECT p.*, COALESCE(r.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_number
+      `SELECT p.*, COALESCE(r.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_number,
+              pa.\`monthly_fee_id\`, pa.\`allocated_amount\`
        FROM \`payments\` p
        LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
+       LEFT JOIN \`payment_allocations\` pa ON pa.\`payment_id\` = p.\`id\`
        WHERE p.\`student_id\` = ?
        ORDER BY p.\`payment_date\` DESC, p.\`created_at\` DESC`,
       [id]
     );
 
-    const paymentsByMonth = {};
+    const allocationsByMonthlyFeeId = {};
     for (const p of payments) {
-      if (p.payment_date) {
-        const d = new Date(p.payment_date);
-        const mKey = `${d.getFullYear()}-${d.getMonth() + 1}`;
-        if (!paymentsByMonth[mKey]) paymentsByMonth[mKey] = [];
-        paymentsByMonth[mKey].push(p);
+      if (p.monthly_fee_id) {
+        if (!allocationsByMonthlyFeeId[p.monthly_fee_id]) allocationsByMonthlyFeeId[p.monthly_fee_id] = [];
+        allocationsByMonthlyFeeId[p.monthly_fee_id].push(p);
       }
     }
 
-    const monthlyFeesWithInstallments = monthlyFees.map(mf => ({
-      ...mf,
-      installments: paymentsByMonth[`${mf.fee_year}-${mf.fee_month}`] || [],
-    }));
+    const monthlyFeesWithInstallments = monthlyFees.map(mf => {
+      const feeAmt = Number(mf.fee_amount || 0);
+      const otherChg = Number(mf.other_charges || 0);
+      const paidAmt = Number(mf.paid_amount || 0);
+      const dueAmt = Math.max(0, (feeAmt + otherChg) - paidAmt);
+      const computedStatus = (feeAmt + otherChg) > 0 && dueAmt === 0 ? 'PAID' : (paidAmt > 0 ? 'PARTIAL' : 'DUE');
+
+      return {
+        ...mf,
+        fee_amount: feeAmt,
+        other_charges: otherChg,
+        paid_amount: paidAmt,
+        due_amount: dueAmt,
+        status: computedStatus,
+        installments: allocationsByMonthlyFeeId[mf.id] || [],
+      };
+    });
 
     return res.json({
       success: true,
