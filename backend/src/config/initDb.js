@@ -127,9 +127,46 @@ async function initializeDatabase(options = {}) {
     await executeSqlFile(SCHEMA_FILE, 'Schema');
   }
 
+  // Ensure password_resets table exists
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS \`password_resets\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`email\` VARCHAR(191) NOT NULL,
+        \`otp_code\` VARCHAR(10) NOT NULL,
+        \`expires_at\` DATETIME NOT NULL,
+        \`is_used\` TINYINT(1) DEFAULT 0,
+        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX (\`email\`),
+        INDEX (\`otp_code\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+  } catch (err) {
+    console.warn('  (password_resets table check):', err.message);
+  }
+
   // Execute seeders
   if (!skipSeeders) {
     await executeSqlFile(SEEDERS_FILE, 'Seeders');
+  }
+
+  // Ensure initial admin user exists ONLY if table is completely empty
+  try {
+    const users = await query('SELECT id FROM users LIMIT 1');
+    if (users.length === 0) {
+      const bcrypt = require('bcryptjs');
+      const hash = await bcrypt.hash('admin123', 10);
+      await query(
+        `INSERT INTO users (id, username, email, password_hash, role, full_name, is_active)
+         VALUES (1, 'admin', 'admin@school.local', ?, 'admin', 'System Administrator', 1)`,
+        [hash]
+      );
+      console.log('  ✓ Initial default admin user created (admin / admin123)');
+    } else {
+      console.log('  🔒 Existing user accounts preserved. Custom passwords NOT modified.');
+    }
+  } catch (err) {
+    console.warn('  (user init check):', err.message);
   }
 
   console.log('\n✅ Database initialization complete!');

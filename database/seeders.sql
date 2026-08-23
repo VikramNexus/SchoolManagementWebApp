@@ -14,11 +14,8 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
--- 1. users — Default admin (password: admin123, bcrypt hash)
---    Hash generated with: bcrypt.hashSync('admin123', 10)
+-- 1. users — Initial user is created programmatically ONLY if users table is empty
 -- ----------------------------------------------------------------------------
-INSERT IGNORE INTO `users` (`id`, `username`, `email`, `password_hash`, `role`, `full_name`, `is_active`)
-VALUES (1, 'admin', 'admin@school.local', '$2a$10$B3JtXcxn/LNhaeHS1fbnYu/aTMJmINKFc8QXW4j.SaFqJyR01tc5K', 'admin', 'System Administrator', 1);
 
 -- ----------------------------------------------------------------------------
 -- 2. school_settings — Single row school profile

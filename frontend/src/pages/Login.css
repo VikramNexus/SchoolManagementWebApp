@@ -530,6 +530,21 @@
   box-shadow: 0 6px 18px rgba(99, 102, 241, 0.55);
 }
 
+.otp-input-box {
+  text-align: center !important;
+  font-size: 1.25rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 6px !important;
+  color: #38bdf8 !important;
+  background: rgba(15, 23, 42, 0.95) !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+}
+
+.otp-input-box:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35) !important;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 480px) {
   .login-genz-card {

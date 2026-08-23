@@ -244,22 +244,41 @@ async function changePassword(req, res) {
   }
 }
 
+const { sendPasswordResetOtpEmail } = require('../services/emailService');
+
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return email || '';
+  const [name, domain] = email.split('@');
+  if (name.length <= 2) return `${name[0]}*@${domain}`;
+  return `${name[0]}${'*'.repeat(name.length - 2)}${name[name.length - 1]}@${domain}`;
+}
+
 /**
- * POST /api/auth/forgot-password
- * Reset password via username or email.
+ * POST /api/auth/forgot-password-otp
+ * Step 1: Generate & Send 6-digit verification code to registered email
  */
-async function forgotPassword(req, res) {
-  const { identifier, new_password } = req.body || {};
+async function sendForgotPasswordOtp(req, res) {
+  const { identifier } = req.body || {};
 
   if (!identifier || !identifier.trim()) {
     return res.status(400).json({ success: false, message: 'Username or registered email is required.' });
   }
 
-  if (!new_password || new_password.length < 6) {
-    return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
-  }
-
   try {
+    // Ensure password_resets table exists
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS \`password_resets\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`email\` VARCHAR(191) NOT NULL,
+        \`otp_code\` VARCHAR(10) NOT NULL,
+        \`expires_at\` DATETIME NOT NULL,
+        \`is_used\` TINYINT(1) DEFAULT 0,
+        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX (\`email\`),
+        INDEX (\`otp_code\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
     const user = await db.queryOne(
       'SELECT id, username, email FROM users WHERE username = ? OR email = ? LIMIT 1',
       [identifier.trim(), identifier.trim()]
@@ -272,15 +291,102 @@ async function forgotPassword(req, res) {
       });
     }
 
+    if (!user.email || !user.email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'No email address is linked to this admin account for verification.',
+      });
+    }
+
+    // Generate secure 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Expire previous unused OTPs for this email
+    await db.query('UPDATE password_resets SET is_used = 1 WHERE email = ?', [user.email]);
+
+    // Insert new OTP with 10 minute expiry
+    await db.query(
+      `INSERT INTO password_resets (email, otp_code, expires_at, is_used)
+       VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), 0)`,
+      [user.email, otpCode]
+    );
+
+    // Send email
+    await sendPasswordResetOtpEmail(user.email, otpCode, user.username);
+
+    const masked = maskEmail(user.email);
+    return res.json({
+      success: true,
+      message: `A 6-digit verification code has been sent to ${masked}. Please check your inbox.`,
+      masked_email: masked,
+    });
+  } catch (err) {
+    console.error('[authController.sendForgotPasswordOtp]', err);
+    return res.status(500).json({ success: false, message: 'Failed to send verification code.' });
+  }
+}
+
+/**
+ * POST /api/auth/verify-otp-reset (also /reset-password)
+ * Step 2: Verify 6-digit OTP and reset password
+ */
+async function verifyOtpAndResetPassword(req, res) {
+  const { identifier, otp_code, new_password, confirm_password } = req.body || {};
+
+  if (!identifier || !identifier.trim()) {
+    return res.status(400).json({ success: false, message: 'Username or email is required.' });
+  }
+
+  if (!otp_code || !otp_code.trim()) {
+    return res.status(400).json({ success: false, message: '6-digit verification code is required.' });
+  }
+
+  if (!new_password || new_password.length < 6) {
+    return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
+  }
+
+  if (confirm_password && new_password !== confirm_password) {
+    return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+  }
+
+  try {
+    const user = await db.queryOne(
+      'SELECT id, username, email FROM users WHERE username = ? OR email = ? LIMIT 1',
+      [identifier.trim(), identifier.trim()]
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Administrator account not found.' });
+    }
+
+    // Verify OTP code
+    const validOtp = await db.queryOne(
+      `SELECT id FROM password_resets
+       WHERE email = ? AND otp_code = ? AND is_used = 0 AND expires_at > NOW()
+       ORDER BY id DESC LIMIT 1`,
+      [user.email, otp_code.trim()]
+    );
+
+    if (!validOtp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification code. Please check or request a new code.',
+      });
+    }
+
+    // Hash new password and update user
     const newHash = await bcrypt.hash(new_password, 10);
     await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id]);
 
+    // Mark OTP as used
+    await db.query('UPDATE password_resets SET is_used = 1 WHERE id = ?', [validOtp.id]);
+
     return res.json({
       success: true,
-      message: `Password for ${user.username} has been reset successfully. You can now sign in.`,
+      message: `Password for ${user.username} has been securely reset. You can now log in.`,
     });
   } catch (err) {
-    console.error('[authController.forgotPassword]', err);
+    console.error('[authController.verifyOtpAndResetPassword]', err);
     return res.status(500).json({ success: false, message: 'Failed to reset password.' });
   }
 }
@@ -290,5 +396,7 @@ module.exports = {
   me,
   updateProfile,
   changePassword,
-  forgotPassword,
+  sendForgotPasswordOtp,
+  verifyOtpAndResetPassword,
+  forgotPassword: verifyOtpAndResetPassword,
 };
