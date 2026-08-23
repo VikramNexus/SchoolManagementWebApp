@@ -12,6 +12,8 @@ const {
   updateStudent,
   patchStudent,
   deleteStudent,
+  downloadStudentLedgerPDF,
+  sendStudentLedgerWhatsApp,
 } = require('../controllers/studentController');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -22,6 +24,8 @@ router.use(authenticateToken);
 
 router.get('/', listStudents);
 router.post('/', createStudent);
+router.get('/:id/ledger-pdf', downloadStudentLedgerPDF);
+router.post('/:id/send-ledger-whatsapp', sendStudentLedgerWhatsApp);
 router.get('/:id', getStudent);
 router.put('/:id', updateStudent);
 router.patch('/:id', patchStudent);

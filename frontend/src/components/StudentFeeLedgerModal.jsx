@@ -18,7 +18,9 @@ import {
   CheckCircle2,
   Calendar,
   IndianRupee,
+  FileText,
 } from 'lucide-react';
+import { api } from '../context/AuthContext';
 import { downloadElementAsJpg, shareReceiptViaWhatsApp } from '../utils/receiptGenerator';
 import { useToast } from './Toast';
 import './StudentFeeLedgerModal.css';
@@ -34,6 +36,7 @@ export default function StudentFeeLedgerModal({
   const ledgerRef = useRef(null);
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [sharing, setSharing] = useState(false);
 
   if (!isOpen || !student) return null;
@@ -44,6 +47,28 @@ export default function StudentFeeLedgerModal({
   const isFullyCleared = totalAssessed > 0 && netBalance === 0;
 
   const parentPhone = student.phone || student.father_phone || student.contact_no || '';
+
+  const handleDownloadPdf = async () => {
+    try {
+      setDownloadingPdf(true);
+      const res = await api.get(`/students/${student.id}/ledger-pdf`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Fee_Ledger_Statement_${student.admission_no || student.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('Official PDF Statement downloaded!');
+    } catch (err) {
+      console.error('[Download Statement PDF]', err);
+      toast.error('Failed to download statement PDF');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const handleDownloadJpg = async () => {
     if (!ledgerRef.current) return;
@@ -64,6 +89,21 @@ export default function StudentFeeLedgerModal({
     if (!ledgerRef.current) return;
     setSharing(true);
     try {
+      // First try direct backend dispatch
+      try {
+        const res = await api.post(`/students/${student.id}/send-ledger-whatsapp`);
+        if (res.data?.success) {
+          if (res.data.direct_link) {
+            window.open(res.data.direct_link, '_blank');
+          }
+          toast.success(res.data.message || 'Dispatched statement to parent on WhatsApp!');
+          setSharing(false);
+          return;
+        }
+      } catch (beErr) {
+        console.log('[Backend WhatsApp fallback to client share]', beErr);
+      }
+
       const statementText = (
         `🏫 *Aryavart Shikshan Sansthan — Fee Account Statement*\n\n` +
         `Dear Parent,\nHere is the official fee statement for *${student.full_name}* (Class: ${student.class_name || 'N/A'}, Adm No: ${student.admission_no || 'N/A'}).\n\n` +
@@ -297,7 +337,33 @@ export default function StudentFeeLedgerModal({
             title="Share complete statement & ledger to parents on WhatsApp"
           >
             {sharing ? <Loader2 size={16} className="spin" /> : <MessageCircle size={16} />}
-            <span>{sharing ? 'Opening WhatsApp…' : 'Share Statement on WhatsApp'}</span>
+            <span>{sharing ? 'Dispatching WhatsApp…' : 'Share on WhatsApp'}</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn-action-pdf"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              padding: '0.75rem 1rem',
+              background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+              border: 'none',
+              borderRadius: '8px',
+              color: '#ffffff',
+              fontWeight: 800,
+              fontSize: '0.88rem',
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+            }}
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            title="Download official branded PDF Statement"
+          >
+            {downloadingPdf ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
+            <span>{downloadingPdf ? 'Generating PDF…' : 'Download PDF'}</span>
           </button>
 
           <button
@@ -308,7 +374,7 @@ export default function StudentFeeLedgerModal({
             title="Download high-resolution statement JPG"
           >
             {downloading ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
-            <span>{downloading ? 'Exporting Statement…' : 'Download JPG Statement'}</span>
+            <span>{downloading ? 'Exporting JPG…' : 'Download JPG'}</span>
           </button>
 
           <button

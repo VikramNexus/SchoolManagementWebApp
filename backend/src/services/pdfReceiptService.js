@@ -697,11 +697,250 @@ async function generateAndSaveDuesNotice(studentId) {
   return { filePath, relativePath };
 }
 
+/**
+ * Generate complete Student Fee Ledger Statement PDF
+ */
+async function generateStudentLedgerPDF(studentId) {
+  const student = await db.queryOne(
+    `SELECT s.*, c.\`name\` as class_name, sec.\`name\` as section_name
+     FROM \`students\` s
+     LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+     LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
+     WHERE s.\`id\` = ?`,
+    [studentId]
+  );
+
+  if (!student) {
+    throw new Error('Student not found');
+  }
+
+  const school = await getSchoolSettings() || {
+    school_name: 'Aryavart Shikshan Sansthan',
+    address: 'Near Knowledge Hub, Main Campus',
+    phone: '+91-9876543210',
+    email: 'info@aryavart.edu.in',
+  };
+
+  const monthlyFees = await db.query(
+    `SELECT * FROM \`monthly_fees\`
+     WHERE \`student_id\` = ?
+     ORDER BY \`fee_year\` ASC, \`fee_month\` ASC`,
+    [studentId]
+  );
+
+  const additionalFees = await db.query(
+    `SELECT * FROM \`student_additional_fees\`
+     WHERE \`student_id\` = ?
+     ORDER BY \`created_at\` ASC`,
+    [studentId]
+  );
+
+  const payments = await db.query(
+    `SELECT p.*, r.\`receipt_number\`
+     FROM \`payments\` p
+     LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
+     WHERE p.\`student_id\` = ?
+     ORDER BY p.\`payment_date\` DESC, p.\`id\` DESC`,
+    [studentId]
+  );
+
+  const totalAssessed = monthlyFees.reduce((s, m) => s + Number(m.fee_amount || 0), 0) +
+    additionalFees.reduce((s, a) => s + Number(a.amount || 0), 0);
+  const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalDue = Math.max(0, totalAssessed - totalPaid);
+
+  const receiptsDir = ensureReceiptsDir();
+  const filename = `ledger_${student.admission_no || studentId}_${Date.now()}.pdf`;
+  const filePath = path.join(receiptsDir, filename);
+
+  const doc = new PDFDocument({ margin: 40, size: 'A4' });
+  const stream = fs.createWriteStream(filePath);
+  doc.pipe(stream);
+
+  let y = 40;
+
+  // Header
+  doc.rect(40, y, 515, 60).fill('#0f172a');
+  doc.fillColor('#38bdf8').fontSize(16).font('Helvetica-Bold').text(school.school_name, 55, y + 12);
+  doc.fillColor('#94a3b8').fontSize(8.5).font('Helvetica').text(
+    `📍 ${school.address || 'Main Campus'}  •  📞 ${school.phone || '+91-9876543210'}  •  Academic Session 2025–2026`,
+    55,
+    y + 34
+  );
+
+  y += 75;
+
+  // Title Strip
+  doc.rect(40, y, 515, 24).fill('#f1f5f9');
+  doc.fillColor('#0369a1').fontSize(10).font('Helvetica-Bold').text(
+    'OFFICIAL STUDENT FEE LEDGER & ACCOUNT STATEMENT',
+    40,
+    y + 7,
+    { align: 'center', width: 515 }
+  );
+
+  y += 32;
+
+  // Student Info Box
+  doc.rect(40, y, 515, 60).stroke('#cbd5e1');
+  doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold');
+  doc.text('Student Name:', 55, y + 10);
+  doc.text('Admission No:', 55, y + 26);
+  doc.text('Class & Section:', 55, y + 42);
+
+  doc.fillColor('#0f172a').font('Helvetica');
+  doc.text(student.full_name || 'N/A', 140, y + 10);
+  doc.text(student.admission_no || 'N/A', 140, y + 26);
+  doc.text(`${student.class_name || 'N/A'} ${student.section_name ? `(${student.section_name})` : ''}`, 140, y + 42);
+
+  doc.fillColor('#475569').font('Helvetica-Bold');
+  doc.text('Father\'s Name:', 320, y + 10);
+  doc.text('Category:', 320, y + 26);
+  doc.text('Statement Date:', 320, y + 42);
+
+  doc.fillColor('#0f172a').font('Helvetica');
+  doc.text(student.father_name || 'N/A', 410, y + 10);
+  doc.text(student.category === 'hosteller' ? 'Hostel Resident' : 'Day Scholar', 410, y + 26);
+  doc.text(new Date().toLocaleDateString('en-IN'), 410, y + 42);
+
+  y += 72;
+
+  // Financial KPIs
+  const boxW = 165;
+  doc.rect(40, y, boxW, 36).fill('#f0f9ff').stroke('#bae6fd');
+  doc.fillColor('#0369a1').fontSize(7.5).font('Helvetica-Bold').text('TOTAL ASSESSED FEES', 45, y + 6);
+  doc.fillColor('#0369a1').fontSize(12).font('Helvetica-Bold').text(`₹${totalAssessed.toLocaleString('en-IN')}`, 45, y + 18);
+
+  doc.rect(215, y, boxW, 36).fill('#f0fdf4').stroke('#bbf7d0');
+  doc.fillColor('#15803d').fontSize(7.5).font('Helvetica-Bold').text('TOTAL FEES CLEARED', 220, y + 6);
+  doc.fillColor('#15803d').fontSize(12).font('Helvetica-Bold').text(`₹${totalPaid.toLocaleString('en-IN')}`, 220, y + 18);
+
+  doc.rect(390, y, boxW, 36).fill(totalDue > 0 ? '#fff7ed' : '#f0fdfa').stroke(totalDue > 0 ? '#fed7aa' : '#99f6e4');
+  doc.fillColor(totalDue > 0 ? '#c2410c' : '#0f766e').fontSize(7.5).font('Helvetica-Bold').text('OUTSTANDING DUES', 395, y + 6);
+  doc.fillColor(totalDue > 0 ? '#c2410c' : '#0f766e').fontSize(12).font('Helvetica-Bold').text(`₹${totalDue.toLocaleString('en-IN')}`, 395, y + 18);
+
+  y += 48;
+
+  // Monthly Table
+  doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold').text('Month-by-Month Fee Schedule', 40, y);
+  y += 14;
+
+  doc.rect(40, y, 515, 18).fill('#0f172a');
+  doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold');
+  doc.text('Month / Fee Period', 50, y + 5);
+  doc.text('Assessed Rate', 240, y + 5, { align: 'right', width: 70 });
+  doc.text('Amount Paid', 330, y + 5, { align: 'right', width: 70 });
+  doc.text('Balance Due', 420, y + 5, { align: 'right', width: 60 });
+  doc.text('Status', 500, y + 5, { align: 'center', width: 45 });
+
+  y += 18;
+
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  if (monthlyFees.length === 0) {
+    doc.rect(40, y, 515, 18).stroke('#e2e8f0');
+    doc.fillColor('#64748b').fontSize(8).font('Helvetica').text('No monthly fee schedules generated yet.', 50, y + 5);
+    y += 18;
+  } else {
+    for (const m of monthlyFees) {
+      if (y > 720) {
+        doc.addPage();
+        y = 40;
+      }
+      const due = Number(m.fee_amount || 0);
+      const paid = Number(m.paid_amount || 0);
+      const bal = Math.max(0, due - paid);
+      const isPaid = bal === 0 && due > 0;
+
+      doc.rect(40, y, 515, 16).stroke('#f1f5f9');
+      doc.fillColor('#1e293b').fontSize(7.5).font('Helvetica');
+      doc.text(`${monthNames[m.fee_month - 1]} ${m.fee_year}`, 50, y + 4);
+      doc.text(`₹${due.toLocaleString('en-IN')}`, 240, y + 4, { align: 'right', width: 70 });
+      doc.fillColor('#15803d').text(`₹${paid.toLocaleString('en-IN')}`, 330, y + 4, { align: 'right', width: 70 });
+      doc.fillColor(bal > 0 ? '#dc2626' : '#64748b').text(`₹${bal.toLocaleString('en-IN')}`, 420, y + 4, { align: 'right', width: 60 });
+      doc.fillColor(isPaid ? '#15803d' : bal > 0 ? '#dc2626' : '#64748b').font('Helvetica-Bold').text(
+        isPaid ? 'PAID' : bal > 0 ? 'DUE' : '—',
+        500,
+        y + 4,
+        { align: 'center', width: 45 }
+      );
+      y += 16;
+    }
+  }
+
+  y += 14;
+
+  // Payments History Log (if any)
+  if (payments.length > 0) {
+    if (y > 660) {
+      doc.addPage();
+      y = 40;
+    }
+    doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold').text(`Validated Payment Receipts Log (${payments.length})`, 40, y);
+    y += 14;
+
+    doc.rect(40, y, 515, 18).fill('#334155');
+    doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold');
+    doc.text('Receipt No', 50, y + 5);
+    doc.text('Payment Date', 170, y + 5);
+    doc.text('Payment Channel', 280, y + 5);
+    doc.text('Amount Received', 440, y + 5, { align: 'right', width: 100 });
+
+    y += 18;
+
+    for (const p of payments.slice(0, 10)) {
+      if (y > 730) {
+        doc.addPage();
+        y = 40;
+      }
+      doc.rect(40, y, 515, 16).stroke('#f1f5f9');
+      doc.fillColor('#0284c7').fontSize(7.5).font('Helvetica-Bold').text(p.receipt_number || `RCP-${p.id}`, 50, y + 4);
+      doc.fillColor('#334155').font('Helvetica').text(
+        p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-IN') : '—',
+        170,
+        y + 4
+      );
+      doc.text(p.payment_mode === 'IN_ACCOUNT' ? '🏦 In Account (Bank)' : '💵 Cash Handover', 280, y + 4);
+      doc.fillColor('#15803d').font('Helvetica-Bold').text(`₹${Number(p.amount).toLocaleString('en-IN')}`, 440, y + 4, { align: 'right', width: 100 });
+      y += 16;
+    }
+  }
+
+  // Footer & Seal
+  if (y > 700) {
+    doc.addPage();
+    y = 40;
+  }
+  y += 20;
+  doc.rect(40, y, 515, 45).fill('#f8fafc').stroke('#e2e8f0');
+  doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text(
+    '✓ This is an official computer-generated fee ledger statement issued by Aryavart Shikshan Sansthan Accounts Department.',
+    50,
+    y + 16
+  );
+  doc.fillColor('#0369a1').font('Helvetica-Bold').text('Authorized Accounts Signatory', 390, y + 16);
+
+  doc.end();
+
+  return new Promise((resolve, reject) => {
+    stream.on('finish', () => resolve(filePath));
+    stream.on('error', reject);
+  });
+}
+
+async function generateAndSaveStudentLedger(studentId) {
+  const filePath = await generateStudentLedgerPDF(studentId);
+  const relativePath = path.relative(path.join(__dirname, '../../'), filePath);
+  return { filePath, relativePath };
+}
+
 module.exports = {
   generateReceiptPDF,
   generateAndSaveReceipt,
   generateDuesNoticePDF,
   generateAndSaveDuesNotice,
+  generateStudentLedgerPDF,
+  generateAndSaveStudentLedger,
   getNextReceiptNumber,
   getPaymentDetailsForReceipt,
   getPaymentAllocations,

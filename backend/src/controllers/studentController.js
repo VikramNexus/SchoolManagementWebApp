@@ -347,6 +347,116 @@ async function deleteStudent(req, res) {
   }
 }
 
+/**
+ * GET /api/students/:id/ledger-pdf
+ * Download official student fee ledger PDF
+ */
+async function downloadStudentLedgerPDF(req, res) {
+  const { id } = req.params;
+  try {
+    const { generateStudentLedgerPDF } = require('../services/pdfReceiptService');
+    const filePath = await generateStudentLedgerPDF(id);
+    const filename = `Fee_Ledger_Statement_${id}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error('[downloadStudentLedgerPDF]', err);
+    return res.status(500).json({ success: false, message: 'Failed to generate statement PDF: ' + err.message });
+  }
+}
+
+/**
+ * POST /api/students/:id/send-ledger-whatsapp
+ * Dispatches complete fee ledger breakdown directly to parent WhatsApp
+ */
+async function sendStudentLedgerWhatsApp(req, res) {
+  const { id } = req.params;
+  try {
+    const student = await db.queryOne(
+      `SELECT s.*, c.\`name\` as class_name, sec.\`name\` as section_name
+       FROM \`students\` s
+       LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+       LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
+       WHERE s.\`id\` = ?`,
+      [id]
+    );
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found.' });
+    }
+
+    const recipientPhone = student.whatsapp_number || student.phone || student.father_phone || student.contact_no;
+    if (!recipientPhone) {
+      return res.status(400).json({ success: false, message: 'No registered phone/WhatsApp number for this student.' });
+    }
+
+    const school = await db.queryOne('SELECT `school_name`, `phone` FROM `school_settings` WHERE `id` = 1') || {
+      school_name: 'Aryavart Shikshan Sansthan',
+    };
+
+    const monthlyFees = await db.query(
+      `SELECT * FROM \`monthly_fees\` WHERE \`student_id\` = ? ORDER BY \`fee_year\` ASC, \`fee_month\` ASC`,
+      [id]
+    );
+    const payments = await db.query(
+      `SELECT * FROM \`payments\` WHERE \`student_id\` = ? ORDER BY \`payment_date\` DESC`,
+      [id]
+    );
+
+    const totalAssessed = monthlyFees.reduce((s, m) => s + Number(m.fee_amount || 0), 0);
+    const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+    const netBalance = Math.max(0, totalAssessed - totalPaid);
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    let monthBreakdownText = '';
+    monthlyFees.slice(0, 12).forEach((m) => {
+      const due = Number(m.fee_amount || 0);
+      const paid = Number(m.paid_amount || 0);
+      const statusIcon = m.status === 'PAID' ? '🟢 PAID' : '🔴 DUE';
+      monthBreakdownText += `• ${monthNames[m.fee_month - 1]} ${m.fee_year}: ₹${paid}/₹${due} (${statusIcon})\n`;
+    });
+
+    const statementMessage = 
+`🏫 *${(school.school_name || 'ARYAVART SHIKSHAN SANSTHAN').toUpperCase()}*
+*OFFICIAL STUDENT FEE STATEMENT & LEDGER*
+━━━━━━━━━━━━━━━━━━━━
+👤 *Student:* ${student.full_name}
+🆔 *Adm No:* ${student.admission_no || 'N/A'}
+🏫 *Class:* ${student.class_name || 'N/A'}${student.section_name ? ` (${student.section_name})` : ''}
+👨‍👦 *Father:* ${student.father_name || 'N/A'}
+📅 *Statement Date:* ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+
+📊 *FINANCIAL SUMMARY*
+• Total Assessed Fees: *₹${totalAssessed.toLocaleString('en-IN')}*
+• Total Fees Paid: *₹${totalPaid.toLocaleString('en-IN')}*
+• Net Balance Due: *₹${netBalance.toLocaleString('en-IN')}*
+• Status: *${netBalance === 0 && totalAssessed > 0 ? '🟢 ALL FEES CLEARED' : '⚠️ PAYMENT DUE'}*
+
+📋 *MONTH-BY-MONTH STATUS*
+${monthBreakdownText || '• All monthly schedules up to date.\n'}
+━━━━━━━━━━━━━━━━━━━━
+✓ Computer generated statement for fee transparency.
+_${school.school_name}_`;
+
+    const { sendWhatsApp } = require('../services/whatsappService');
+    const result = await sendWhatsApp(recipientPhone, statementMessage, {
+      student_id: student.id,
+    });
+
+    return res.json({
+      success: true,
+      mode: result?.mode || 'background',
+      direct_link: result?.direct_link || null,
+      message: result?.mode === 'direct_link' ? `Opening WhatsApp for ${recipientPhone}...` : `Fee Ledger statement dispatched to ${recipientPhone}`,
+      recipient: recipientPhone,
+    });
+  } catch (err) {
+    console.error('[sendStudentLedgerWhatsApp]', err);
+    return res.status(500).json({ success: false, message: 'Failed to send ledger statement: ' + err.message });
+  }
+}
+
 module.exports = {
   listStudents,
   createStudent,
@@ -354,4 +464,6 @@ module.exports = {
   updateStudent,
   patchStudent,
   deleteStudent,
+  downloadStudentLedgerPDF,
+  sendStudentLedgerWhatsApp,
 };
