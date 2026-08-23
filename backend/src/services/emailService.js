@@ -62,40 +62,44 @@ function getTransporter() {
 async function sendPasswordResetOtpEmail(toEmail, otpCode, username) {
   const transporter = getTransporter();
 
+  const senderEmail = process.env.GMAIL_USER || 'vy3052907@gmail.com';
+
   const mailOptions = {
-    from: process.env.EMAIL_FROM || '"Aryavart Portal Security" <noreply@schoolmanagement.local>',
+    from: `"Aryavart Portal Security" <${senderEmail}>`,
     to: toEmail,
-    subject: `🔐 Your Password Reset Verification Code: ${otpCode}`,
+    replyTo: senderEmail,
+    subject: `Password Reset Verification Code: ${otpCode} — Aryavart Portal`,
+    text: `Hello ${username},\n\nYour 6-digit verification code to reset your Aryavart Portal admin password is: ${otpCode}\n\nThis code is valid for 10 minutes.\nIf you did not request this, please ignore this email.`,
     html: `
-      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 16px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #38bdf8; margin: 0; font-size: 22px;">🏫 Aryavart Portal</h2>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 14px; border: 1px solid #1e293b;">
+        <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #1e293b; padding-bottom: 16px;">
+          <h2 style="color: #38bdf8; margin: 0; font-size: 20px; letter-spacing: -0.5px;">🏫 Aryavart Shikshan Sansthan</h2>
           <p style="color: #94a3b8; font-size: 13px; margin: 4px 0 0;">Administrator Account Security</p>
         </div>
 
-        <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; text-align: center;">
-          <p style="font-size: 15px; margin: 0 0 16px; color: #e2e8f0;">
+        <div style="background: #1e293b; border-radius: 10px; padding: 20px; text-align: center; margin-bottom: 20px;">
+          <p style="font-size: 14px; margin: 0 0 14px; color: #e2e8f0;">
             Hello <strong>${username}</strong>,<br/>
             We received a request to reset the password for your administrator account.
           </p>
 
-          <p style="font-size: 13px; color: #94a3b8; margin: 0 0 12px;">Your 6-digit email verification code is:</p>
+          <p style="font-size: 12px; color: #94a3b8; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 1px;">Your 6-Digit Verification Code</p>
 
-          <div style="display: inline-block; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #38bdf8; background: #1e293b; padding: 12px 24px; border-radius: 10px; border: 1.5px dashed #38bdf8; margin-bottom: 16px;">
+          <div style="display: inline-block; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #38bdf8; background: #0f172a; padding: 12px 28px; border-radius: 8px; border: 1.5px dashed #38bdf8; margin-bottom: 14px;">
             ${otpCode}
           </div>
 
-          <p style="font-size: 12px; color: #f59e0b; margin: 0;">
-            ⚠️ This code is valid for <strong>10 minutes</strong>. Do NOT share this code with anyone.
+          <p style="font-size: 12px; color: #fbbf24; margin: 0;">
+            ⏱️ This code will expire in <strong>10 minutes</strong>.
           </p>
         </div>
 
-        <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 20px;">
-          If you did not request this password reset, please ignore this email. Your account remains secure.
+        <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0; line-height: 1.5;">
+          If you did not request this password reset, you can safely ignore this email.<br/>
+          Your account remains protected.
         </p>
       </div>
     `,
-    text: `Your Aryavart Portal Password Reset Code is: ${otpCode}. Valid for 10 minutes.`,
   };
 
   if (transporter) {

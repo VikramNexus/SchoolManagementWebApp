@@ -21,6 +21,10 @@ import {
   ShieldCheck,
   RotateCcw,
   RefreshCw,
+  Cloud,
+  Laptop,
+  Globe,
+  Activity,
 } from 'lucide-react';
 import { useAuth, SERVER_URL_KEY, DEFAULT_SERVER_URL, updateApiBaseUrl, api } from '../context/AuthContext';
 import './Login.css';
@@ -187,14 +191,25 @@ export default function Login() {
     }
   };
 
-  const handleTestServer = async () => {
+  const [pingLatency, setPingLatency] = useState(null);
+
+  const handleTestServer = async (targetUrl = serverUrl) => {
     setServerTestStatus('testing');
+    setPingLatency(null);
+    const start = performance.now();
     try {
-      const testUrl = `${serverUrl.trim().replace(/\/$/, '')}/api/health`;
+      let cleanUrl = (targetUrl || '').trim().replace(/\/$/, '');
+      if (!cleanUrl.endsWith('/api')) {
+        cleanUrl += '/api';
+      }
+      const testUrl = `${cleanUrl}/health`;
       const res = await fetch(testUrl, { method: 'GET' });
+      const latency = Math.round(performance.now() - start);
       if (res.ok) {
         setServerTestStatus('success');
-        updateApiBaseUrl(serverUrl.trim());
+        setPingLatency(latency);
+        setServerUrl(cleanUrl);
+        updateApiBaseUrl(cleanUrl);
       } else {
         setServerTestStatus('error');
       }
@@ -203,9 +218,20 @@ export default function Login() {
     }
   };
 
+  const handleSelectPreset = (url) => {
+    setServerUrl(url);
+    setServerTestStatus(null);
+    setPingLatency(null);
+    handleTestServer(url);
+  };
+
   const handleSaveServer = (e) => {
     e.preventDefault();
-    updateApiBaseUrl(serverUrl.trim());
+    let cleanUrl = serverUrl.trim().replace(/\/$/, '');
+    if (!cleanUrl.endsWith('/api')) {
+      cleanUrl += '/api';
+    }
+    updateApiBaseUrl(cleanUrl);
     setShowServerModal(false);
   };
 
@@ -328,18 +354,18 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Server IP Config Modal */}
+      {/* Server IP / Cloud Endpoint Config Modal */}
       {showServerModal && (
         <div className="forgot-modal-overlay" onClick={() => setShowServerModal(false)}>
-          <div className="forgot-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="forgot-modal-card server-endpoint-modal" onClick={(e) => e.stopPropagation()}>
             <div className="forgot-modal-header">
               <div className="forgot-header-title">
-                <div className="forgot-icon-badge">
-                  <Server size={20} />
+                <div className="forgot-icon-badge server-badge-glow">
+                  <Globe size={22} />
                 </div>
                 <div>
                   <h3 className="modal-title">API Server Connection</h3>
-                  <p className="modal-subtitle">Configure cloud or local server address for this device.</p>
+                  <p className="modal-subtitle">Configure backend cloud or local connection for this device.</p>
                 </div>
               </div>
               <button
@@ -352,36 +378,81 @@ export default function Login() {
               </button>
             </div>
 
+            {/* Quick Preset Selector */}
+            <div className="server-presets-section">
+              <label className="preset-label">Choose Server Preset</label>
+              <div className="preset-grid">
+                <button
+                  type="button"
+                  className={`preset-card ${serverUrl.includes('onrender.com') ? 'active' : ''}`}
+                  onClick={() => handleSelectPreset('https://schoolmanagementwebapp-pf7m.onrender.com/api')}
+                >
+                  <div className="preset-card-icon cloud-icon">
+                    <Cloud size={18} />
+                  </div>
+                  <div className="preset-card-info">
+                    <div className="preset-name">Render Cloud 24/7</div>
+                    <div className="preset-url">schoolmanagementwebapp-pf7m.onrender.com</div>
+                  </div>
+                  {serverUrl.includes('onrender.com') && <span className="preset-check">✓</span>}
+                </button>
+
+                <button
+                  type="button"
+                  className={`preset-card ${serverUrl.includes('localhost') ? 'active' : ''}`}
+                  onClick={() => handleSelectPreset('http://localhost:5000/api')}
+                >
+                  <div className="preset-card-icon local-icon">
+                    <Laptop size={18} />
+                  </div>
+                  <div className="preset-card-info">
+                    <div className="preset-name">Local Machine</div>
+                    <div className="preset-url">http://localhost:5000/api</div>
+                  </div>
+                  {serverUrl.includes('localhost') && <span className="preset-check">✓</span>}
+                </button>
+              </div>
+            </div>
+
             <form className="forgot-form" onSubmit={handleSaveServer}>
               <div className="genz-field">
-                <label>Backend Server URL</label>
+                <label>Custom Endpoint URL</label>
                 <div className="input-wrap">
                   <input
                     type="url"
-                    placeholder="https://schoolmanagementwebapp-pf7m.onrender.com/api"
+                    placeholder="https://your-server-url.com/api"
                     value={serverUrl}
                     onChange={(e) => {
                       setServerUrl(e.target.value);
                       setServerTestStatus(null);
+                      setPingLatency(null);
                     }}
                     required
                   />
                 </div>
-                <span className="field-hint">
-                  Default Cloud: <code>https://schoolmanagementwebapp-pf7m.onrender.com/api</code>
-                </span>
               </div>
 
-              {serverTestStatus === 'success' && (
-                <div className="genz-alert success">
-                  <CheckCircle2 size={16} />
-                  <span>Server reached successfully! Connected &amp; ready.</span>
+              {/* Status & Latency Badge */}
+              {serverTestStatus === 'testing' && (
+                <div className="server-status-pill testing">
+                  <Loader2 size={15} className="spin" />
+                  <span>Pinging server &amp; testing health check…</span>
                 </div>
               )}
+
+              {serverTestStatus === 'success' && (
+                <div className="server-status-pill success">
+                  <CheckCircle2 size={16} />
+                  <span>
+                    Server Online &bull; <strong>{pingLatency ? `${pingLatency}ms latency` : 'Connected'}</strong>
+                  </span>
+                </div>
+              )}
+
               {serverTestStatus === 'error' && (
-                <div className="genz-alert">
+                <div className="server-status-pill error">
                   <AlertCircle size={16} />
-                  <span>Cannot reach server. Please verify your internet connection.</span>
+                  <span>Cannot reach server. Verify connection and URL.</span>
                 </div>
               )}
 
@@ -389,11 +460,11 @@ export default function Login() {
                 <button
                   type="button"
                   className="modal-sec-btn"
-                  onClick={handleTestServer}
+                  onClick={() => handleTestServer()}
                   disabled={serverTestStatus === 'testing'}
                 >
-                  {serverTestStatus === 'testing' ? <Loader2 size={15} className="spin" /> : <Wifi size={15} />}
-                  <span>Test Server</span>
+                  <Activity size={15} />
+                  <span>Ping &amp; Test</span>
                 </button>
                 <button type="submit" className="modal-pri-btn">
                   Save &amp; Connect
