@@ -5,8 +5,20 @@
 
 const nodemailer = require('nodemailer');
 
-// Initialize SMTP transporter
+// Initialize SMTP or Gmail transporter
 function createTransporter() {
+  // Option 1: Direct Gmail App Password
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    });
+  }
+
+  // Option 2: Custom SMTP Host (cPanel, Hostinger, Brevo, SendGrid)
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
   const user = process.env.SMTP_USER;
