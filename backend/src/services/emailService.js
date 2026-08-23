@@ -5,17 +5,29 @@
 
 const nodemailer = require('nodemailer');
 
-// Initialize SMTP or Gmail transporter
-function createTransporter() {
-  // Option 1: Direct Gmail App Password
+let cachedTransporter = null;
+
+// Initialize cached pooled SMTP / Gmail transporter for high-speed delivery
+function getTransporter() {
+  if (cachedTransporter) return cachedTransporter;
+
+  // Option 1: Direct Gmail High-Speed SSL Pool
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    return nodemailer.createTransport({
-      service: 'gmail',
+    cachedTransporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
       auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_APP_PASSWORD,
       },
+      connectionTimeout: 8000,
+      greetingTimeout: 4000,
     });
+    return cachedTransporter;
   }
 
   // Option 2: Custom SMTP Host (cPanel, Hostinger, Brevo, SendGrid)
@@ -25,18 +37,22 @@ function createTransporter() {
   const pass = process.env.SMTP_PASS;
 
   if (host && user && pass) {
-    return nodemailer.createTransport({
+    cachedTransporter = nodemailer.createTransport({
       host,
       port,
       secure: port === 465,
+      pool: true,
+      maxConnections: 5,
       auth: {
         user,
         pass,
       },
+      connectionTimeout: 8000,
+      greetingTimeout: 4000,
     });
+    return cachedTransporter;
   }
 
-  // Fallback transporter (console logging for dev/testing when SMTP is not configured)
   return null;
 }
 
@@ -44,7 +60,7 @@ function createTransporter() {
  * Send 6-digit Password Reset OTP to Administrator Email
  */
 async function sendPasswordResetOtpEmail(toEmail, otpCode, username) {
-  const transporter = createTransporter();
+  const transporter = getTransporter();
 
   const mailOptions = {
     from: process.env.EMAIL_FROM || '"Aryavart Portal Security" <noreply@schoolmanagement.local>',

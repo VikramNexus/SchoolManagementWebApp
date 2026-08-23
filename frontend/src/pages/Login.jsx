@@ -3,7 +3,7 @@
  * Ultra-Modern Glassmorphism UI with Cloud & Local Connectivity
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import {
   GraduationCap,
@@ -20,6 +20,7 @@ import {
   Mail,
   ShieldCheck,
   RotateCcw,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth, SERVER_URL_KEY, DEFAULT_SERVER_URL, updateApiBaseUrl, api } from '../context/AuthContext';
 import './Login.css';
@@ -41,6 +42,7 @@ export default function Login() {
   // Forgot password modal state (2-Step Email Verification)
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotStep, setForgotStep] = useState(1); // 1: Send OTP to Email, 2: Enter OTP & New Password
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [forgotForm, setForgotForm] = useState({
     identifier: '',
     otp_code: '',
@@ -50,6 +52,15 @@ export default function Login() {
   const [maskedEmail, setMaskedEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMsg, setForgotMsg] = useState({ type: '', text: '' });
+
+  // Cooldown countdown timer for Resend OTP button
+  useEffect(() => {
+    let timer;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => setResendCooldown((prev) => prev - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   // If already authenticated, redirect to dashboard
   if (isAuthenticated) {
@@ -88,7 +99,7 @@ export default function Login() {
 
   // Step 1: Send 6-digit OTP code to registered admin email
   const handleSendOtp = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setForgotMsg({ type: '', text: '' });
 
     if (!forgotForm.identifier.trim()) {
@@ -109,6 +120,7 @@ export default function Login() {
           text: res.data.message || 'Verification code sent to your email!',
         });
         setForgotStep(2);
+        setResendCooldown(30); // 30s cooldown before allowing next resend
       }
     } catch (err) {
       setForgotMsg({
@@ -118,6 +130,12 @@ export default function Login() {
     } finally {
       setForgotLoading(false);
     }
+  };
+
+  // Resend OTP handler
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || forgotLoading) return;
+    await handleSendOtp();
   };
 
   // Step 2: Verify OTP and set new password
@@ -501,6 +519,25 @@ export default function Login() {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="resend-action-bar">
+                  <span className="resend-hint">Didn't receive the email?</span>
+                  <button
+                    type="button"
+                    className="btn-resend-otp"
+                    onClick={handleResendOtp}
+                    disabled={resendCooldown > 0 || forgotLoading}
+                  >
+                    {resendCooldown > 0 ? (
+                      <span>Resend code in {resendCooldown}s</span>
+                    ) : (
+                      <>
+                        <RefreshCw size={13} className={forgotLoading ? 'spin' : ''} />
+                        <span>Resend Code</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 <div className="modal-btn-row">
