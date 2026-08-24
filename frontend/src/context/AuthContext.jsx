@@ -15,12 +15,19 @@ const USER_KEY = 'sms_user';
 export const SERVER_URL_KEY = 'sms_server_url';
 export const DEFAULT_SERVER_URL = import.meta.env.VITE_API_URL || 'https://schoolmanagementwebapp-pf7m.onrender.com';
 
+export function normalizeApiUrl(rawUrl) {
+  if (!rawUrl) return `${DEFAULT_SERVER_URL.replace(/\/+$/, '')}/api`;
+  let url = rawUrl.trim().replace(/\/+$/, '');
+  // Strip any trailing /api (even multiple times) so we have a clean base
+  while (url.endsWith('/api')) {
+    url = url.slice(0, -4).replace(/\/+$/, '');
+  }
+  return `${url}/api`;
+}
+
 export function getBaseURL() {
   const saved = localStorage.getItem(SERVER_URL_KEY);
-  if (saved) {
-    return `${saved.replace(/\/$/, '')}/api`;
-  }
-  return `${DEFAULT_SERVER_URL.replace(/\/$/, '')}/api`;
+  return normalizeApiUrl(saved || DEFAULT_SERVER_URL);
 }
 
 const AuthContext = createContext(null);
@@ -30,8 +37,9 @@ export const api = axios.create({ baseURL: getBaseURL() });
 
 export function updateApiBaseUrl(newServerUrl) {
   if (newServerUrl) {
-    localStorage.setItem(SERVER_URL_KEY, newServerUrl.trim());
-    api.defaults.baseURL = `${newServerUrl.trim().replace(/\/$/, '')}/api`;
+    const clean = normalizeApiUrl(newServerUrl);
+    localStorage.setItem(SERVER_URL_KEY, clean);
+    api.defaults.baseURL = clean;
   }
 }
 

@@ -126,10 +126,18 @@ app.get(['/ping', '/api/ping'], (req, res) => {
   res.status(200).send('pong');
 });
 
+// URL normalizer middleware (gracefully handles accidental /api/api prefixes)
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/api')) {
+    req.url = req.url.replace(/^\/api\/api/, '/api');
+  }
+  next();
+});
+
 // ---------------------------------------------------------------------------
 // Mount API routers (auth, settings, students, payments, ...)
 // ---------------------------------------------------------------------------
-app.use('/api', apiRoutes);
+app.use(['/api', '/api/api'], apiRoutes);
 
 // ---------------------------------------------------------------------------
 // Static Web App Serving & SPA Fallback (Live Auto-Sync)

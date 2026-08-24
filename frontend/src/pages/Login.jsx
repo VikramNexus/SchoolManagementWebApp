@@ -28,7 +28,7 @@ import {
   HelpCircle,
   KeyRound,
 } from 'lucide-react';
-import { useAuth, SERVER_URL_KEY, DEFAULT_SERVER_URL, updateApiBaseUrl, api } from '../context/AuthContext';
+import { useAuth, SERVER_URL_KEY, DEFAULT_SERVER_URL, updateApiBaseUrl, normalizeApiUrl, api } from '../context/AuthContext';
 import './Login.css';
 
 export default function Login() {
@@ -208,10 +208,7 @@ export default function Login() {
     setPingLatency(null);
     const start = performance.now();
     try {
-      let cleanUrl = (targetUrl || '').trim().replace(/\/$/, '');
-      if (!cleanUrl.endsWith('/api')) {
-        cleanUrl += '/api';
-      }
+      const cleanUrl = normalizeApiUrl(targetUrl);
       const testUrl = `${cleanUrl}/health`;
       const res = await fetch(testUrl, { method: 'GET' });
       const latency = Math.round(performance.now() - start);
@@ -229,18 +226,16 @@ export default function Login() {
   };
 
   const handleSelectPreset = (url) => {
-    setServerUrl(url);
+    const cleanUrl = normalizeApiUrl(url);
+    setServerUrl(cleanUrl);
     setServerTestStatus(null);
     setPingLatency(null);
-    handleTestServer(url);
+    handleTestServer(cleanUrl);
   };
 
   const handleSaveServer = (e) => {
     e.preventDefault();
-    let cleanUrl = serverUrl.trim().replace(/\/$/, '');
-    if (!cleanUrl.endsWith('/api')) {
-      cleanUrl += '/api';
-    }
+    const cleanUrl = normalizeApiUrl(serverUrl);
     updateApiBaseUrl(cleanUrl);
     setShowServerModal(false);
   };
