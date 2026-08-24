@@ -125,8 +125,31 @@
 .header-right {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.btn-header-action {
+  height: 32px !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  border-radius: 6px !important;
+  gap: 0.35rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.btn-receipt-num-compact {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.3rem !important;
+  height: 28px !important;
+  padding: 0 0.55rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  border-radius: 6px !important;
 }
 
 /* Dues Breakdown Summary Bar Wrap */
@@ -923,6 +946,7 @@
   border: none !important;
   box-shadow: none !important;
   width: 100% !important;
+  margin: 0.85rem 0 !important;
 }
 
 .pending-dues-actions-grid-row {
@@ -1047,12 +1071,18 @@
     gap: 0.45rem !important;
   }
 
-  .header-right .btn {
+  .btn-header-action {
     width: 100% !important;
     justify-content: center !important;
-    height: 36px !important;
-    font-size: 0.8rem !important;
+    height: 32px !important;
+    font-size: 0.76rem !important;
     padding: 0 0.4rem !important;
+  }
+
+  .btn-receipt-num-compact {
+    height: 24px !important;
+    padding: 0 0.35rem !important;
+    font-size: 0.7rem !important;
   }
 
   /* 2-Column Top Information Grid */

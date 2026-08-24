@@ -41,7 +41,7 @@ import {
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
-import WhatsAppDirectButton from '../components/WhatsAppDirectButton';
+import WhatsAppDirectButton, { WhatsAppIcon } from '../components/WhatsAppDirectButton';
 import FeeLedgerTable from '../components/FeeLedgerTable';
 import RecordPaymentModal from '../components/RecordPaymentModal';
 import EditMonthlyRateModal from '../components/EditMonthlyRateModal';
@@ -662,11 +662,11 @@ export default function StudentProfile() {
           </div>
         </div>
         <div className="header-right">
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowEditProfileModal(true)}>
-            <Edit2 size={14} /> Edit Profile
+          <button className="btn btn-secondary btn-header-action" onClick={() => setShowEditProfileModal(true)}>
+            <Edit2 size={13} /> Edit Profile
           </button>
-          <button className="btn btn-danger-outline btn-sm" onClick={() => setShowDeleteModal(true)} title="Delete or Mark as Left">
-            <Trash2 size={14} /> Delete
+          <button className="btn btn-danger-outline btn-header-action" onClick={() => setShowDeleteModal(true)} title="Delete or Mark as Left">
+            <Trash2 size={13} /> Delete
           </button>
         </div>
       </header>
@@ -787,7 +787,7 @@ export default function StudentProfile() {
                   className="contact-item whatsapp"
                   title="WhatsApp"
                 >
-                  <MessageCircle size={20} />
+                  <WhatsAppIcon size={20} />
                   <span>WhatsApp</span>
                 </a>
               )}
@@ -1135,13 +1135,12 @@ export default function StudentProfile() {
                         <td>
                           <button
                             type="button"
-                            className="btn btn-secondary btn-xs"
+                            className="btn btn-secondary btn-receipt-num-compact"
                             onClick={() => handleOpenReceipt(p.id)}
                             title="View & Download Official JPG Receipt & WhatsApp Share"
-                            style={{ gap: '0.3rem', display: 'inline-flex', alignItems: 'center' }}
                           >
-                            <Receipt size={13} />
-                            {receiptNum}
+                            <Receipt size={12} />
+                            <span>{receiptNum}</span>
                           </button>
                         </td>
                         <td>

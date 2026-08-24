@@ -13,11 +13,11 @@ import {
   Check,
   Receipt,
   GraduationCap,
-  MessageCircle,
   Building2,
   CheckCircle2,
 } from 'lucide-react';
 import { downloadElementAsJpg, shareReceiptViaWhatsApp } from '../utils/receiptGenerator';
+import { WhatsAppIcon } from './WhatsAppDirectButton';
 import { useToast } from './Toast';
 import './JpgReceiptModal.css';
 
@@ -290,7 +290,7 @@ export default function JpgReceiptModal({
             disabled={sharing}
             title="Share receipt image & details on WhatsApp"
           >
-            {sharing ? <Loader2 size={16} className="spin" /> : <MessageCircle size={16} />}
+            {sharing ? <Loader2 size={16} className="spin" /> : <WhatsAppIcon size={16} />}
             <span>{sharing ? 'Opening WhatsApp…' : 'Share on WhatsApp'}</span>
           </button>
 

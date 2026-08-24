@@ -12,7 +12,6 @@ import {
   Loader2,
   Receipt,
   GraduationCap,
-  MessageCircle,
   TrendingUp,
   AlertCircle,
   CheckCircle2,
@@ -22,6 +21,7 @@ import {
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { downloadElementAsJpg, shareReceiptViaWhatsApp } from '../utils/receiptGenerator';
+import { WhatsAppIcon } from './WhatsAppDirectButton';
 import { useToast } from './Toast';
 import './StudentFeeLedgerModal.css';
 
@@ -336,7 +336,7 @@ export default function StudentFeeLedgerModal({
             disabled={sharing}
             title="Share complete statement & ledger to parents on WhatsApp"
           >
-            {sharing ? <Loader2 size={16} className="spin" /> : <MessageCircle size={16} />}
+            {sharing ? <Loader2 size={16} className="spin" /> : <WhatsAppIcon size={16} />}
             <span>{sharing ? 'Dispatching WhatsApp…' : 'Share on WhatsApp'}</span>
           </button>
 
