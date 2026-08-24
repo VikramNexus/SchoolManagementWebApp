@@ -1043,6 +1043,37 @@ export default function StudentProfile() {
           )}
         </section>
 
+        {/* Quick Pending Dues Action Buttons Bar (Shifted above Monthly Fee Ledger) */}
+        <section className="pending-dues-section">
+          <div className="pending-dues-actions-grid-row">
+            <WhatsAppDirectButton
+              onSend={() => api.post(`/receipts/send-dues-whatsapp/${student.id}`)}
+              phone={student.whatsapp_number || student.phone}
+              defaultLabel="WhatsApp Dues"
+              successLabel="✓ Sent"
+              size="sm"
+              className="btn-action-dues btn-action-wa"
+            />
+            <button
+              type="button"
+              className="btn-action-dues btn-action-download"
+              onClick={handleDownloadDuesNotice}
+              disabled={downloadingDuesNotice}
+            >
+              {downloadingDuesNotice ? <Loader2 size={14} className="spin" /> : <FileText size={14} />}
+              <span>Dues Receipt</span>
+            </button>
+            <button
+              type="button"
+              className="btn-action-dues btn-action-pay"
+              onClick={() => setShowRecordPaymentModal(true)}
+            >
+              <CreditCard size={14} />
+              <span>Receive Money</span>
+            </button>
+          </div>
+        </section>
+
         {/* Monthly Fee Ledger */}
         <section className="ledger-section">
           <div className="section-header-box">
@@ -1066,45 +1097,6 @@ export default function StudentProfile() {
             onViewReceipt={handleOpenReceipt}
             onRecordPayment={() => setShowRecordPaymentModal(true)}
           />
-        </section>
-
-        {/* Pending Dues & Payment Actions Section */}
-        <section className="pending-dues-section">
-          <div className="section-header-box pending-dues-header-box">
-            <div className="pending-dues-text-left">
-              <h2 className="dark-title"><CreditCard size={20} /> Pending Dues &amp; Payment Action</h2>
-              <p className="subtitle">Download official dues receipt PDF or receive payment directly from student</p>
-            </div>
-            <div className="pending-dues-actions-row">
-              <WhatsAppDirectButton
-                onSend={() => api.post(`/receipts/send-dues-whatsapp/${student.id}`)}
-                phone={student.whatsapp_number || student.phone}
-                defaultLabel="Send Dues Bill via WhatsApp"
-                successLabel="✓ Dues Notice Sent"
-                size="md"
-                className="btn-action-dues btn-action-wa"
-              />
-              <button
-                type="button"
-                className="btn-action-dues btn-action-download"
-                onClick={handleDownloadDuesNotice}
-                disabled={downloadingDuesNotice}
-                title="Download Dues Bill PDF"
-              >
-                {downloadingDuesNotice ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
-                <span>Download Dues Receipt PDF</span>
-              </button>
-              <button
-                type="button"
-                className="btn-action-dues btn-action-pay"
-                onClick={() => setShowRecordPaymentModal(true)}
-                title="Receive Fee Payment from Student"
-              >
-                <CreditCard size={16} />
-                <span>Receive Money from Student</span>
-              </button>
-            </div>
-          </div>
         </section>
 
         {/* Recent Payments */}
