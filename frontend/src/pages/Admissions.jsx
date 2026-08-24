@@ -464,63 +464,6 @@ export default function Admissions() {
         </div>
       </div>
 
-      {/* Summary KPI Cards Grid (Receipt Look) */}
-      <div className="admissions-summary-grid">
-        <div className="adm-stat-card primary">
-          <div className="stat-card-top">
-            <span className="stat-card-tag primary">Enrollment</span>
-            <div className="stat-card-icon primary">
-              <GraduationCap size={20} />
-            </div>
-          </div>
-          <span className="stat-card-label">Total Session Admissions</span>
-          <span className="stat-card-value">{stats.total_admissions} Students</span>
-          <span className="stat-card-subtext">Active student enrollments</span>
-        </div>
-
-        <div className="adm-stat-card green">
-          <div className="stat-card-top">
-            <span className="stat-card-tag green">Revenue</span>
-            <div className="stat-card-icon green">
-              <IndianRupee size={20} />
-            </div>
-          </div>
-          <span className="stat-card-label">Admission Desk Revenue</span>
-          <span className="stat-card-value text-green">
-            {formatCurrency(stats.admission_revenue)}
-          </span>
-          <span className="stat-card-subtext">Collected from admission charges</span>
-        </div>
-
-        <div className="adm-stat-card blue">
-          <div className="stat-card-top">
-            <span className="stat-card-tag blue">Security Fund</span>
-            <div className="stat-card-icon blue">
-              <ShieldCheck size={20} />
-            </div>
-          </div>
-          <span className="stat-card-label">Security Deposits Held</span>
-          <span className="stat-card-value">
-            {formatCurrency(stats.security_deposit_total)}
-          </span>
-          <span className="stat-card-subtext">Caution money refundable</span>
-        </div>
-
-        <div className="adm-stat-card orange">
-          <div className="stat-card-top">
-            <span className="stat-card-tag orange">Advance Fees</span>
-            <div className="stat-card-icon orange">
-              <Calendar size={20} />
-            </div>
-          </div>
-          <span className="stat-card-label">Advance Tuition Allocated</span>
-          <span className="stat-card-value">
-            {formatCurrency(stats.advance_fees_collected)}
-          </span>
-          <span className="stat-card-subtext">First-month fee assigned &amp; paid</span>
-        </div>
-      </div>
-
       {/* View 1: New Admission Desk Form */}
       {activeTab === 'desk' && (
         <>

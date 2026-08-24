@@ -87,6 +87,11 @@ export default function Sidebar() {
     setCollapsed(true);
   };
 
+  // Mobile view: completely remove sidebar (navigation is handled via MobileBottomNav)
+  if (isMobile) {
+    return null;
+  }
+
   return (
     <>
       {/* Mobile background overlay */}

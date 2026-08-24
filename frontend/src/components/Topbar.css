@@ -613,11 +613,11 @@
   background: rgba(239, 68, 68, 0.1);
 }
 
-/* Responsive */
+/* Responsive: Full-width Topbar on mobile without hamburger offset */
 @media (max-width: 1024px) {
   .topbar {
     left: 0 !important;
-    padding: 0 1.25rem 0 4.5rem;
+    padding: 0 1rem !important;
   }
 }
 
@@ -625,7 +625,7 @@
   .topbar {
     left: 0 !important;
     height: 56px;
-    padding: 0 0.75rem 0 3.5rem;
+    padding: 0 0.85rem !important;
   }
 
   .page-title {

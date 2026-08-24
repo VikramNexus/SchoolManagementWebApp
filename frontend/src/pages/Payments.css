@@ -148,6 +148,24 @@
   flex: 1;
 }
 
+.payments-filters-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.payments-filters-card .search-box-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 .payments-filters-card .search-prefix-icon {
   position: absolute;
   left: 1rem;
@@ -183,17 +201,19 @@
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
 }
 
-.payments-filters-card .filter-controls-group {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+/* 2x2 Format: 4 Sorting & Filtering Controls */
+.payments-filters-card .filter-controls-grid-2x2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem 1rem;
+  width: 100%;
 }
 
 .payments-filters-card .filter-control-item {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  width: 100%;
 }
 
 .payments-filters-card .control-label {
@@ -207,7 +227,7 @@
 .payments-filters-card select,
 .payments-filters-card input[type="date"] {
   height: 42px;
-  min-width: 130px;
+  width: 100%;
   padding: 0 0.85rem;
   border: 1.5px solid #cbd5e1;
   border-radius: 8px;
@@ -217,12 +237,25 @@
   font-family: inherit;
   outline: none;
   transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
 .payments-filters-card select:focus,
 .payments-filters-card input[type="date"]:focus {
   border-color: #0284c7;
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.payments-filters-card .clear-filters-btn {
+  height: 38px;
+  padding: 0 1rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 /* Payments Table Card & Horizontal Scroll Lock */

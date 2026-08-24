@@ -309,7 +309,8 @@ export default function Receipts() {
           )}
         </div>
 
-        <div className="filter-controls-group">
+        {/* 2x2 Format: 4 Sorting & Filtering Controls */}
+        <div className="filter-controls-grid-2x2">
           <div className="filter-control-item">
             <span className="control-label">Class</span>
             <select
@@ -366,24 +367,24 @@ export default function Receipts() {
               }}
             />
           </div>
-
-          {(search || classFilter || categoryFilter || startDate || endDate) && (
-            <button
-              type="button"
-              className="btn btn-secondary clear-filters-btn"
-              onClick={() => {
-                setSearch('');
-                setClassFilter('');
-                setCategoryFilter('');
-                setStartDate('');
-                setEndDate('');
-                setPage(1);
-              }}
-            >
-              <X size={14} /> Clear Filters
-            </button>
-          )}
         </div>
+
+        {(search || classFilter || categoryFilter || startDate || endDate) && (
+          <button
+            type="button"
+            className="btn btn-secondary clear-filters-btn"
+            onClick={() => {
+              setSearch('');
+              setClassFilter('');
+              setCategoryFilter('');
+              setStartDate('');
+              setEndDate('');
+              setPage(1);
+            }}
+          >
+            <X size={14} /> Clear Filters
+          </button>
+        )}
       </div>
 
       {error && (
