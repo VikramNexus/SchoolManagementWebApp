@@ -129,8 +129,32 @@
   letter-spacing: 0.08em;
 }
 
+.desktop-sidebar-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94a3b8;
+  cursor: pointer;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.desktop-sidebar-toggle-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
 /* Collapsed Text Hiding */
-.sidebar.collapsed:not(.hover-expanded) .brand-text-col {
+.sidebar.collapsed:not(.hover-expanded) .brand-text-col,
+.sidebar.collapsed:not(.hover-expanded) .desktop-sidebar-toggle-btn {
   opacity: 0;
   transform: translateX(-12px);
   pointer-events: none;

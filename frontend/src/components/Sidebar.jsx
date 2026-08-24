@@ -14,6 +14,8 @@ import {
   School,
   Menu,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -122,6 +124,21 @@ export default function Sidebar() {
               <span className="brand-title">Aryavart Portal</span>
               <span className="brand-badge">{isMobile ? 'Mobile Menu' : 'Academic Suite'}</span>
             </div>
+            {!isMobile && (
+              <button
+                type="button"
+                className="desktop-sidebar-toggle-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCollapsed(!collapsed);
+                  setHoverExpanded(false);
+                }}
+                title={collapsed ? 'Lock Sidebar Open' : 'Collapse Sidebar'}
+                aria-label={collapsed ? 'Lock Sidebar Open' : 'Collapse Sidebar'}
+              >
+                {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+              </button>
+            )}
           </div>
           {mobileOpen && (
             <button

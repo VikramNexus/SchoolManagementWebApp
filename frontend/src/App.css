@@ -67,14 +67,30 @@ body {
   flex-direction: column;
   min-height: 100vh;
   min-width: 0; /* prevents flex overflow */
-  transition: margin-left 0.80s cubic-bezier(0.2, 0.9, 0.25, 1);
+  transition: margin-left 0.35s cubic-bezier(0.2, 0.9, 0.25, 1), width 0.35s cubic-bezier(0.2, 0.9, 0.25, 1);
+  margin-left: var(--sidebar-collapsed-width);
+  width: calc(100% - var(--sidebar-collapsed-width));
+}
+
+/* Sidebar expanded / non-collapsed state */
+.sidebar:not(.collapsed) ~ .main-content,
+.sidebar:not(.collapsed) + .main-content {
   margin-left: var(--sidebar-width);
+  width: calc(100% - var(--sidebar-width));
 }
 
 /* Sidebar collapsed state */
 .sidebar.collapsed ~ .main-content,
 .sidebar.collapsed + .main-content {
   margin-left: var(--sidebar-collapsed-width);
+  width: calc(100% - var(--sidebar-collapsed-width));
+}
+
+/* Sidebar hover-expanded state (adjusts page content seamlessly) */
+.sidebar.collapsed.hover-expanded ~ .main-content,
+.sidebar.collapsed.hover-expanded + .main-content {
+  margin-left: var(--sidebar-width);
+  width: calc(100% - var(--sidebar-width));
 }
 
 /* Page content */

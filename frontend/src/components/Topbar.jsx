@@ -14,6 +14,9 @@ import {
   LogOut,
   Settings,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  RotateCw,
   Search,
   RefreshCw,
   ArrowLeft,
@@ -138,8 +141,37 @@ export default function Topbar() {
 
   return (
     <header className="topbar" role="banner">
-      {/* Left: Brand / Current Section title */}
+      {/* Left: Desktop Browser Nav Controls (Back, Forward, Refresh) + Page title */}
       <div className="topbar-left">
+        <div className="desktop-browser-nav-controls">
+          <button
+            type="button"
+            className="browser-nav-btn"
+            onClick={handleGoBack}
+            title="Go back"
+            aria-label="Back"
+          >
+            <ChevronLeft size={20} strokeWidth={2.4} />
+          </button>
+          <button
+            type="button"
+            className="browser-nav-btn"
+            onClick={handleGoForward}
+            title="Go forward"
+            aria-label="Forward"
+          >
+            <ChevronRight size={20} strokeWidth={2.4} />
+          </button>
+          <button
+            type="button"
+            className="browser-nav-btn reload-btn"
+            onClick={handleReloadPage}
+            title="Refresh page"
+            aria-label="Refresh"
+          >
+            <RotateCw size={17} strokeWidth={2.4} />
+          </button>
+        </div>
         <h1 className="page-title">{pageTitle}</h1>
       </div>
 

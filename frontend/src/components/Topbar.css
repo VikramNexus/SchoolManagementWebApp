@@ -26,7 +26,7 @@
 .topbar {
   position: fixed;
   top: 0;
-  left: var(--sidebar-width);
+  left: var(--sidebar-collapsed-width);
   right: 0;
   height: var(--topbar-height);
   background: var(--topbar-bg);
@@ -37,7 +37,12 @@
   padding: 0 1.5rem;
   z-index: 900;
   box-shadow: var(--shadow-sm);
-  transition: left 0.80s cubic-bezier(0.2, 0.9, 0.25, 1);
+  transition: left 0.35s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.sidebar:not(.collapsed) ~ .main-content .topbar,
+.sidebar:not(.collapsed) + .main-content .topbar {
+  left: var(--sidebar-width);
 }
 
 .sidebar.collapsed ~ .main-content .topbar,
@@ -45,11 +50,66 @@
   left: var(--sidebar-collapsed-width);
 }
 
+.sidebar.collapsed.hover-expanded ~ .main-content .topbar,
+.sidebar.collapsed.hover-expanded + .main-content .topbar {
+  left: var(--sidebar-width);
+}
+
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.5rem;
   flex: 0 0 auto;
+}
+
+/* Desktop Browser Nav Controls (Back, Forward, Refresh) - Clean & Background-free */
+.desktop-browser-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-right: 0.4rem;
+}
+
+.browser-nav-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: #64748b !important;
+  cursor: pointer !important;
+  border-radius: 4px !important;
+  transition: color 0.15s ease, transform 0.15s ease !important;
+}
+
+.browser-nav-btn:hover {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #0f172a !important;
+  transform: scale(1.15);
+}
+
+.browser-nav-btn:active {
+  transform: scale(0.92);
+  color: #0284c7 !important;
+}
+
+.browser-nav-btn.reload-btn:hover svg {
+  transform: rotate(45deg);
+  transition: transform 0.25s ease;
+}
+
+@media (max-width: 1024px) {
+  .desktop-browser-nav-controls {
+    display: none !important;
+  }
 }
 
 .app-nav-controls {
