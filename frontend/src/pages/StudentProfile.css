@@ -917,114 +917,275 @@
 
 @media (max-width: 768px) {
   .student-profile {
-    padding: 0.75rem 0.5rem;
-    gap: 1rem;
+    padding: 0.5rem 0.5rem 2.5rem !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   .profile-header {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 1rem;
-    gap: 1rem;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 0.85rem !important;
+    border-radius: 12px !important;
+    gap: 0.75rem !important;
   }
 
   .header-left {
-    width: 100%;
-    gap: 0.75rem;
+    width: 100% !important;
+    gap: 0.65rem !important;
+    align-items: flex-start !important;
+  }
+
+  .back-btn {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+    flex-shrink: 0 !important;
   }
 
   .avatar {
-    width: 52px;
-    height: 52px;
-    font-size: 1.25rem;
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 1.15rem !important;
+    flex-shrink: 0 !important;
   }
 
-  .student-identity h1 {
-    font-size: 1.25rem !important;
-  }
-
-  .header-right {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-  }
-
-  .header-right .status-badge {
-    grid-column: span 2;
-    text-align: center;
-    padding: 0.4rem;
-    font-size: 0.75rem;
-    font-weight: 800;
-  }
-
-  .header-right .btn-primary {
-    grid-column: span 2;
-    padding: 0.65rem 1rem;
-    font-size: 0.9rem;
-    font-weight: 800;
-  }
-
-  .header-right .btn-secondary,
-  .header-right .btn-danger {
-    padding: 0.55rem 0.5rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    justify-content: center;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .quick-stats-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
+  .student-identity {
     gap: 0.65rem !important;
   }
 
-  .stat-card {
-    padding: 0.85rem 0.75rem !important;
-    border-radius: 10px !important;
+  .student-identity h1 {
+    font-size: 1.15rem !important;
   }
 
-  .stat-value {
+  .header-right {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  .header-right .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    height: 38px !important;
+    font-size: 0.825rem !important;
+    padding: 0 0.5rem !important;
+  }
+
+  /* 2-Column Top Information Grid */
+  .compact-info-cards-top {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.45rem !important;
+    width: 100% !important;
+  }
+
+  .compact-info-card {
+    padding: 0.5rem 0.6rem !important;
+    min-height: 48px !important;
+    border-radius: 8px !important;
+    gap: 0.45rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .compact-card-icon {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
+  }
+
+  .compact-card-icon svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .compact-card-label {
+    font-size: 0.62rem !important;
+  }
+
+  .compact-card-value {
+    font-size: 0.825rem !important;
+  }
+
+  .compact-info-card:nth-child(5) {
+    grid-column: span 2 !important;
+  }
+
+  /* 2-Column Dues Summary Bar */
+  .dues-summary-section-wrap {
+    gap: 0.65rem !important;
+  }
+
+  .dues-summary-bar {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.45rem !important;
+    width: 100% !important;
+  }
+
+  .dues-card {
+    padding: 0.65rem 0.75rem !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+  }
+
+  .dues-card .card-label {
+    font-size: 0.62rem !important;
+  }
+
+  .dues-card .card-value {
+    font-size: 1.15rem !important;
+    margin-top: 0.15rem !important;
+  }
+
+  .dues-card.dark-red {
+    grid-column: span 2 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0.75rem 0.85rem !important;
+  }
+
+  .dues-card.dark-red .card-value {
+    margin-top: 0 !important;
     font-size: 1.25rem !important;
   }
 
-  .table-wrapper {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    border-radius: 8px;
+  /* Fee Ledger Full Width Banner Button */
+  .btn-fee-ledger-large-banner {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 0.75rem 0.85rem !important;
+    gap: 0.65rem !important;
+    border-radius: 10px !important;
+    box-sizing: border-box !important;
+  }
+
+  .ledger-banner-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.6rem !important;
+  }
+
+  .ledger-banner-icon-box {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 8px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .ledger-banner-icon-box svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .ledger-banner-title {
+    font-size: 0.85rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .ledger-banner-sub {
+    display: none !important;
+  }
+
+  .ledger-banner-cta-badge {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.45rem !important;
+    font-size: 0.78rem !important;
+    border-radius: 6px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Contact Actions 3-Column Grid */
+  .contact-section {
+    padding: 0.85rem !important;
+    border-radius: 12px !important;
+  }
+
+  .contact-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.45rem !important;
+    margin-top: 0.65rem !important;
+  }
+
+  .contact-item {
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 0.6rem 0.35rem !important;
+    border-radius: 8px !important;
+    font-size: 0.75rem !important;
+    gap: 0.25rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .contact-item svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .contact-item.address {
+    grid-column: span 3 !important;
+    flex-direction: row !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding: 0.6rem 0.75rem !important;
+    gap: 0.5rem !important;
+  }
+
+  /* General Section Boxes on Mobile */
+  .family-account-section,
+  .extra-expenses-section,
+  .ledger-section,
+  .pending-dues-section {
+    padding: 0.85rem !important;
+    border-radius: 12px !important;
+    box-sizing: border-box !important;
+  }
+
+  .section-header-box {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.65rem !important;
+    margin-bottom: 0.85rem !important;
+  }
+
+  .section-header-box h2 {
+    font-size: 0.95rem !important;
+  }
+
+  .section-header-box .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .table-wrapper,
+  .table-responsive {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 8px !important;
+    width: 100% !important;
   }
 
   .ledger-table,
   .family-ledger-table {
-    min-width: 550px;
-  }
-
-  .section-header-box {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem;
-  }
-
-  .section-header-box .header-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .section-header-box .header-actions button,
-  .section-header-box .header-actions a {
-    width: 100%;
-    justify-content: center;
+    min-width: 480px !important;
   }
 
   .pending-dues-actions-row {
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch;
+    width: 100% !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
   }
 
   .pending-dues-actions-row .btn-action-dues {
-    width: 100%;
+    width: 100% !important;
+    justify-content: center !important;
   }
 }
 

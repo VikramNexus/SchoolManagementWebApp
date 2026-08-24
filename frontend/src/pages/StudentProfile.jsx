@@ -679,7 +679,7 @@ export default function StudentProfile() {
             <div className="compact-card-info">
               <span className="compact-card-label">Class / Section</span>
               <span className="compact-card-value">
-                {student.class_name} {student.section_name && <span className="section-tag-compact">{student.section_name}</span>}
+                {student.class_name || 'Class —'} {student.section_name && <span className="section-tag-compact">{student.section_name}</span>}
               </span>
             </div>
           </div>
@@ -703,19 +703,10 @@ export default function StudentProfile() {
                 <button
                   className="icon-btn-compact edit-rate-btn-compact"
                   onClick={() => setShowEditRateModal(true)}
-                  title="Edit Monthly Rate"
+                  aria-label="Edit Monthly Rate"
                 >
                   <Edit2 size={11} />
                 </button>
-              </span>
-            </div>
-          </div>
-          <div className="compact-info-card">
-            <div className="compact-card-icon blue"><Calendar size={16} /></div>
-            <div className="compact-card-info">
-              <span className="compact-card-label">Admission Date</span>
-              <span className="compact-card-value">
-                {formatDateSafe(student.admission_date || student.created_at)}
               </span>
             </div>
           </div>
@@ -757,7 +748,6 @@ export default function StudentProfile() {
             type="button"
             className="btn-fee-ledger-large-banner"
             onClick={() => setShowLedgerModal(true)}
-            title="Open Complete Student Monthly Fee Ledger, Download PDF/JPG, and Share on WhatsApp"
           >
             <div className="ledger-banner-left">
               <div className="ledger-banner-icon-box">
