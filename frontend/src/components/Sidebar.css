@@ -14,8 +14,8 @@
   --sidebar-active-bg: linear-gradient(135deg, rgba(2, 132, 199, 0.28) 0%, rgba(56, 189, 248, 0.12) 100%);
   --sidebar-active-border: rgba(56, 189, 248, 0.35);
   --sidebar-active-text: #38bdf8;
-  --transition-fluid: 0.80s cubic-bezier(0.2, 0.9, 0.25, 1);
-  --transition-text: 0.45s cubic-bezier(0.2, 0.9, 0.25, 1);
+  --transition-fluid: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-text: 0.18s ease;
 }
 
 .sidebar {

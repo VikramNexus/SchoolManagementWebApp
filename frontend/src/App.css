@@ -86,13 +86,6 @@ body {
   width: calc(100% - var(--sidebar-collapsed-width));
 }
 
-/* Sidebar hover-expanded state (adjusts page content seamlessly) */
-.sidebar.collapsed.hover-expanded ~ .main-content,
-.sidebar.collapsed.hover-expanded + .main-content {
-  margin-left: var(--sidebar-width);
-  width: calc(100% - var(--sidebar-width));
-}
-
 /* Page content */
 .page-content {
   flex: 1;

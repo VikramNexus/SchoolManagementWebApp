@@ -145,9 +145,7 @@
 }
 
 .register-table-responsive {
-  overflow-x: auto;
   width: 100%;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* High-Contrast Clear Table */
@@ -155,9 +153,48 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
-  min-width: 780px;
   background: #ffffff;
   table-layout: auto;
+}
+
+/* Desktop View: Lock horizontal scroll, fit perfectly in 100% card */
+@media (min-width: 1025px) {
+  .register-table-responsive {
+    overflow-x: hidden !important;
+    width: 100% !important;
+  }
+
+  .dark-register-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: auto !important;
+  }
+
+  .dark-register-table th,
+  .dark-register-table td {
+    padding: 0.7rem 0.45rem !important;
+    font-size: 0.825rem !important;
+  }
+
+  .month-cell-bold {
+    font-size: 0.85rem !important;
+  }
+
+  .closing-cell-dark {
+    font-size: 0.875rem !important;
+  }
+}
+
+/* Mobile / Tablet: Smooth touch scrolling preserved */
+@media (max-width: 1024px) {
+  .register-table-responsive {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .dark-register-table {
+    min-width: 680px !important;
+  }
 }
 
 .dark-register-table th {
