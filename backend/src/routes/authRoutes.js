@@ -4,23 +4,27 @@ const {
   me,
   updateProfile,
   changePassword,
-  sendForgotPasswordOtp,
-  verifyOtpAndResetPassword,
+  getSecurityQuestion,
+  resetPasswordWithSecurityAnswer,
+  getAdminSecurityQuestion,
+  updateAdminSecurityQuestion,
 } = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Public: login & forgot password with email OTP verification
+// Public: login & password recovery via security question
 router.post('/login', login);
-router.post('/forgot-password-otp', sendForgotPasswordOtp);
-router.post('/verify-otp-reset', verifyOtpAndResetPassword);
-router.post('/reset-password', verifyOtpAndResetPassword);
-router.post('/forgot-password', verifyOtpAndResetPassword);
+router.post('/get-security-question', getSecurityQuestion);
+router.post('/reset-password-security-question', resetPasswordWithSecurityAnswer);
+router.post('/forgot-password', resetPasswordWithSecurityAnswer);
+router.post('/reset-password', resetPasswordWithSecurityAnswer);
 
-// Protected: fetch user, update profile, change password
+// Protected: fetch user, update profile, change password, security questions
 router.get('/me', authenticateToken, me);
 router.put('/profile', authenticateToken, updateProfile);
 router.put('/change-password', authenticateToken, changePassword);
+router.get('/security-question', authenticateToken, getAdminSecurityQuestion);
+router.put('/security-question', authenticateToken, updateAdminSecurityQuestion);
 
 module.exports = router;

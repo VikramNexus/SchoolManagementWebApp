@@ -244,20 +244,23 @@ async function changePassword(req, res) {
   }
 }
 
-const { sendPasswordResetOtpEmail } = require('../services/emailService');
-
-function maskEmail(email) {
-  if (!email || !email.includes('@')) return email || '';
-  const [name, domain] = email.split('@');
-  if (name.length <= 2) return `${name[0]}*@${domain}`;
-  return `${name[0]}${'*'.repeat(name.length - 2)}${name[name.length - 1]}@${domain}`;
-}
+const STANDARD_SECURITY_QUESTIONS = [
+  "What is your father's name?",
+  "What is your favorite pet's name?",
+  "What is your mother's maiden or childhood name?",
+  "What was the name of your first school?",
+  "In which city or village were you born?",
+  "What was your first vehicle, car, or favorite bike?",
+  "What was your childhood nickname?",
+  "What is your favorite childhood friend's name?",
+  "Custom secret question",
+];
 
 /**
- * POST /api/auth/forgot-password-otp
- * Step 1: Generate & Send 6-digit verification code to registered email
+ * POST /api/auth/get-security-question
+ * Step 1 of password recovery: Fetch the admin's secret question
  */
-async function sendForgotPasswordOtp(req, res) {
+async function getSecurityQuestion(req, res) {
   const { identifier } = req.body || {};
 
   if (!identifier || !identifier.trim()) {
@@ -265,22 +268,8 @@ async function sendForgotPasswordOtp(req, res) {
   }
 
   try {
-    // Ensure password_resets table exists
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS \`password_resets\` (
-        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-        \`email\` VARCHAR(191) NOT NULL,
-        \`otp_code\` VARCHAR(10) NOT NULL,
-        \`expires_at\` DATETIME NOT NULL,
-        \`is_used\` TINYINT(1) DEFAULT 0,
-        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX (\`email\`),
-        INDEX (\`otp_code\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
     const user = await db.queryOne(
-      'SELECT id, username, email FROM users WHERE username = ? OR email = ? LIMIT 1',
+      'SELECT id, username, email, security_question, security_answer_hash FROM users WHERE username = ? OR email = ? LIMIT 1',
       [identifier.trim(), identifier.trim()]
     );
 
@@ -291,54 +280,42 @@ async function sendForgotPasswordOtp(req, res) {
       });
     }
 
-    if (!user.email || !user.email.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'No email address is linked to this admin account for verification.',
+    if (user.security_question && user.security_answer_hash) {
+      return res.json({
+        success: true,
+        has_question: true,
+        question: user.security_question,
+        username: user.username,
       });
     }
 
-    // Generate secure 6-digit OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Expire previous unused OTPs for this email
-    await db.query('UPDATE password_resets SET is_used = 1 WHERE email = ?', [user.email]);
-
-    // Insert new OTP with 10 minute expiry
-    await db.query(
-      `INSERT INTO password_resets (email, otp_code, expires_at, is_used)
-       VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), 0)`,
-      [user.email, otpCode]
-    );
-
-    // Send email
-    await sendPasswordResetOtpEmail(user.email, otpCode, user.username);
-
-    const masked = maskEmail(user.email);
+    // If user has not yet configured a question, provide the list of standard questions to pick and answer
     return res.json({
       success: true,
-      message: `A 6-digit verification code has been securely sent to your email (${masked}). Please check your inbox.`,
-      masked_email: masked,
+      has_question: false,
+      available_questions: STANDARD_SECURITY_QUESTIONS,
+      username: user.username,
+      message: 'No security question set yet. Please select a question and answer to secure your account.',
     });
   } catch (err) {
-    console.error('[authController.sendForgotPasswordOtp]', err);
-    return res.status(500).json({ success: false, message: 'Failed to send verification code.' });
+    console.error('[authController.getSecurityQuestion]', err);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve security question.' });
   }
 }
 
 /**
- * POST /api/auth/verify-otp-reset (also /reset-password)
- * Step 2: Verify 6-digit OTP and reset password
+ * POST /api/auth/reset-password-with-security-answer
+ * Step 2 of password recovery: Validate secret answer and reset password
  */
-async function verifyOtpAndResetPassword(req, res) {
-  const { identifier, otp_code, new_password, confirm_password } = req.body || {};
+async function resetPasswordWithSecurityAnswer(req, res) {
+  const { identifier, security_answer, new_password, confirm_password, chosen_question } = req.body || {};
 
   if (!identifier || !identifier.trim()) {
-    return res.status(400).json({ success: false, message: 'Username or email is required.' });
+    return res.status(400).json({ success: false, message: 'Username or registered email is required.' });
   }
 
-  if (!otp_code || !otp_code.trim()) {
-    return res.status(400).json({ success: false, message: '6-digit verification code is required.' });
+  if (!security_answer || !security_answer.trim()) {
+    return res.status(400).json({ success: false, message: 'Secret answer is required.' });
   }
 
   if (!new_password || new_password.length < 6) {
@@ -351,7 +328,7 @@ async function verifyOtpAndResetPassword(req, res) {
 
   try {
     const user = await db.queryOne(
-      'SELECT id, username, email FROM users WHERE username = ? OR email = ? LIMIT 1',
+      'SELECT id, username, email, password_hash, security_question, security_answer_hash FROM users WHERE username = ? OR email = ? LIMIT 1',
       [identifier.trim(), identifier.trim()]
     );
 
@@ -359,35 +336,119 @@ async function verifyOtpAndResetPassword(req, res) {
       return res.status(404).json({ success: false, message: 'Administrator account not found.' });
     }
 
-    // Verify OTP code
-    const validOtp = await db.queryOne(
-      `SELECT id FROM password_resets
-       WHERE email = ? AND otp_code = ? AND is_used = 0 AND expires_at > NOW()
-       ORDER BY id DESC LIMIT 1`,
-      [user.email, otp_code.trim()]
-    );
+    const normalizedAnswer = String(security_answer).trim().toLowerCase();
 
-    if (!validOtp) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired verification code. Please check or request a new code.',
-      });
+    // If user already has a saved answer hash, verify it
+    if (user.security_answer_hash) {
+      const isMatch = await bcrypt.compare(normalizedAnswer, user.security_answer_hash);
+      if (!isMatch) {
+        return res.status(400).json({
+          success: false,
+          message: 'Incorrect secret answer. Please verify and try again.',
+        });
+      }
+    } else {
+      // First time initialization via recovery
+      const questionToSave = chosen_question || "What is your father's name?";
+      const ansHash = await bcrypt.hash(normalizedAnswer, 10);
+      await db.query(
+        'UPDATE users SET security_question = ?, security_answer_hash = ? WHERE id = ?',
+        [questionToSave, ansHash, user.id]
+      );
     }
 
     // Hash new password and update user
     const newHash = await bcrypt.hash(new_password, 10);
     await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id]);
 
-    // Mark OTP as used
-    await db.query('UPDATE password_resets SET is_used = 1 WHERE id = ?', [validOtp.id]);
+    return res.json({
+      success: true,
+      message: `Password for ${user.username} has been securely reset! You can now log in.`,
+    });
+  } catch (err) {
+    console.error('[authController.resetPasswordWithSecurityAnswer]', err);
+    return res.status(500).json({ success: false, message: 'Failed to reset password.' });
+  }
+}
+
+/**
+ * GET /api/auth/security-question
+ * Authenticated: Get current user's configured security question
+ */
+async function getAdminSecurityQuestion(req, res) {
+  try {
+    const user = await db.queryOne(
+      'SELECT id, username, security_question, security_answer_hash FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
 
     return res.json({
       success: true,
-      message: `Password for ${user.username} has been securely reset. You can now log in.`,
+      security_question: user.security_question || '',
+      has_answer: !!user.security_answer_hash,
+      available_questions: STANDARD_SECURITY_QUESTIONS,
     });
   } catch (err) {
-    console.error('[authController.verifyOtpAndResetPassword]', err);
-    return res.status(500).json({ success: false, message: 'Failed to reset password.' });
+    console.error('[authController.getAdminSecurityQuestion]', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch security question.' });
+  }
+}
+
+/**
+ * PUT /api/auth/security-question
+ * Authenticated: Update security question and secret answer
+ */
+async function updateAdminSecurityQuestion(req, res) {
+  const { security_question, security_answer, current_password } = req.body || {};
+
+  if (!security_question || !security_question.trim()) {
+    return res.status(400).json({ success: false, message: 'Security question is required.' });
+  }
+
+  if (!security_answer || !security_answer.trim()) {
+    return res.status(400).json({ success: false, message: 'Secret answer is required.' });
+  }
+
+  if (!current_password) {
+    return res.status(400).json({ success: false, message: 'Current password is required to save security question.' });
+  }
+
+  try {
+    const user = await db.queryOne(
+      'SELECT id, username, password_hash FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    // Verify current password
+    const validPassword = await bcrypt.compare(current_password, user.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ success: false, message: 'Current password is incorrect.' });
+    }
+
+    // Normalize and hash secret answer
+    const normalizedAnswer = String(security_answer).trim().toLowerCase();
+    const answerHash = await bcrypt.hash(normalizedAnswer, 10);
+
+    await db.query(
+      'UPDATE users SET security_question = ?, security_answer_hash = ? WHERE id = ?',
+      [security_question.trim(), answerHash, user.id]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Password recovery security question and secret answer saved successfully!',
+    });
+  } catch (err) {
+    console.error('[authController.updateAdminSecurityQuestion]', err);
+    return res.status(500).json({ success: false, message: 'Failed to update security question.' });
   }
 }
 
@@ -396,7 +457,10 @@ module.exports = {
   me,
   updateProfile,
   changePassword,
-  sendForgotPasswordOtp,
-  verifyOtpAndResetPassword,
-  forgotPassword: verifyOtpAndResetPassword,
+  getSecurityQuestion,
+  resetPasswordWithSecurityAnswer,
+  getAdminSecurityQuestion,
+  updateAdminSecurityQuestion,
+  // Backward compatibility alias
+  forgotPassword: resetPasswordWithSecurityAnswer,
 };

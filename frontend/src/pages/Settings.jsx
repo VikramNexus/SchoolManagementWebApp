@@ -34,6 +34,8 @@ import {
   ShieldCheck,
   Key,
   Lock,
+  HelpCircle,
+  KeyRound,
 } from 'lucide-react';
 import { api, useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -73,6 +75,41 @@ export default function Settings() {
     new_password: '',
     confirm_password: '',
   });
+
+  // Security Question state
+  const [securityForm, setSecurityForm] = useState({
+    security_question: "What is your father's name?",
+    custom_question: '',
+    security_answer: '',
+    current_password: '',
+    has_answer: false,
+  });
+  const [availableQuestions, setAvailableQuestions] = useState([]);
+  const [savingSecurity, setSavingSecurity] = useState(false);
+
+  const fetchSecurityQuestion = async () => {
+    try {
+      const res = await api.get('/auth/security-question');
+      if (res.data.success) {
+        setSecurityForm((prev) => ({
+          ...prev,
+          security_question: res.data.security_question || "What is your father's name?",
+          has_answer: res.data.has_answer,
+        }));
+        if (res.data.available_questions) {
+          setAvailableQuestions(res.data.available_questions);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load security question:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'profile') {
+      fetchSecurityQuestion();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (user) {
@@ -225,6 +262,51 @@ export default function Settings() {
       toast.error(err.response?.data?.message || 'Failed to change password.');
     } finally {
       setSavingPassword(false);
+    }
+  };
+
+  // Security Question Submit Handler
+  const handleSecurityQuestionSubmit = async (e) => {
+    e.preventDefault();
+    const finalQuestion =
+      securityForm.security_question === 'Custom secret question'
+        ? securityForm.custom_question.trim()
+        : securityForm.security_question;
+
+    if (!finalQuestion) {
+      toast.error('Please enter or select a security question.');
+      return;
+    }
+    if (!securityForm.security_answer.trim()) {
+      toast.error('Please enter your secret answer.');
+      return;
+    }
+    if (!securityForm.current_password) {
+      toast.error('Please enter your current admin password to verify your identity.');
+      return;
+    }
+
+    try {
+      setSavingSecurity(true);
+      const res = await api.put('/auth/security-question', {
+        security_question: finalQuestion,
+        security_answer: securityForm.security_answer.trim(),
+        current_password: securityForm.current_password,
+      });
+
+      if (res.data.success) {
+        toast.success(res.data.message || 'Security question updated successfully!');
+        setSecurityForm((prev) => ({
+          ...prev,
+          security_answer: '',
+          current_password: '',
+          has_answer: true,
+        }));
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update security question.');
+    } finally {
+      setSavingSecurity(false);
     }
   };
 
@@ -707,6 +789,131 @@ export default function Settings() {
                   ) : (
                     <>
                       <Key size={16} /> Change Password
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+            {/* Password Recovery Security Question Form */}
+            <form className="settings-form admin-profile-card security-questions-card" onSubmit={handleSecurityQuestionSubmit}>
+              <div className="section-title-wrap">
+                <HelpCircle size={20} className="section-title-icon" />
+                <div>
+                  <h2 className="section-heading">Password Recovery Security Question</h2>
+                  <p className="section-subtext">
+                    Choose a secret question and answer to easily reset your password if you ever forget it.
+                  </p>
+                </div>
+              </div>
+
+              {securityForm.has_answer && (
+                <div className="current-sq-badge">
+                  <CheckCircle2 size={16} className="text-green" />
+                  <span>
+                    Current Active Question: <strong>{securityForm.security_question}</strong>
+                  </span>
+                </div>
+              )}
+
+              <div className="form-grid">
+                <div className="form-group full-width">
+                  <label htmlFor="security_question_select">
+                    Choose Security Question <span className="required">*</span>
+                  </label>
+                  <div className="styled-input-wrapper">
+                    <div className="input-prefix-icon"><HelpCircle size={18} /></div>
+                    <select
+                      id="security_question_select"
+                      className="styled-setting-input"
+                      value={securityForm.security_question}
+                      onChange={(e) => setSecurityForm((prev) => ({ ...prev, security_question: e.target.value }))}
+                      required
+                    >
+                      {(availableQuestions.length > 0 ? availableQuestions : [
+                        "What is your father's name?",
+                        "What is your favorite pet's name?",
+                        "What is your mother's maiden / childhood name?",
+                        "What was the name of your first school?",
+                        "In which city or village were you born?",
+                        "What was your first vehicle, car, or favorite bike?",
+                        "What was your childhood nickname?",
+                        "What is your favorite childhood friend's name?",
+                        "Custom secret question",
+                      ]).map((q, idx) => (
+                        <option key={idx} value={q}>{q}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {securityForm.security_question === 'Custom secret question' && (
+                  <div className="form-group full-width">
+                    <label htmlFor="custom_question">
+                      Enter Your Custom Secret Question <span className="required">*</span>
+                    </label>
+                    <div className="styled-input-wrapper">
+                      <div className="input-prefix-icon"><HelpCircle size={18} /></div>
+                      <input
+                        type="text"
+                        id="custom_question"
+                        className="styled-setting-input"
+                        value={securityForm.custom_question}
+                        onChange={(e) => setSecurityForm((prev) => ({ ...prev, custom_question: e.target.value }))}
+                        placeholder="e.g. What is my favorite sports team?"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="form-group full-width">
+                  <label htmlFor="security_answer">
+                    Secret Answer <span className="required">*</span>
+                  </label>
+                  <div className="styled-input-wrapper">
+                    <div className="input-prefix-icon"><KeyRound size={18} /></div>
+                    <input
+                      type="text"
+                      id="security_answer"
+                      className="styled-setting-input"
+                      value={securityForm.security_answer}
+                      onChange={(e) => setSecurityForm((prev) => ({ ...prev, security_answer: e.target.value }))}
+                      placeholder="Enter secret answer (e.g. Amit Patel / Tommy)"
+                      required
+                    />
+                  </div>
+                  <span className="field-sub-hint">Secret answer is case-insensitive during recovery.</span>
+                </div>
+
+                <div className="form-group full-width">
+                  <label htmlFor="security_current_password">
+                    Current Password (to confirm your identity) <span className="required">*</span>
+                  </label>
+                  <div className="styled-input-wrapper">
+                    <div className="input-prefix-icon"><Key size={18} /></div>
+                    <input
+                      type="password"
+                      id="security_current_password"
+                      className="styled-setting-input"
+                      value={securityForm.current_password}
+                      onChange={(e) => setSecurityForm((prev) => ({ ...prev, current_password: e.target.value }))}
+                      placeholder="Enter current admin password"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="btn btn-primary btn-save-school" disabled={savingSecurity}>
+                  {savingSecurity ? (
+                    <>
+                      <Loader2 size={16} className="spin" /> Saving Question…
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} /> Save Security Question
                     </>
                   )}
                 </button>

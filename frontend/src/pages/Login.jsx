@@ -25,6 +25,8 @@ import {
   Laptop,
   Globe,
   Activity,
+  HelpCircle,
+  KeyRound,
 } from 'lucide-react';
 import { useAuth, SERVER_URL_KEY, DEFAULT_SERVER_URL, updateApiBaseUrl, api } from '../context/AuthContext';
 import './Login.css';
@@ -43,28 +45,23 @@ export default function Login() {
   const [serverUrl, setServerUrl] = useState(() => localStorage.getItem(SERVER_URL_KEY) || DEFAULT_SERVER_URL);
   const [serverTestStatus, setServerTestStatus] = useState(null); // 'testing' | 'success' | 'error'
 
-  // Forgot password modal state (2-Step Email Verification)
+  // Forgot password modal state (Security Question Recovery)
   const [showForgotModal, setShowForgotModal] = useState(false);
-  const [forgotStep, setForgotStep] = useState(1); // 1: Send OTP to Email, 2: Enter OTP & New Password
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [forgotStep, setForgotStep] = useState(1); // 1: Lookup Question, 2: Answer & Reset
   const [forgotForm, setForgotForm] = useState({
     identifier: '',
-    otp_code: '',
+    question: '',
+    has_question: true,
+    available_questions: [],
+    chosen_question: '',
+    security_answer: '',
     new_password: '',
     confirm_password: '',
   });
-  const [maskedEmail, setMaskedEmail] = useState('');
+  const [showForgotAnswer, setShowForgotAnswer] = useState(false);
+  const [showForgotNewPass, setShowForgotNewPass] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMsg, setForgotMsg] = useState({ type: '', text: '' });
-
-  // Cooldown countdown timer for Resend OTP button
-  useEffect(() => {
-    let timer;
-    if (resendCooldown > 0) {
-      timer = setTimeout(() => setResendCooldown((prev) => prev - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [resendCooldown]);
 
   // If already authenticated, redirect to dashboard
   if (isAuthenticated) {
@@ -73,8 +70,12 @@ export default function Login() {
 
   const validate = () => {
     const errs = {};
-    if (!form.username.trim()) errs.username = 'Username or Admin ID is required';
-    if (!form.password) errs.password = 'Password is required';
+    if (!form.username.trim()) {
+      errs.username = 'Username or email is required';
+    }
+    if (!form.password) {
+      errs.password = 'Password is required';
+    }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -101,8 +102,8 @@ export default function Login() {
     }
   };
 
-  // Step 1: Send 6-digit OTP code to registered admin email
-  const handleSendOtp = async (e) => {
+  // Step 1: Lookup admin account and fetch security question
+  const handleLookupQuestion = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setForgotMsg({ type: '', text: '' });
 
@@ -113,18 +114,19 @@ export default function Login() {
 
     setForgotLoading(true);
     try {
-      const res = await api.post('/auth/forgot-password-otp', {
+      const res = await api.post('/auth/get-security-question', {
         identifier: forgotForm.identifier.trim(),
       });
 
       if (res.data.success) {
-        setMaskedEmail(res.data.masked_email || 'your registered email');
-        setForgotMsg({
-          type: 'success',
-          text: res.data.message || 'Verification code sent to your email!',
-        });
+        setForgotForm((prev) => ({
+          ...prev,
+          question: res.data.question || '',
+          has_question: res.data.has_question,
+          available_questions: res.data.available_questions || [],
+          chosen_question: res.data.question || res.data.available_questions?.[0] || "What is your father's name?",
+        }));
         setForgotStep(2);
-        setResendCooldown(30); // 30s cooldown before allowing next resend
       }
     } catch (err) {
       setForgotMsg({
@@ -136,19 +138,13 @@ export default function Login() {
     }
   };
 
-  // Resend OTP handler
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0 || forgotLoading) return;
-    await handleSendOtp();
-  };
-
-  // Step 2: Verify OTP and set new password
-  const handleVerifyAndReset = async (e) => {
+  // Step 2: Verify secret answer and reset password
+  const handleResetWithSecurityAnswer = async (e) => {
     e.preventDefault();
     setForgotMsg({ type: '', text: '' });
 
-    if (!forgotForm.otp_code.trim() || forgotForm.otp_code.trim().length !== 6) {
-      setForgotMsg({ type: 'error', text: 'Please enter the 6-digit verification code sent to your email.' });
+    if (!forgotForm.security_answer.trim()) {
+      setForgotMsg({ type: 'error', text: 'Please enter your secret answer.' });
       return;
     }
     if (forgotForm.new_password.length < 6) {
@@ -162,29 +158,43 @@ export default function Login() {
 
     setForgotLoading(true);
     try {
-      const res = await api.post('/auth/verify-otp-reset', {
+      const res = await api.post('/auth/reset-password-security-question', {
         identifier: forgotForm.identifier.trim(),
-        otp_code: forgotForm.otp_code.trim(),
+        security_answer: forgotForm.security_answer.trim(),
         new_password: forgotForm.new_password,
         confirm_password: forgotForm.confirm_password,
+        chosen_question: forgotForm.chosen_question,
       });
 
       if (res.data.success) {
         setForgotMsg({
           type: 'success',
-          text: 'Password reset successfully! You can now log in with your new password.',
+          text: 'Password reset successfully! Logging you in...',
+        });
+        setForm({
+          username: forgotForm.identifier.trim(),
+          password: forgotForm.new_password,
         });
         setTimeout(() => {
           setShowForgotModal(false);
           setForgotStep(1);
-          setForgotForm({ identifier: '', otp_code: '', new_password: '', confirm_password: '' });
+          setForgotForm({
+            identifier: '',
+            question: '',
+            has_question: true,
+            available_questions: [],
+            chosen_question: '',
+            security_answer: '',
+            new_password: '',
+            confirm_password: '',
+          });
           setForgotMsg({ type: '', text: '' });
-        }, 2200);
+        }, 1800);
       }
     } catch (err) {
       setForgotMsg({
         type: 'error',
-        text: err.response?.data?.message || 'Invalid or expired code. Please try again.',
+        text: err.response?.data?.message || 'Incorrect secret answer. Please try again.',
       });
     } finally {
       setForgotLoading(false);
@@ -477,23 +487,23 @@ export default function Login() {
         </div>
       )}
 
-      {/* Forgot Password Recovery Modal (Email Verification Flow) */}
+      {/* Forgot Password Recovery Modal (Security Question Recovery Flow) */}
       {showForgotModal && (
         <div className="forgot-modal-overlay" onClick={() => setShowForgotModal(false)}>
           <div className="forgot-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="forgot-modal-header">
               <div className="forgot-header-title">
                 <div className="forgot-icon-badge">
-                  {forgotStep === 1 ? <Mail size={20} /> : <ShieldCheck size={20} />}
+                  {forgotStep === 1 ? <KeyRound size={20} /> : <HelpCircle size={20} />}
                 </div>
                 <div>
                   <h3 className="modal-title">
-                    {forgotStep === 1 ? 'Email Password Reset' : 'Verify Code & Set Password'}
+                    {forgotStep === 1 ? 'Find Admin Account' : 'Security Question Verification'}
                   </h3>
                   <p className="modal-subtitle">
                     {forgotStep === 1
-                      ? 'We will send a 6-digit verification code to your registered admin email.'
-                      : `Enter the code sent to ${maskedEmail || 'your email'}.`}
+                      ? 'Enter your username or email to retrieve your security question.'
+                      : 'Answer your secret question to reset your password instantly.'}
                   </p>
                 </div>
               </div>
@@ -514,15 +524,15 @@ export default function Login() {
               </div>
             )}
 
-            {/* STEP 1: Enter Username/Email and Request OTP */}
+            {/* STEP 1: Enter Username/Email */}
             {forgotStep === 1 && (
-              <form className="forgot-form" onSubmit={handleSendOtp}>
+              <form className="forgot-form" onSubmit={handleLookupQuestion}>
                 <div className="genz-field">
                   <label>Admin Username or Registered Email</label>
                   <div className="input-wrap">
                     <input
                       type="text"
-                      placeholder="e.g. admin or admin@school.local"
+                      placeholder="e.g. Vikram or admin"
                       value={forgotForm.identifier}
                       onChange={(e) => setForgotForm({ ...forgotForm, identifier: e.target.value })}
                       required
@@ -538,79 +548,98 @@ export default function Login() {
                 >
                   {forgotLoading ? (
                     <>
-                      <Loader2 size={16} className="spin" /> Sending Code…
+                      <Loader2 size={16} className="spin" /> Finding Account…
                     </>
                   ) : (
                     <>
-                      <Mail size={16} /> Send 6-Digit Email Code
+                      <KeyRound size={16} /> Continue to Security Question
                     </>
                   )}
                 </button>
               </form>
             )}
 
-            {/* STEP 2: Enter 6-Digit OTP & Set New Password */}
+            {/* STEP 2: Answer Security Question & Set New Password */}
             {forgotStep === 2 && (
-              <form className="forgot-form" onSubmit={handleVerifyAndReset}>
+              <form className="forgot-form" onSubmit={handleResetWithSecurityAnswer}>
+                {/* Display Security Question */}
+                <div className="security-question-banner">
+                  <span className="sq-label">Security Question:</span>
+                  {forgotForm.has_question ? (
+                    <strong className="sq-question-text">❓ {forgotForm.question}</strong>
+                  ) : (
+                    <div className="sq-select-wrap">
+                      <select
+                        className="sq-select"
+                        value={forgotForm.chosen_question}
+                        onChange={(e) => setForgotForm({ ...forgotForm, chosen_question: e.target.value })}
+                      >
+                        {forgotForm.available_questions.map((q, idx) => (
+                          <option key={idx} value={q}>{q}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Secret Answer */}
                 <div className="genz-field">
-                  <label>6-Digit Email Verification Code</label>
+                  <label>Your Secret Answer</label>
                   <div className="input-wrap">
                     <input
-                      type="text"
-                      maxLength={6}
-                      placeholder="Enter 6-digit code"
-                      className="otp-input-box"
-                      value={forgotForm.otp_code}
-                      onChange={(e) => setForgotForm({ ...forgotForm, otp_code: e.target.value.replace(/\D/g, '') })}
+                      type={showForgotAnswer ? 'text' : 'password'}
+                      placeholder="Enter your secret answer"
+                      value={forgotForm.security_answer}
+                      onChange={(e) => setForgotForm({ ...forgotForm, security_answer: e.target.value })}
                       required
                       autoFocus
                     />
+                    <button
+                      type="button"
+                      className="eye-btn"
+                      onClick={() => setShowForgotAnswer(!showForgotAnswer)}
+                      tabIndex={-1}
+                    >
+                      {showForgotAnswer ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
+                  <span className="field-hint-text">Secret answer is case-insensitive.</span>
                 </div>
 
+                {/* New Password */}
                 <div className="genz-field">
                   <label>New Password</label>
                   <div className="input-wrap">
                     <input
-                      type="password"
+                      type={showForgotNewPass ? 'text' : 'password'}
                       placeholder="Min 6 characters"
                       value={forgotForm.new_password}
                       onChange={(e) => setForgotForm({ ...forgotForm, new_password: e.target.value })}
                       required
                     />
+                    <button
+                      type="button"
+                      className="eye-btn"
+                      onClick={() => setShowForgotNewPass(!showForgotNewPass)}
+                      tabIndex={-1}
+                    >
+                      {showForgotNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                 </div>
 
+                {/* Confirm New Password */}
                 <div className="genz-field">
                   <label>Confirm New Password</label>
                   <div className="input-wrap">
                     <input
-                      type="password"
+                      type={showForgotNewPass ? 'text' : 'password'}
                       placeholder="Repeat new password"
                       value={forgotForm.confirm_password}
                       onChange={(e) => setForgotForm({ ...forgotForm, confirm_password: e.target.value })}
                       required
                     />
                   </div>
-                </div>
-
-                <div className="resend-action-bar">
-                  <span className="resend-hint">Didn't receive the email?</span>
-                  <button
-                    type="button"
-                    className="btn-resend-otp"
-                    onClick={handleResendOtp}
-                    disabled={resendCooldown > 0 || forgotLoading}
-                  >
-                    {resendCooldown > 0 ? (
-                      <span>Resend code in {resendCooldown}s</span>
-                    ) : (
-                      <>
-                        <RefreshCw size={13} className={forgotLoading ? 'spin' : ''} />
-                        <span>Resend Code</span>
-                      </>
-                    )}
-                  </button>
                 </div>
 
                 <div className="modal-btn-row">
@@ -634,7 +663,7 @@ export default function Login() {
                         <Loader2 size={16} className="spin" /> Verifying…
                       </>
                     ) : (
-                      'Reset & Save'
+                      'Reset Password & Login'
                     )}
                   </button>
                 </div>
