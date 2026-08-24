@@ -327,6 +327,7 @@ async function listAdmissions(req, res) {
         s.father_name,
         s.mother_name,
         s.phone,
+        s.whatsapp_number,
         s.admission_date,
         s.monthly_fee_rate,
         s.family_id,

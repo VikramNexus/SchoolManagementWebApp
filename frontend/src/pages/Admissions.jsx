@@ -30,6 +30,8 @@ import {
   Phone,
   Printer,
   Check,
+  MessageSquare,
+  MapPin,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../context/AuthContext';
@@ -124,6 +126,7 @@ export default function Admissions() {
   };
 
   const [formData, setFormData] = useState(initialFormState);
+  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [enrollmentSuccess, setEnrollmentSuccess] = useState(null);
   const [showJpgReceiptModal, setShowJpgReceiptModal] = useState(false);
@@ -262,15 +265,48 @@ export default function Admissions() {
   };
 
   const selectSibling = (std) => {
+    const sPhone = std.phone || '';
+    const sWhatsapp = std.whatsapp_number || sPhone;
     setFormData((prev) => ({
       ...prev,
       selected_sibling: std,
       father_name: std.father_name || std.parent_name || prev.father_name,
       mother_name: std.mother_name || prev.mother_name,
-      phone: std.phone || prev.phone,
+      phone: sPhone || prev.phone,
+      whatsapp_number: sWhatsapp || prev.whatsapp_number,
       address: std.address || prev.address,
     }));
+    if (sPhone) {
+      setWhatsappSameAsPhone(sWhatsapp === sPhone);
+    }
     setSiblingSearchResults([]);
+  };
+
+  const handlePhoneChange = (value) => {
+    setFormData((prev) => ({
+      ...prev,
+      phone: value,
+      whatsapp_number: whatsappSameAsPhone ? value : prev.whatsapp_number,
+    }));
+  };
+
+  const handleToggleSameAsPhone = (checked) => {
+    setWhatsappSameAsPhone(checked);
+    if (checked) {
+      setFormData((prev) => ({
+        ...prev,
+        whatsapp_number: prev.phone,
+      }));
+    }
+  };
+
+  const handleWhatsAppNumberChange = (value) => {
+    setFormData((prev) => ({ ...prev, whatsapp_number: value }));
+    if (value !== formData.phone) {
+      setWhatsappSameAsPhone(false);
+    } else {
+      setWhatsappSameAsPhone(true);
+    }
   };
 
   const removeSibling = () => {
@@ -380,6 +416,7 @@ export default function Admissions() {
 
   const handleResetForm = () => {
     setFormData(initialFormState);
+    setWhatsappSameAsPhone(true);
     setEnrollmentSuccess(null);
   };
 
@@ -781,7 +818,7 @@ export default function Admissions() {
                   )}
                 </div>
 
-                <div className="form-grid-3">
+                <div className="form-grid-2">
                   <div className="form-field">
                     <label>Father's Name</label>
                     <input
@@ -801,7 +838,9 @@ export default function Admissions() {
                       onChange={(e) => setFormData((prev) => ({ ...prev, mother_name: e.target.value }))}
                     />
                   </div>
+                </div>
 
+                <div className="form-grid-2">
                   <div className="form-field">
                     <label>Primary Phone Number</label>
                     <div className="input-prefix-box">
@@ -810,25 +849,39 @@ export default function Admissions() {
                         type="tel"
                         placeholder="e.g. 9876543210"
                         value={formData.phone}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value, whatsapp_number: prev.whatsapp_number || e.target.value }))}
+                        onChange={(e) => handlePhoneChange(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-field">
+                    <div className="label-with-toggle">
+                      <label>WhatsApp Number (Fee Alerts &amp; Receipts)</label>
+                      <label className="toggle-checkbox-label" title="Copy from Primary Phone Number">
+                        <input
+                          type="checkbox"
+                          checked={whatsappSameAsPhone}
+                          onChange={(e) => handleToggleSameAsPhone(e.target.checked)}
+                        />
+                        <span>Same as Phone</span>
+                      </label>
+                    </div>
+                    <div className="input-prefix-box">
+                      <MessageSquare size={15} className="prefix-icon text-emerald" />
+                      <input
+                        type="tel"
+                        placeholder="e.g. 9876543210"
+                        value={formData.whatsapp_number}
+                        onChange={(e) => handleWhatsAppNumberChange(e.target.value)}
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="form-grid-2">
-                  <div className="form-field">
-                    <label>WhatsApp Number (for Fee Reminders)</label>
-                    <input
-                      type="tel"
-                      placeholder="e.g. 9876543210"
-                      value={formData.whatsapp_number}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, whatsapp_number: e.target.value }))}
-                    />
-                  </div>
-
-                  <div className="form-field">
-                    <label>Residential Address</label>
+                <div className="form-field full-width-field" style={{ marginTop: '0.25rem' }}>
+                  <label>Residential Address</label>
+                  <div className="input-prefix-box">
+                    <MapPin size={15} className="prefix-icon" />
                     <input
                       type="text"
                       placeholder="Village / Town, Post, District, PIN Code"
@@ -1217,7 +1270,7 @@ export default function Admissions() {
                           compact
                           size="sm"
                           onSend={() => api.post(`/admissions/send-whatsapp/${adm.id}`)}
-                          phone={adm.phone}
+                          phone={adm.whatsapp_number || adm.phone}
                         />
                         <button
                           type="button"
