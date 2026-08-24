@@ -87,7 +87,7 @@ export default function Admissions() {
     class_id: '',
     section_id: '',
     category: 'day_scholar',
-    monthly_fee_rate: 3000,
+    monthly_fee_rate: '',
     admission_date: now.toISOString().slice(0, 10),
 
     // Parent
@@ -102,25 +102,23 @@ export default function Admissions() {
     sibling_search: '',
     selected_sibling: null,
 
-    // Charges
-    has_admission_fee: true,
-    admission_fee_amount: 1000,
+    // Charges (Manual Entry by Admin)
+    has_admission_fee: false,
+    admission_fee_amount: '',
 
-    has_security_deposit: true,
-    security_deposit_amount: 2000,
+    has_security_deposit: false,
+    security_deposit_amount: '',
 
-    include_advance_month: true,
+    include_advance_month: false,
     advance_fee_month: currentMonth,
     advance_fee_year: currentYear,
-    advance_fee_amount: 3000,
+    advance_fee_amount: '',
 
-    custom_expenses: [
-      { id: 1, description: 'Uniform & ID Card Kit', amount: 1500 },
-    ],
+    custom_expenses: [],
 
     // Payment Collection
     collect_payment: true,
-    paid_amount: 7500,
+    paid_amount: '',
     payment_mode: 'CASH',
     payment_notes: 'Initial admission fee and advance tuition payment',
   };
@@ -208,31 +206,36 @@ export default function Admissions() {
     }
   }, [activeTab, fetchAdmissionsList]);
 
-  // Update default monthly rate when category changes
+  // Update category without forcing hardcoded default rates
   const handleCategoryChange = (newCat) => {
-    const defaultRate = newCat === 'hosteller' ? 5000 : 3000;
     setFormData((prev) => ({
       ...prev,
       category: newCat,
-      monthly_fee_rate: defaultRate,
-      advance_fee_amount: defaultRate,
     }));
   };
 
   // Recalculate total payable whenever fee components change
   useEffect(() => {
     let total = 0;
-    if (formData.has_admission_fee) total += Number(formData.admission_fee_amount || 0);
-    if (formData.has_security_deposit) total += Number(formData.security_deposit_amount || 0);
-    if (formData.include_advance_month) total += Number(formData.advance_fee_amount || 0);
+    if (formData.has_admission_fee && formData.admission_fee_amount !== '') {
+      total += Number(formData.admission_fee_amount || 0);
+    }
+    if (formData.has_security_deposit && formData.security_deposit_amount !== '') {
+      total += Number(formData.security_deposit_amount || 0);
+    }
+    if (formData.include_advance_month && formData.advance_fee_amount !== '') {
+      total += Number(formData.advance_fee_amount || 0);
+    }
 
     formData.custom_expenses.forEach((item) => {
-      total += Number(item.amount || 0);
+      if (item.amount !== '') {
+        total += Number(item.amount || 0);
+      }
     });
 
     setFormData((prev) => ({
       ...prev,
-      paid_amount: total,
+      paid_amount: total > 0 ? total : '',
     }));
   }, [
     formData.has_admission_fee,
@@ -323,7 +326,7 @@ export default function Admissions() {
       ...prev,
       custom_expenses: [
         ...prev.custom_expenses,
-        { id: Date.now(), description: '', amount: 0 },
+        { id: Date.now(), description: '', amount: '' },
       ],
     }));
   };
@@ -353,6 +356,10 @@ export default function Admissions() {
     }
     if (!formData.class_id) {
       toast.error('Please select a class.');
+      return;
+    }
+    if (formData.monthly_fee_rate === '' || isNaN(Number(formData.monthly_fee_rate))) {
+      toast.error('Please enter the custom monthly fee rate.');
       return;
     }
 
@@ -629,20 +636,21 @@ export default function Admissions() {
                       <input
                         type="number"
                         min="0"
+                        placeholder="Enter monthly fee rate (e.g. 3000)"
                         value={formData.monthly_fee_rate}
                         onChange={(e) => {
-                          const val = Number(e.target.value);
+                          const val = e.target.value === '' ? '' : Number(e.target.value);
                           setFormData((prev) => ({
                             ...prev,
                             monthly_fee_rate: val,
-                            advance_fee_amount: val,
+                            advance_fee_amount: prev.advance_fee_amount === '' || prev.advance_fee_amount === prev.monthly_fee_rate ? val : prev.advance_fee_amount,
                           }));
                         }}
                         required
                       />
                     </div>
                     <span className="field-hint">
-                      Each child can have a custom monthly fee rate specified by Admin.
+                      Enter the monthly tuition / boarding fee rate manually for this student.
                     </span>
                   </div>
 
@@ -869,9 +877,10 @@ export default function Admissions() {
                         <input
                           type="number"
                           min="0"
+                          placeholder="Enter admission fee amount"
                           value={formData.admission_fee_amount}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, admission_fee_amount: Number(e.target.value) }))
+                            setFormData((prev) => ({ ...prev, admission_fee_amount: e.target.value === '' ? '' : Number(e.target.value) }))
                           }
                         />
                       </div>
@@ -896,9 +905,10 @@ export default function Admissions() {
                         <input
                           type="number"
                           min="0"
+                          placeholder="Enter security deposit amount"
                           value={formData.security_deposit_amount}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, security_deposit_amount: Number(e.target.value) }))
+                            setFormData((prev) => ({ ...prev, security_deposit_amount: e.target.value === '' ? '' : Number(e.target.value) }))
                           }
                         />
                       </div>
@@ -960,9 +970,10 @@ export default function Admissions() {
                           <input
                             type="number"
                             min="0"
+                            placeholder="Enter advance fee amount"
                             value={formData.advance_fee_amount}
                             onChange={(e) =>
-                              setFormData((prev) => ({ ...prev, advance_fee_amount: Number(e.target.value) }))
+                              setFormData((prev) => ({ ...prev, advance_fee_amount: e.target.value === '' ? '' : Number(e.target.value) }))
                             }
                           />
                         </div>
@@ -1000,7 +1011,7 @@ export default function Admissions() {
                           min="0"
                           placeholder="Amount"
                           value={row.amount}
-                          onChange={(e) => updateExpenseRow(row.id, 'amount', Number(e.target.value))}
+                          onChange={(e) => updateExpenseRow(row.id, 'amount', e.target.value === '' ? '' : Number(e.target.value))}
                         />
                       </div>
                       <button
@@ -1051,9 +1062,10 @@ export default function Admissions() {
                       <input
                         type="number"
                         min="0"
+                        placeholder="Enter amount paid"
                         value={formData.paid_amount}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, paid_amount: Number(e.target.value) }))}
-                        required
+                        onChange={(e) => setFormData((prev) => ({ ...prev, paid_amount: e.target.value === '' ? '' : Number(e.target.value) }))}
+                        required={formData.collect_payment}
                       />
                     </div>
                   </div>
