@@ -36,6 +36,10 @@ import {
   Lock,
   HelpCircle,
   KeyRound,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { api, useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -59,41 +63,34 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState(tabFromUrl || 'school');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [savingPassword, setSavingPassword] = useState(false);
-
-  // Admin Profile state
-  const [profileForm, setProfileForm] = useState({
+  // Unified Admin Profile & Security state
+  const [adminSettingsForm, setAdminSettingsForm] = useState({
     full_name: '',
     username: '',
     email: '',
-  });
-
-  // Change Password state
-  const [passwordForm, setPasswordForm] = useState({
     current_password: '',
     new_password: '',
     confirm_password: '',
-  });
-
-  // Security Question state
-  const [securityForm, setSecurityForm] = useState({
     security_question: "What is your father's name?",
     custom_question: '',
     security_answer: '',
-    current_password: '',
     has_answer: false,
   });
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [showSecurityAnswer, setShowSecurityAnswer] = useState(false);
   const [availableQuestions, setAvailableQuestions] = useState([]);
-  const [savingSecurity, setSavingSecurity] = useState(false);
+  const [savingAdminSettings, setSavingAdminSettings] = useState(false);
+  const [isPasswordChangeExpanded, setIsPasswordChangeExpanded] = useState(false);
 
   const fetchSecurityQuestion = async () => {
     try {
       const res = await api.get('/auth/security-question');
       if (res.data.success) {
-        setSecurityForm((prev) => ({
+        setAdminSettingsForm((prev) => ({
           ...prev,
-          security_question: res.data.security_question || "What is your father's name?",
+          security_question: res.data.security_question || prev.security_question,
           has_answer: res.data.has_answer,
         }));
         if (res.data.available_questions) {
@@ -113,11 +110,13 @@ export default function Settings() {
 
   useEffect(() => {
     if (user) {
-      setProfileForm({
+      setAdminSettingsForm((prev) => ({
+        ...prev,
         full_name: user.full_name || '',
         username: user.username || '',
         email: user.email || '',
-      });
+        security_question: user.security_question || prev.security_question,
+      }));
     }
   }, [user]);
 
@@ -216,97 +215,76 @@ export default function Settings() {
     }
   };
 
-  // Admin Profile & Security handlers
-  const handleProfileSubmit = async (e) => {
+  // Unified 1-Click Admin Profile, Password & Security Submit Handler
+  const handleUnifiedAdminSubmit = async (e) => {
     e.preventDefault();
-    try {
-      setSavingProfile(true);
-      const res = await api.put('/auth/profile', profileForm);
-      if (res.data.success) {
-        toast.success('Admin profile updated successfully!');
-        if (res.data.user) {
-          updateUser(res.data.user, res.data.token);
-        }
-      }
-    } catch (err) {
-      console.error('[Settings.handleProfileSubmit]', err);
-      toast.error(err.response?.data?.message || 'Failed to update admin profile.');
-    } finally {
-      setSavingProfile(false);
-    }
-  };
 
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    if (passwordForm.new_password !== passwordForm.confirm_password) {
-      toast.error('New passwords do not match.');
+    if (!adminSettingsForm.username.trim()) {
+      toast.error('Login username is required.');
       return;
     }
-    if (passwordForm.new_password.length < 6) {
-      toast.error('Password must be at least 6 characters long.');
+
+    const isChangingPassword = Boolean(adminSettingsForm.new_password.trim());
+    if (isChangingPassword) {
+      if (!adminSettingsForm.current_password) {
+        toast.error('Please enter your Current Password to authorize changing your password.');
+        return;
+      }
+      if (adminSettingsForm.new_password.length < 6) {
+        toast.error('New password must be at least 6 characters long.');
+        return;
+      }
+      if (adminSettingsForm.new_password !== adminSettingsForm.confirm_password) {
+        toast.error('New passwords do not match.');
+        return;
+      }
+    }
+
+    const isUpdatingSecurity = Boolean(adminSettingsForm.security_answer.trim());
+    if (isUpdatingSecurity && !adminSettingsForm.current_password) {
+      toast.error('Please enter your Current Password to update your secret recovery answer.');
       return;
     }
-    try {
-      setSavingPassword(true);
-      const res = await api.put('/auth/change-password', passwordForm);
-      if (res.data.success) {
-        toast.success('Password changed successfully! Please keep it secure.');
-        setPasswordForm({
-          current_password: '',
-          new_password: '',
-          confirm_password: '',
-        });
-      }
-    } catch (err) {
-      console.error('[Settings.handlePasswordSubmit]', err);
-      toast.error(err.response?.data?.message || 'Failed to change password.');
-    } finally {
-      setSavingPassword(false);
-    }
-  };
 
-  // Security Question Submit Handler
-  const handleSecurityQuestionSubmit = async (e) => {
-    e.preventDefault();
     const finalQuestion =
-      securityForm.security_question === 'Custom secret question'
-        ? securityForm.custom_question.trim()
-        : securityForm.security_question;
-
-    if (!finalQuestion) {
-      toast.error('Please enter or select a security question.');
-      return;
-    }
-    if (!securityForm.security_answer.trim()) {
-      toast.error('Please enter your secret answer.');
-      return;
-    }
-    if (!securityForm.current_password) {
-      toast.error('Please enter your current admin password to verify your identity.');
-      return;
-    }
+      adminSettingsForm.security_question === 'Custom secret question'
+        ? adminSettingsForm.custom_question.trim()
+        : adminSettingsForm.security_question;
 
     try {
-      setSavingSecurity(true);
-      const res = await api.put('/auth/security-question', {
+      setSavingAdminSettings(true);
+      const res = await api.put('/auth/profile-and-security', {
+        full_name: adminSettingsForm.full_name.trim(),
+        username: adminSettingsForm.username.trim(),
+        email: adminSettingsForm.email.trim(),
+        current_password: adminSettingsForm.current_password,
+        new_password: adminSettingsForm.new_password,
+        confirm_password: adminSettingsForm.confirm_password,
         security_question: finalQuestion,
-        security_answer: securityForm.security_answer.trim(),
-        current_password: securityForm.current_password,
+        security_answer: adminSettingsForm.security_answer.trim(),
       });
 
       if (res.data.success) {
-        toast.success(res.data.message || 'Security question updated successfully!');
-        setSecurityForm((prev) => ({
+        toast.success(res.data.message || 'All Profile & Security settings updated successfully!');
+        if (res.data.user) {
+          updateUser(res.data.user, res.data.token);
+        }
+        setAdminSettingsForm((prev) => ({
           ...prev,
-          security_answer: '',
           current_password: '',
+          new_password: '',
+          confirm_password: '',
+          security_answer: '',
           has_answer: true,
+          security_question: res.data.user?.security_question || finalQuestion,
         }));
+        setIsPasswordChangeExpanded(false);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update security question.');
+      console.error('[Settings.handleUnifiedAdminSubmit]', err);
+      toast.error(err.response?.data?.message || 'Failed to update settings.');
     } finally {
-      setSavingSecurity(false);
+      setSavingAdminSettings(false);
     }
   };
 
@@ -624,6 +602,7 @@ export default function Settings() {
         </div>
 
         {/* Admin Profile & Security */}
+        {/* Admin Profile & Security (Unified 1-Save Experience) */}
         <div
           role="tabpanel"
           id="profile-panel"
@@ -631,295 +610,335 @@ export default function Settings() {
           hidden={activeTab !== 'profile'}
           className="tab-panel"
         >
-          <div className="admin-profile-grid">
-            {/* Profile Info Form */}
-            <form className="settings-form admin-profile-card" onSubmit={handleProfileSubmit}>
-              <div className="section-title-wrap">
-                <User size={20} className="section-title-icon" />
-                <div>
-                  <h2 className="section-heading">Administrator Profile &amp; Account</h2>
-                  <p className="section-subtext">Update your administrative name, username, and official email.</p>
-                </div>
+          {/* Admin Hero Header Banner */}
+          <div className="admin-unified-hero">
+            <div className="hero-avatar-box">
+              <div className="hero-avatar-circle">
+                {(adminSettingsForm.full_name || user?.username || 'A')[0].toUpperCase()}
               </div>
+            </div>
+            <div className="hero-text-details">
+              <div className="hero-title-row">
+                <h2 className="hero-user-fullname">{adminSettingsForm.full_name || 'System Administrator'}</h2>
+                <span className="hero-username-tag">@{adminSettingsForm.username || 'admin'}</span>
+                <span className="hero-badge-role">
+                  <ShieldCheck size={14} />
+                  <span>MASTER ADMINISTRATOR</span>
+                </span>
+              </div>
+              <p className="hero-subtitle">
+                Configure your administrator profile, login credentials, and account recovery secret questions with 1-click synchronized saving.
+              </p>
+            </div>
+          </div>
 
-              <div className="form-grid">
-                <div className="form-group full-width">
-                  <label htmlFor="admin_full_name">
-                    Administrator Full Name <span className="required">*</span>
-                  </label>
-                  <div className="styled-input-wrapper">
-                    <div className="input-prefix-icon"><User size={18} /></div>
-                    <input
-                      type="text"
-                      id="admin_full_name"
-                      className="styled-setting-input"
-                      value={profileForm.full_name}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, full_name: e.target.value }))}
-                      placeholder="e.g. Principal / Administrator"
-                      required
-                    />
+          <form className="unified-admin-form-wrapper" onSubmit={handleUnifiedAdminSubmit}>
+            <div className="unified-form-grid">
+              {/* CARD 1: Profile & Identity */}
+              <div className="admin-surface-card">
+                <div className="surface-card-header">
+                  <div className="surface-icon-badge bg-blue-subtle">
+                    <User size={20} className="text-blue" />
+                  </div>
+                  <div>
+                    <h3 className="surface-card-title">Administrator Profile &amp; Account</h3>
+                    <p className="surface-card-subtext">Your full name, login username, and official email.</p>
                   </div>
                 </div>
 
-                <div className="form-group full-width">
-                  <label htmlFor="admin_username">
-                    Login Username <span className="required">*</span>
-                  </label>
-                  <div className="styled-input-wrapper">
-                    <div className="input-prefix-icon"><ShieldCheck size={18} /></div>
-                    <input
-                      type="text"
-                      id="admin_username"
-                      className="styled-setting-input"
-                      value={profileForm.username}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, username: e.target.value }))}
-                      placeholder="e.g. admin"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group full-width">
-                  <label htmlFor="admin_email">
-                    Administrator Email (Gmail / School Email)
-                  </label>
-                  <div className="styled-input-wrapper">
-                    <div className="input-prefix-icon"><Mail size={18} /></div>
-                    <input
-                      type="email"
-                      id="admin_email"
-                      className="styled-setting-input"
-                      value={profileForm.email}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, email: e.target.value }))}
-                      placeholder="e.g. Aryavartshikshansansthan@gmail.com"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-actions">
-                <button type="submit" className="btn btn-primary btn-save-school" disabled={savingProfile}>
-                  {savingProfile ? (
-                    <>
-                      <Loader2 size={16} className="spin" /> Saving Profile…
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} /> Save Admin Profile
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-
-            {/* Change Password Form */}
-            <form className="settings-form admin-profile-card" onSubmit={handlePasswordSubmit}>
-              <div className="section-title-wrap">
-                <Lock size={20} className="section-title-icon" />
-                <div>
-                  <h2 className="section-heading">Security &amp; Change Password</h2>
-                  <p className="section-subtext">Update your login password to maintain complete account security.</p>
-                </div>
-              </div>
-
-              <div className="form-grid">
-                <div className="form-group full-width">
-                  <label htmlFor="current_password">
-                    Current Password <span className="required">*</span>
-                  </label>
-                  <div className="styled-input-wrapper">
-                    <div className="input-prefix-icon"><Key size={18} /></div>
-                    <input
-                      type="password"
-                      id="current_password"
-                      className="styled-setting-input"
-                      value={passwordForm.current_password}
-                      onChange={(e) => setPasswordForm((prev) => ({ ...prev, current_password: e.target.value }))}
-                      placeholder="Enter existing password"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group full-width">
-                  <label htmlFor="new_password">
-                    New Password (Min 6 Characters) <span className="required">*</span>
-                  </label>
-                  <div className="styled-input-wrapper">
-                    <div className="input-prefix-icon"><Lock size={18} /></div>
-                    <input
-                      type="password"
-                      id="new_password"
-                      className="styled-setting-input"
-                      value={passwordForm.new_password}
-                      onChange={(e) => setPasswordForm((prev) => ({ ...prev, new_password: e.target.value }))}
-                      placeholder="Enter new password"
-                      required
-                      minLength={6}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group full-width">
-                  <label htmlFor="confirm_password">
-                    Confirm New Password <span className="required">*</span>
-                  </label>
-                  <div className="styled-input-wrapper">
-                    <div className="input-prefix-icon"><CheckCircle2 size={18} /></div>
-                    <input
-                      type="password"
-                      id="confirm_password"
-                      className="styled-setting-input"
-                      value={passwordForm.confirm_password}
-                      onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirm_password: e.target.value }))}
-                      placeholder="Confirm new password"
-                      required
-                      minLength={6}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-actions">
-                <button type="submit" className="btn btn-primary btn-save-school" disabled={savingPassword}>
-                  {savingPassword ? (
-                    <>
-                      <Loader2 size={16} className="spin" /> Updating Password…
-                    </>
-                  ) : (
-                    <>
-                      <Key size={16} /> Change Password
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-
-            {/* Password Recovery Security Question Form */}
-            <form className="settings-form admin-profile-card security-questions-card" onSubmit={handleSecurityQuestionSubmit}>
-              <div className="section-title-wrap">
-                <HelpCircle size={20} className="section-title-icon" />
-                <div>
-                  <h2 className="section-heading">Password Recovery Security Question</h2>
-                  <p className="section-subtext">
-                    Choose a secret question and answer to easily reset your password if you ever forget it.
-                  </p>
-                </div>
-              </div>
-
-              {securityForm.has_answer && (
-                <div className="current-sq-badge">
-                  <CheckCircle2 size={16} className="text-green" />
-                  <span>
-                    Current Active Question: <strong>{securityForm.security_question}</strong>
-                  </span>
-                </div>
-              )}
-
-              <div className="form-grid">
-                <div className="form-group full-width">
-                  <label htmlFor="security_question_select">
-                    Choose Security Question <span className="required">*</span>
-                  </label>
-                  <div className="styled-input-wrapper">
-                    <div className="input-prefix-icon"><HelpCircle size={18} /></div>
-                    <select
-                      id="security_question_select"
-                      className="styled-setting-input"
-                      value={securityForm.security_question}
-                      onChange={(e) => setSecurityForm((prev) => ({ ...prev, security_question: e.target.value }))}
-                      required
-                    >
-                      {(availableQuestions.length > 0 ? availableQuestions : [
-                        "What is your father's name?",
-                        "What is your favorite pet's name?",
-                        "What is your mother's maiden / childhood name?",
-                        "What was the name of your first school?",
-                        "In which city or village were you born?",
-                        "What was your first vehicle, car, or favorite bike?",
-                        "What was your childhood nickname?",
-                        "What is your favorite childhood friend's name?",
-                        "Custom secret question",
-                      ]).map((q, idx) => (
-                        <option key={idx} value={q}>{q}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {securityForm.security_question === 'Custom secret question' && (
+                <div className="surface-card-body">
                   <div className="form-group full-width">
-                    <label htmlFor="custom_question">
-                      Enter Your Custom Secret Question <span className="required">*</span>
+                    <label htmlFor="admin_full_name">
+                      Administrator Full Name <span className="required">*</span>
                     </label>
                     <div className="styled-input-wrapper">
-                      <div className="input-prefix-icon"><HelpCircle size={18} /></div>
+                      <div className="input-prefix-icon"><User size={18} /></div>
                       <input
                         type="text"
-                        id="custom_question"
+                        id="admin_full_name"
                         className="styled-setting-input"
-                        value={securityForm.custom_question}
-                        onChange={(e) => setSecurityForm((prev) => ({ ...prev, custom_question: e.target.value }))}
-                        placeholder="e.g. What is my favorite sports team?"
+                        value={adminSettingsForm.full_name}
+                        onChange={(e) => setAdminSettingsForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                        placeholder="e.g. Vikram Kumar"
                         required
                       />
                     </div>
                   </div>
+
+                  <div className="form-group full-width">
+                    <label htmlFor="admin_username">
+                      Login Username <span className="required">*</span>
+                    </label>
+                    <div className="styled-input-wrapper">
+                      <div className="input-prefix-icon"><ShieldCheck size={18} /></div>
+                      <input
+                        type="text"
+                        id="admin_username"
+                        className="styled-setting-input"
+                        value={adminSettingsForm.username}
+                        onChange={(e) => setAdminSettingsForm((prev) => ({ ...prev, username: e.target.value }))}
+                        placeholder="e.g. Vikram"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group full-width">
+                    <label htmlFor="admin_email">
+                      Administrator Email (Gmail / Contact)
+                    </label>
+                    <div className="styled-input-wrapper">
+                      <div className="input-prefix-icon"><Mail size={18} /></div>
+                      <input
+                        type="email"
+                        id="admin_email"
+                        className="styled-setting-input"
+                        value={adminSettingsForm.email}
+                        onChange={(e) => setAdminSettingsForm((prev) => ({ ...prev, email: e.target.value }))}
+                        placeholder="e.g. vy3052907@gmail.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 2: Password Recovery Security Question */}
+              <div className="admin-surface-card">
+                <div className="surface-card-header">
+                  <div className="surface-icon-badge bg-sky-subtle">
+                    <HelpCircle size={20} className="text-sky" />
+                  </div>
+                  <div>
+                    <h3 className="surface-card-title">Password Recovery Security Question</h3>
+                    <p className="surface-card-subtext">Secret question &amp; answer to instantly reset password if forgotten.</p>
+                  </div>
+                </div>
+
+                <div className="surface-card-body">
+                  {adminSettingsForm.has_answer && (
+                    <div className="current-sq-active-pill">
+                      <CheckCircle2 size={16} className="text-emerald" />
+                      <span>
+                        Active Recovery Question: <strong>{adminSettingsForm.security_question}</strong>
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="form-group full-width">
+                    <label htmlFor="security_question_select">Choose Security Question</label>
+                    <div className="styled-input-wrapper">
+                      <div className="input-prefix-icon"><HelpCircle size={18} /></div>
+                      <select
+                        id="security_question_select"
+                        className="styled-setting-input"
+                        value={adminSettingsForm.security_question}
+                        onChange={(e) => setAdminSettingsForm((prev) => ({ ...prev, security_question: e.target.value }))}
+                      >
+                        {(availableQuestions.length > 0 ? availableQuestions : [
+                          "What is your father's name?",
+                          "What is your favorite pet's name?",
+                          "What is your mother's maiden / childhood name?",
+                          "What was the name of your first school?",
+                          "In which city or village were you born?",
+                          "What was your first vehicle, car, or favorite bike?",
+                          "What was your childhood nickname?",
+                          "What is your favorite childhood friend's name?",
+                          "Custom secret question",
+                        ]).map((q, idx) => (
+                          <option key={idx} value={q}>{q}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {adminSettingsForm.security_question === 'Custom secret question' && (
+                    <div className="form-group full-width">
+                      <label htmlFor="custom_question">Your Custom Secret Question</label>
+                      <div className="styled-input-wrapper">
+                        <div className="input-prefix-icon"><HelpCircle size={18} /></div>
+                        <input
+                          type="text"
+                          id="custom_question"
+                          className="styled-setting-input"
+                          value={adminSettingsForm.custom_question}
+                          onChange={(e) => setAdminSettingsForm((prev) => ({ ...prev, custom_question: e.target.value }))}
+                          placeholder="e.g. What is my favorite sports team?"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="form-group full-width">
+                    <label htmlFor="security_answer">
+                      Secret Answer <span className="label-optional-hint">(Leave blank to keep existing answer)</span>
+                    </label>
+                    <div className="styled-input-wrapper">
+                      <div className="input-prefix-icon"><KeyRound size={18} /></div>
+                      <input
+                        type={showSecurityAnswer ? 'text' : 'password'}
+                        id="security_answer"
+                        className="styled-setting-input"
+                        value={adminSettingsForm.security_answer}
+                        onChange={(e) => setAdminSettingsForm((prev) => ({ ...prev, security_answer: e.target.value }))}
+                        placeholder={adminSettingsForm.has_answer ? '••••••••  (Type new answer to update)' : 'Enter secret answer'}
+                      />
+                      <button
+                        type="button"
+                        className="input-eye-btn"
+                        onClick={() => setShowSecurityAnswer(!showSecurityAnswer)}
+                        tabIndex={-1}
+                      >
+                        {showSecurityAnswer ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    <span className="field-sub-hint">Case-insensitive. Used during "Forgot Password" recovery.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 3: Password Update Section (Collapsible / Interactive Card spanning full width) */}
+              <div className="admin-surface-card full-width-card password-surface-card">
+                <div
+                  className="password-collapse-toggle"
+                  onClick={() => setIsPasswordChangeExpanded(!isPasswordChangeExpanded)}
+                >
+                  <div className="collapse-left-info">
+                    <div className="surface-icon-badge bg-amber-subtle">
+                      <Lock size={20} className="text-amber" />
+                    </div>
+                    <div>
+                      <h3 className="surface-card-title">Change Account Password</h3>
+                      <p className="surface-card-subtext">
+                        {isPasswordChangeExpanded
+                          ? 'Enter your new password below. Leave blank if you do not want to change it.'
+                          : 'Click to expand if you wish to change your account login password.'}
+                      </p>
+                    </div>
+                  </div>
+                  <button type="button" className="btn-collapse-toggle" tabIndex={-1}>
+                    {isPasswordChangeExpanded ? (
+                      <>
+                        <span>Close</span> <ChevronUp size={16} />
+                      </>
+                    ) : (
+                      <>
+                        <span>Change Password</span> <ChevronDown size={16} />
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {isPasswordChangeExpanded && (
+                  <div className="password-expanded-panel">
+                    <div className="password-inputs-row">
+                      <div className="form-group">
+                        <label htmlFor="new_password">New Password (Min 6 Characters)</label>
+                        <div className="styled-input-wrapper">
+                          <div className="input-prefix-icon"><Lock size={18} /></div>
+                          <input
+                            type={showNewPass ? 'text' : 'password'}
+                            id="new_password"
+                            className="styled-setting-input"
+                            value={adminSettingsForm.new_password}
+                            onChange={(e) => setAdminSettingsForm((prev) => ({ ...prev, new_password: e.target.value }))}
+                            placeholder="Enter new password"
+                            minLength={6}
+                          />
+                          <button
+                            type="button"
+                            className="input-eye-btn"
+                            onClick={() => setShowNewPass(!showNewPass)}
+                            tabIndex={-1}
+                          >
+                            {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label htmlFor="confirm_password">Confirm New Password</label>
+                        <div className="styled-input-wrapper">
+                          <div className="input-prefix-icon"><CheckCircle2 size={18} /></div>
+                          <input
+                            type={showConfirmPass ? 'text' : 'password'}
+                            id="confirm_password"
+                            className="styled-setting-input"
+                            value={adminSettingsForm.confirm_password}
+                            onChange={(e) => setAdminSettingsForm((prev) => ({ ...prev, confirm_password: e.target.value }))}
+                            placeholder="Repeat new password"
+                            minLength={6}
+                          />
+                          <button
+                            type="button"
+                            className="input-eye-btn"
+                            onClick={() => setShowConfirmPass(!showConfirmPass)}
+                            tabIndex={-1}
+                          >
+                            {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
-                <div className="form-group full-width">
-                  <label htmlFor="security_answer">
-                    Secret Answer <span className="required">*</span>
-                  </label>
-                  <div className="styled-input-wrapper">
-                    <div className="input-prefix-icon"><KeyRound size={18} /></div>
-                    <input
-                      type="text"
-                      id="security_answer"
-                      className="styled-setting-input"
-                      value={securityForm.security_answer}
-                      onChange={(e) => setSecurityForm((prev) => ({ ...prev, security_answer: e.target.value }))}
-                      placeholder="Enter secret answer (e.g. Amit Patel / Tommy)"
-                      required
-                    />
+                {/* Current Password Verification (Displays automatically if user is changing password or secret answer) */}
+                {(Boolean(adminSettingsForm.new_password.trim()) || Boolean(adminSettingsForm.security_answer.trim())) && (
+                  <div className="current-password-verify-box">
+                    <div className="verify-banner-header">
+                      <Key size={16} className="text-amber" />
+                      <span>Security Verification: Enter Current Password to authorize your changes</span>
+                    </div>
+                    <div className="form-group full-width">
+                      <div className="styled-input-wrapper highlight-verify">
+                        <div className="input-prefix-icon"><Key size={18} /></div>
+                        <input
+                          type={showCurrentPass ? 'text' : 'password'}
+                          id="current_password"
+                          className="styled-setting-input"
+                          value={adminSettingsForm.current_password}
+                          onChange={(e) => setAdminSettingsForm((prev) => ({ ...prev, current_password: e.target.value }))}
+                          placeholder="Enter current admin password"
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="input-eye-btn"
+                          onClick={() => setShowCurrentPass(!showCurrentPass)}
+                          tabIndex={-1}
+                        >
+                          {showCurrentPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <span className="field-sub-hint">Secret answer is case-insensitive during recovery.</span>
-                </div>
-
-                <div className="form-group full-width">
-                  <label htmlFor="security_current_password">
-                    Current Password (to confirm your identity) <span className="required">*</span>
-                  </label>
-                  <div className="styled-input-wrapper">
-                    <div className="input-prefix-icon"><Key size={18} /></div>
-                    <input
-                      type="password"
-                      id="security_current_password"
-                      className="styled-setting-input"
-                      value={securityForm.current_password}
-                      onChange={(e) => setSecurityForm((prev) => ({ ...prev, current_password: e.target.value }))}
-                      placeholder="Enter current admin password"
-                      required
-                    />
-                  </div>
-                </div>
+                )}
               </div>
+            </div>
 
-              <div className="form-actions">
-                <button type="submit" className="btn btn-primary btn-save-school" disabled={savingSecurity}>
-                  {savingSecurity ? (
-                    <>
-                      <Loader2 size={16} className="spin" /> Saving Question…
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} /> Save Security Question
-                    </>
-                  )}
-                </button>
+            {/* UNIFIED SINGLE SAVE ACTION BAR */}
+            <div className="unified-admin-action-bar">
+              <div className="action-bar-info">
+                <Sparkles size={18} className="text-amber" />
+                <span>All profile name, username, email, password, and security questions are saved together.</span>
               </div>
-            </form>
-          </div>
+              <button
+                type="submit"
+                className="btn btn-primary btn-unified-save"
+                disabled={savingAdminSettings}
+              >
+                {savingAdminSettings ? (
+                  <>
+                    <Loader2 size={18} className="spin" /> Saving All Changes…
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} /> Save Profile &amp; Security Settings
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
 
         {/* Classes & Sections */}

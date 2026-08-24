@@ -4,6 +4,7 @@ const {
   me,
   updateProfile,
   changePassword,
+  updateAllAdminSettings,
   getSecurityQuestion,
   resetPasswordWithSecurityAnswer,
   getAdminSecurityQuestion,
@@ -24,6 +25,7 @@ router.post('/reset-password', resetPasswordWithSecurityAnswer);
 router.get('/me', authenticateToken, me);
 router.put('/profile', authenticateToken, updateProfile);
 router.put('/change-password', authenticateToken, changePassword);
+router.put('/profile-and-security', authenticateToken, updateAllAdminSettings);
 router.get('/security-question', authenticateToken, getAdminSecurityQuestion);
 router.put('/security-question', authenticateToken, updateAdminSecurityQuestion);
 

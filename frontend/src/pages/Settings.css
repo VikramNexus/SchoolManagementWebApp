@@ -471,42 +471,410 @@
   font-style: italic;
 }
 
-/* Admin Profile & Security Grid */
-.admin-profile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-  gap: 1.5rem;
-  align-items: start;
+/* ==========================================================================
+   Unified Admin Profile & Security Styles (1-Click Save Experience)
+   ========================================================================== */
+
+/* Hero Banner */
+.admin-unified-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0c4a6e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.5rem;
+  color: #ffffff;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.18);
+  position: relative;
+  overflow: hidden;
 }
 
-.admin-profile-card {
+.admin-unified-hero::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-avatar-box {
+  flex-shrink: 0;
+}
+
+.hero-avatar-circle {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.65rem;
+  font-weight: 900;
+  box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.hero-text-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.hero-user-fullname {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+.hero-username-tag {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+}
+
+.hero-badge-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  letter-spacing: 0.5px;
+}
+
+.hero-subtitle {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+  max-width: 750px;
+  line-height: 1.45;
+}
+
+/* Form Wrapper & Grid */
+.unified-admin-form-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.unified-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .unified-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Surface Cards */
+.admin-surface-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: all 0.2s ease;
 }
 
-.security-questions-card {
-  border-top: 3px solid #0284c7;
+.admin-surface-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
 }
 
-.current-sq-badge {
+.full-width-card {
+  grid-column: 1 / -1;
+}
+
+.surface-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 1rem;
+}
+
+.surface-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bg-blue-subtle {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.text-blue {
+  color: #2563eb;
+}
+
+.bg-sky-subtle {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
+.text-sky {
+  color: #0284c7;
+}
+
+.bg-amber-subtle {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.text-amber {
+  color: #d97706;
+}
+
+.surface-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.surface-card-subtext {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.surface-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+/* Active Question Pill */
+.current-sq-active-pill {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 0.85rem;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
   border-radius: 8px;
-  margin-bottom: 1rem;
-  font-size: 0.82rem;
-  color: #166534;
+  font-size: 0.8rem;
+  color: #065f46;
+}
+
+.text-emerald {
+  color: #059669;
+}
+
+.label-optional-hint {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 500;
 }
 
 .field-sub-hint {
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   color: #64748b;
-  margin-top: 0.25rem;
+  margin-top: 0.2rem;
   display: block;
+}
+
+.input-eye-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  padding: 0 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.input-eye-btn:hover {
+  color: #0284c7;
+}
+
+/* Password Collapse Container */
+.password-surface-card {
+  background: #fafafa;
+  border: 1px dashed #cbd5e1;
+}
+
+.password-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapse-left-info {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.btn-collapse-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #0284c7;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-collapse-toggle:hover {
+  background: #f0f9ff;
+  border-color: #0284c7;
+}
+
+.password-expanded-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.password-inputs-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 700px) {
+  .password-inputs-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Current Password Verification Banner */
+.current-password-verify-box {
+  margin-top: 1rem;
+  padding: 1rem 1.15rem;
+  background: #fffbeb;
+  border: 1.5px solid #fde68a;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.verify-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #92400e;
+}
+
+.highlight-verify {
+  border-color: #f59e0b !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15) !important;
+}
+
+/* UNIFIED SINGLE SAVE ACTION BAR */
+.unified-admin-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.75rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+}
+
+.action-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+.btn-unified-save {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.85rem;
+  background: linear-gradient(135deg, #0284c7 0%, #4f46e5 100%);
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+  white-space: nowrap;
+}
+
+.btn-unified-save:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(2, 132, 199, 0.5);
+  background: linear-gradient(135deg, #0369a1 0%, #4338ca 100%);
+}
+
+.btn-unified-save:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-unified-save:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .unified-admin-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .action-bar-info {
+    justify-content: center;
+  }
+  .btn-unified-save {
+    justify-content: center;
+  }
 }

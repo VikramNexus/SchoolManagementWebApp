@@ -244,6 +244,166 @@ async function changePassword(req, res) {
   }
 }
 
+/**
+ * PUT /api/auth/profile-and-security
+ * Unified 1-Click Update for Admin Profile, Password, and Security Question
+ */
+async function updateAllAdminSettings(req, res) {
+  const userId = req.user.id;
+  const {
+    full_name,
+    username,
+    email,
+    current_password,
+    new_password,
+    confirm_password,
+    security_question,
+    security_answer,
+  } = req.body || {};
+
+  if (!username || !username.trim()) {
+    return res.status(400).json({ success: false, message: 'Login username cannot be empty.' });
+  }
+
+  try {
+    const user = await db.queryOne(
+      'SELECT id, username, email, password_hash, security_question, security_answer_hash FROM users WHERE id = ?',
+      [userId]
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Administrator account not found.' });
+    }
+
+    // 1. Check if new username is already taken by another user
+    const trimmedUsername = username.trim();
+    if (trimmedUsername.toLowerCase() !== user.username.toLowerCase()) {
+      const existingUser = await db.queryOne(
+        'SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ? LIMIT 1',
+        [trimmedUsername, userId]
+      );
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          message: `Username '${trimmedUsername}' is already taken by another account.`,
+        });
+      }
+    }
+
+    // 2. Check if new email is already taken by another user
+    const trimmedEmail = email?.trim() || null;
+    if (trimmedEmail && trimmedEmail.toLowerCase() !== (user.email || '').toLowerCase()) {
+      const existingEmail = await db.queryOne(
+        'SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ? LIMIT 1',
+        [trimmedEmail, userId]
+      );
+      if (existingEmail) {
+        return res.status(409).json({
+          success: false,
+          message: `Email '${trimmedEmail}' is already registered with another account.`,
+        });
+      }
+    }
+
+    // Password verification flag (to avoid verifying multiple times in the same request)
+    let passwordVerified = false;
+
+    // 3. Handle Password Change (if new_password is typed)
+    const isChangingPassword = Boolean(new_password && new_password.trim());
+    if (isChangingPassword) {
+      if (!current_password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please enter your current password to authorize changing your password.',
+        });
+      }
+      const matches = await bcrypt.compare(current_password, user.password_hash);
+      if (!matches) {
+        return res.status(400).json({ success: false, message: 'Incorrect current password.' });
+      }
+      passwordVerified = true;
+
+      if (new_password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'New password must be at least 6 characters long.',
+        });
+      }
+      if (confirm_password && new_password !== confirm_password) {
+        return res.status(400).json({ success: false, message: 'New passwords do not match.' });
+      }
+
+      const newPassHash = await bcrypt.hash(new_password, 10);
+      await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newPassHash, userId]);
+    }
+
+    // 4. Handle Security Question & Answer Change (if security_answer is entered)
+    const isUpdatingSecurity = Boolean(security_answer && security_answer.trim());
+    if (isUpdatingSecurity) {
+      if (!passwordVerified) {
+        if (!current_password) {
+          return res.status(400).json({
+            success: false,
+            message: 'Please enter your current password to save the new security question & answer.',
+          });
+        }
+        const matches = await bcrypt.compare(current_password, user.password_hash);
+        if (!matches) {
+          return res.status(400).json({ success: false, message: 'Incorrect current password.' });
+        }
+        passwordVerified = true;
+      }
+
+      const questionToSave = security_question?.trim() || user.security_question || "What is your father's name?";
+      const normalizedAnswer = String(security_answer).trim().toLowerCase();
+      const ansHash = await bcrypt.hash(normalizedAnswer, 10);
+
+      await db.query(
+        'UPDATE users SET security_question = ?, security_answer_hash = ? WHERE id = ?',
+        [questionToSave, ansHash, userId]
+      );
+    } else if (security_question && security_question.trim() && security_question.trim() !== user.security_question) {
+      // Just updating the question wording without resetting answer hash
+      await db.query(
+        'UPDATE users SET security_question = ? WHERE id = ?',
+        [security_question.trim(), userId]
+      );
+    }
+
+    // 5. Update Profile Details (Full Name, Username, Email)
+    await db.query(
+      'UPDATE users SET full_name = ?, username = ?, email = ? WHERE id = ?',
+      [full_name?.trim() || null, trimmedUsername, trimmedEmail, userId]
+    );
+
+    // 6. Fetch updated user details & sign fresh JWT
+    const updatedUser = await db.queryOne(
+      'SELECT id, username, email, role, full_name, security_question FROM users WHERE id = ?',
+      [userId]
+    );
+
+    const token = jwt.sign(
+      {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        role: updatedUser.role,
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    return res.json({
+      success: true,
+      message: 'All Admin Profile & Security settings updated successfully!',
+      token,
+      user: updatedUser,
+    });
+  } catch (err) {
+    console.error('[authController.updateAllAdminSettings]', err);
+    return res.status(500).json({ success: false, message: 'Failed to update settings.' });
+  }
+}
+
 const STANDARD_SECURITY_QUESTIONS = [
   "What is your father's name?",
   "What is your favorite pet's name?",
@@ -457,6 +617,7 @@ module.exports = {
   me,
   updateProfile,
   changePassword,
+  updateAllAdminSettings,
   getSecurityQuestion,
   resetPasswordWithSecurityAnswer,
   getAdminSecurityQuestion,
