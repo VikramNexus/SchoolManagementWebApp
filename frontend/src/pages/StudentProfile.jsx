@@ -606,6 +606,9 @@ export default function StudentProfile() {
       {/* Header */}
       <header className="profile-header">
         <div className="header-left">
+          <Link to="/students" className="back-btn" aria-label="Back to students">
+            <ArrowLeft size={20} />
+          </Link>
           <div className="student-identity">
             <div className="avatar">
               {student.full_name?.charAt(0)?.toUpperCase() || 'S'}

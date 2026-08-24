@@ -52,10 +52,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.35rem;
+  padding: 1.25rem 1.5rem;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 0.85rem;
+  border-radius: 1rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   flex-wrap: wrap;
   gap: 1rem;
@@ -64,7 +64,28 @@
 .header-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 0.6rem;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.back-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  transform: translateX(-2px);
 }
 
 .student-identity {
@@ -74,8 +95,8 @@
 }
 
 .avatar {
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: linear-gradient(135deg, #0ea5e9, #0284c7);
   box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
@@ -83,13 +104,13 @@
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   color: #ffffff;
 }
 
 .student-identity h1 {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   font-weight: 800;
   color: #0f172a;
 }
@@ -109,12 +130,12 @@
 }
 
 .btn-header-action {
-  height: 35px !important;
-  padding: 0 0.9rem !important;
-  font-size: 0.8125rem !important;
+  height: 32px !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.78rem !important;
   font-weight: 700 !important;
-  border-radius: 7px !important;
-  gap: 0.4rem !important;
+  border-radius: 6px !important;
+  gap: 0.35rem !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -123,9 +144,9 @@
 .btn-receipt-num-compact {
   display: inline-flex !important;
   align-items: center !important;
-  gap: 0.35rem !important;
+  gap: 0.3rem !important;
   height: 28px !important;
-  padding: 0 0.65rem !important;
+  padding: 0 0.55rem !important;
   font-size: 0.78rem !important;
   font-weight: 700 !important;
   border-radius: 6px !important;
@@ -939,22 +960,22 @@
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 0.45rem !important;
-  height: 38px !important;
-  padding: 0 0.95rem !important;
+  gap: 0.35rem !important;
+  height: 36px !important;
+  padding: 0 0.65rem !important;
   border-radius: 8px !important;
-  font-size: 0.8125rem !important;
+  font-size: 0.78rem !important;
   font-weight: 700 !important;
   cursor: pointer !important;
   white-space: nowrap !important;
   box-sizing: border-box !important;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
   width: 100% !important;
 }
 
 .btn-action-dues svg {
-  width: 15px !important;
-  height: 15px !important;
+  width: 14px !important;
+  height: 14px !important;
   flex-shrink: 0 !important;
 }
 

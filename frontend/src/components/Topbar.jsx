@@ -151,7 +151,7 @@ export default function Topbar() {
             title="Go back"
             aria-label="Back"
           >
-            <ChevronLeft size={23} strokeWidth={2.4} />
+            <ChevronLeft size={20} strokeWidth={2.4} />
           </button>
           <button
             type="button"
@@ -160,7 +160,7 @@ export default function Topbar() {
             title="Go forward"
             aria-label="Forward"
           >
-            <ChevronRight size={23} strokeWidth={2.4} />
+            <ChevronRight size={20} strokeWidth={2.4} />
           </button>
           <button
             type="button"
@@ -169,7 +169,7 @@ export default function Topbar() {
             title="Refresh page"
             aria-label="Refresh"
           >
-            <RotateCw size={19} strokeWidth={2.4} />
+            <RotateCw size={17} strokeWidth={2.4} />
           </button>
         </div>
         <h1 className="page-title">{pageTitle}</h1>
