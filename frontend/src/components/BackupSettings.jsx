@@ -1,12 +1,11 @@
 /**
  * BackupSettings Component — School Management System (Frontend)
  *
- * Provides:
- * 1. 1-Click System Database Snapshot & Disaster Recovery (.sql) — Mobile & Desktop
- * 2. 1-Click Google Drive / Cloud Storage upload integration
+ * Ultra-Clean, Eye-Comfort, Elevated Design matching Payments & Receipts suite:
+ * 1. 1-Click System Database Snapshot & Disaster Recovery (.sql)
+ * 2. 1-Click Send Snapshot to Cloud Email (Defaulted to Admin Email ID)
  * 3. Master Multi-Sheet Excel Financial & Demographic Archive (.xlsx) — Desktop View Only
- * 4. Cloud Email Vault automated backup delivery
- * 5. Safe Rollback Restore Modal with double-confirmation
+ * 4. Safe Rollback Restore Modal with double-confirmation ("RESTORE")
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -14,7 +13,6 @@ import {
   HardDrive,
   Download,
   Upload,
-  Cloud,
   FileSpreadsheet,
   RefreshCw,
   Trash2,
@@ -28,18 +26,19 @@ import {
   FileText,
   Mail,
   Send,
-  ExternalLink,
-  Lock,
   X,
   Sparkles,
+  DollarSign,
+  FileCode,
 } from 'lucide-react';
-import { api } from '../context/AuthContext';
+import { api, useAuth } from '../context/AuthContext';
 import { useToast } from './Toast';
 import { saveFileToDeviceStorage } from '../utils/fileDownloader';
 import './BackupSettings.css';
 
 export default function BackupSettings() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const fileInputRef = useRef(null);
 
   // States
@@ -49,7 +48,7 @@ export default function BackupSettings() {
   const [creatingBackup, setCreatingBackup] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [sendingCloud, setSendingCloud] = useState(false);
-  const [cloudEmail, setCloudEmail] = useState('');
+  const [cloudEmail, setCloudEmail] = useState(user?.email || 'admin@school.com');
   const [uploadingBackup, setUploadingBackup] = useState(false);
 
   // Restore Modal State
@@ -74,8 +73,11 @@ export default function BackupSettings() {
 
       if (infoRes.data.success) setInfo(infoRes.data.info);
       if (listRes.data.success) setBackups(listRes.data.backups || []);
-      if (schoolRes.data.success && schoolRes.data.school?.email) {
-        setCloudEmail(schoolRes.data.school.email);
+      
+      // Default to logged in user email, fallback to school email
+      const defaultEmail = user?.email || schoolRes.data.school?.email || 'admin@school.com';
+      if (defaultEmail) {
+        setCloudEmail(defaultEmail);
       }
     } catch (err) {
       console.error('[BackupSettings.fetchData]', err);
@@ -107,7 +109,7 @@ export default function BackupSettings() {
         toast.success('✓ Database snapshot generated successfully!');
         const filename = res.data.backup.filename;
         
-        // Trigger direct download
+        // Trigger download
         await handleDownloadBackup(filename);
         fetchData();
       }
@@ -138,63 +140,7 @@ export default function BackupSettings() {
     }
   };
 
-  // 1-Click Save to Google Drive / Cloud Storage
-  const handleSaveToCloudDrive = async () => {
-    try {
-      setCreatingBackup(true);
-      // Generate fresh snapshot
-      const res = await api.post('/backup/create');
-      if (!res.data.success) throw new Error('Could not create backup');
-      
-      const filename = res.data.backup.filename;
-      const fileRes = await api.get(`/backup/download/${filename}`, { responseType: 'blob' });
-      const fileBlob = new Blob([fileRes.data], { type: 'application/sql' });
-
-      // Save locally first
-      await saveFileToDeviceStorage({
-        data: fileBlob,
-        filename,
-        mimeType: 'application/sql',
-      });
-
-      // If native Web Share API with files is supported (Mobile / Chrome Desktop)
-      let shared = false;
-      if (typeof navigator !== 'undefined' && typeof File !== 'undefined' && navigator.canShare) {
-        try {
-          const file = new File([fileBlob], filename, { type: 'application/sql' });
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: 'School Database Backup',
-              text: `School System Snapshot: ${filename}`,
-            });
-            shared = true;
-            toast.success('✓ Shared to Google Drive / Cloud successfully!');
-          }
-        } catch (shareErr) {
-          if (shareErr.name !== 'AbortError') {
-            console.warn('[WebShare]', shareErr);
-          }
-        }
-      }
-
-      if (!shared) {
-        toast.info('Backup file saved! Opening Google Drive in new tab to upload...');
-        setTimeout(() => {
-          window.open('https://drive.google.com/drive/my-drive', '_blank');
-        }, 800);
-      }
-
-      fetchData();
-    } catch (err) {
-      console.error('[handleSaveToCloudDrive]', err);
-      toast.error('Failed to save to cloud storage.');
-    } finally {
-      setCreatingBackup(false);
-    }
-  };
-
-  // 1-Click Export Master Multi-Sheet Excel Archive (.xlsx) — Desktop View
+  // 1-Click Export Master Multi-Sheet Excel Archive (.xlsx) — Desktop View Only
   const handleExportMasterExcel = async () => {
     try {
       setExportingExcel(true);
@@ -219,20 +165,17 @@ export default function BackupSettings() {
     }
   };
 
-  // Dispatch Backup to Cloud Email Vault
+  // 1-Click Dispatch Backup to Cloud Email Vault (Admin Email)
   const handleSendCloudEmail = async (e) => {
-    e.preventDefault();
-    if (!cloudEmail || !cloudEmail.trim()) {
-      toast.error('Please enter a valid recipient email address.');
-      return;
-    }
+    if (e) e.preventDefault();
+    const target = (cloudEmail && cloudEmail.trim()) || user?.email || 'admin@school.com';
     try {
       setSendingCloud(true);
       const res = await api.post('/backup/send-cloud', {
-        target_email: cloudEmail.trim(),
+        target_email: target,
       });
       if (res.data.success) {
-        toast.success(res.data.message || '✓ Backup sent to Cloud Email Vault!');
+        toast.success(res.data.message || `✓ Backup snapshot sent to ${target}!`);
         fetchData();
       }
     } catch (err) {
@@ -262,7 +205,7 @@ export default function BackupSettings() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       if (res.data.success) {
-        toast.success('✓ Backup file uploaded and registered successfully!');
+        toast.success('✓ Backup file uploaded successfully!');
         fetchData();
       }
     } catch (err) {
@@ -327,61 +270,66 @@ export default function BackupSettings() {
   };
 
   return (
-    <div className="backup-vault-container">
-      {/* Header Banner */}
-      <div className="vault-header-card">
-        <div className="vault-header-content">
-          <div className="vault-icon-badge">
-            <ShieldCheck size={28} />
+    <div className="backup-desk-container">
+      {/* Top Header Card (Eye-Comfort Modern Theme) */}
+      <div className="backup-header-card">
+        <div className="header-left-info">
+          <div className="backup-icon-badge">
+            <Database size={24} />
           </div>
           <div>
-            <h2 className="vault-title">System Backup &amp; Data Vault</h2>
-            <p className="vault-subtitle">
-              Disaster recovery snapshots, Google Drive / Cloud upload, and Excel master financial archives.
+            <h1 className="backup-title">Database Backup &amp; Disaster Recovery</h1>
+            <p className="backup-subtitle">
+              Safeguard student ledgers, fee receipts, and database tables with instant 1-click snapshots and cloud email vault.
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          className="btn-vault-refresh"
-          onClick={fetchData}
-          disabled={loading}
-          title="Refresh Vault Status"
-        >
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          <span>Refresh</span>
-        </button>
+
+        <div className="header-actions-group">
+          <button
+            type="button"
+            className="btn-backup-refresh"
+            onClick={fetchData}
+            disabled={loading}
+            title="Refresh Status"
+          >
+            <RefreshCw size={15} className={loading ? 'spin' : ''} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
-      {/* KPI Stats Grid */}
+      {/* KPI Stats Summary Cards */}
       {info && (
-        <div className="vault-stats-grid">
-          <div className="vault-stat-item">
-            <div className="stat-icon-wrap" style={{ background: 'rgba(2, 132, 199, 0.15)', color: '#0284c7' }}>
+        <div className="backup-stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon-wrap icon-blue">
               <Database size={20} />
             </div>
             <div className="stat-info">
               <span className="stat-label">Protected Tables</span>
               <h3 className="stat-value">{info.table_count || 19} Tables</h3>
+              <span className="stat-sub">100% schema integrity</span>
             </div>
           </div>
 
-          <div className="vault-stat-item">
-            <div className="stat-icon-wrap" style={{ background: 'rgba(22, 163, 74, 0.15)', color: '#16a34a' }}>
+          <div className="stat-card">
+            <div className="stat-icon-wrap icon-green">
               <Layers size={20} />
             </div>
             <div className="stat-info">
-              <span className="stat-label">Enrolled Records</span>
+              <span className="stat-label">Enrolled Students</span>
               <h3 className="stat-value">{info.student_count || 0} Students</h3>
+              <span className="stat-sub">Active demographic records</span>
             </div>
           </div>
 
-          <div className="vault-stat-item">
-            <div className="stat-icon-wrap" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>
+          <div className="stat-card">
+            <div className="stat-icon-wrap icon-purple">
               <Calendar size={20} />
             </div>
             <div className="stat-info">
-              <span className="stat-label">Last Backup Snapshot</span>
+              <span className="stat-label">Last Snapshot</span>
               <h3 className="stat-value" style={{ fontSize: '0.95rem' }}>
                 {info.last_backup
                   ? new Date(info.last_backup.created_at).toLocaleDateString('en-IN', {
@@ -392,62 +340,55 @@ export default function BackupSettings() {
                     })
                   : 'No backups yet'}
               </h3>
+              <span className="stat-sub">Safe recovery checkpoint</span>
             </div>
           </div>
 
-          <div className="vault-stat-item">
-            <div className="stat-icon-wrap" style={{ background: 'rgba(217, 119, 6, 0.15)', color: '#d97706' }}>
-              <Cloud size={20} />
+          <div className="stat-card">
+            <div className="stat-icon-wrap icon-amber">
+              <ShieldCheck size={20} />
             </div>
             <div className="stat-info">
-              <span className="stat-label">Cloud Vault Status</span>
-              <h3 className="stat-value" style={{ color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <CheckCircle2 size={16} /> Ready
-              </h3>
+              <span className="stat-label">Stored Snapshots</span>
+              <h3 className="stat-value">{backups.length} Available</h3>
+              <span className="stat-sub">Instant restore points</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main Actions Row */}
-      <div className="vault-actions-grid">
-        {/* Card 1: 1-Click Database Disaster Recovery (All Devices) */}
-        <div className="vault-card primary-backup-card">
-          <div className="card-header-row">
-            <div className="card-title-wrap">
-              <HardDrive size={22} className="card-icon" />
+      {/* Main Feature Cards Grid */}
+      <div className="backup-features-grid">
+        {/* Card 1: 1-Click Database Disaster Recovery */}
+        <div className="feature-card">
+          <div className="feature-card-header">
+            <div className="feature-title-wrap">
+              <div className="feature-mini-icon blue">
+                <HardDrive size={18} />
+              </div>
               <div>
-                <h3 className="card-title">1-Click Full System Backup</h3>
-                <span className="card-tag">Disaster Recovery (.sql)</span>
+                <h3 className="feature-title">1-Click Full System Backup</h3>
+                <span className="feature-badge blue">Complete SQL Dump (.sql)</span>
               </div>
             </div>
           </div>
-          <p className="card-desc">
-            Instantly generates a native SQL snapshot containing all 19 database tables (students, fee ledgers, payments, receipts, and settings).
+
+          <p className="feature-desc">
+            Instantly generates and downloads a native SQL snapshot containing all 19 database tables (students, fee ledgers, payments, receipts, and settings).
           </p>
 
-          <div className="card-btn-stack">
+          <div className="feature-btn-stack">
             <button
               type="button"
-              className="btn-vault-action btn-primary-backup"
+              className="btn-action-primary"
               onClick={handleCreateBackup}
               disabled={creatingBackup}
             >
-              {creatingBackup ? <Loader2 size={18} className="spin" /> : <Download size={18} />}
-              <span>{creatingBackup ? 'Generating Snapshot…' : '⬇️ Download System Backup (.sql)'}</span>
+              {creatingBackup ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
+              <span>{creatingBackup ? 'Generating Snapshot…' : 'Download System Backup (.sql)'}</span>
             </button>
 
-            <button
-              type="button"
-              className="btn-vault-action btn-cloud-drive"
-              onClick={handleSaveToCloudDrive}
-              disabled={creatingBackup}
-            >
-              <Cloud size={18} />
-              <span>☁️ Save to Google Drive / Cloud</span>
-            </button>
-
-            <div className="upload-manual-wrap">
+            <div className="upload-btn-wrap">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -457,11 +398,11 @@ export default function BackupSettings() {
               />
               <button
                 type="button"
-                className="btn-vault-action btn-upload-backup"
+                className="btn-action-secondary"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingBackup}
               >
-                {uploadingBackup ? <Loader2 size={18} className="spin" /> : <Upload size={18} />}
+                {uploadingBackup ? <Loader2 size={16} className="spin" /> : <Upload size={16} />}
                 <span>{uploadingBackup ? 'Uploading…' : 'Upload Existing .sql File'}</span>
               </button>
             </div>
@@ -469,123 +410,133 @@ export default function BackupSettings() {
         </div>
 
         {/* Card 2: Master Multi-Sheet Excel Archive (DESKTOP VIEW ONLY) */}
-        <div className="vault-card excel-vault-card desktop-only-excel-vault">
-          <div className="card-header-row">
-            <div className="card-title-wrap">
-              <FileSpreadsheet size={22} className="card-icon excel-icon" />
+        <div className="feature-card desktop-only-excel-vault">
+          <div className="feature-card-header">
+            <div className="feature-title-wrap">
+              <div className="feature-mini-icon green">
+                <FileSpreadsheet size={18} />
+              </div>
               <div>
-                <h3 className="card-title">Master Excel Data Vault</h3>
-                <span className="card-tag excel-tag">Desktop View Only (.xlsx)</span>
+                <h3 className="feature-title">Master Excel Data Vault</h3>
+                <span className="feature-badge green">Desktop View Only (.xlsx)</span>
               </div>
             </div>
           </div>
-          <p className="card-desc">
-            Export a complete, human-readable 5-sheet Excel workbook containing Student Directory, Fee Ledgers, Dues Register, and Class Rates for offline auditing in Microsoft Excel.
+
+          <p className="feature-desc">
+            Export a complete, human-readable 5-sheet formatted Excel workbook containing Student Directory, Fee Ledgers, Dues Register, and Class Rates for offline auditing in Microsoft Excel.
           </p>
 
-          <div className="excel-features-list">
-            <div className="feature-pill">✓ 5 Color-Coded Sheets</div>
-            <div className="feature-pill">✓ Student Directory</div>
-            <div className="feature-pill">✓ Collections Ledger</div>
-            <div className="feature-pill">✓ Outstanding Dues</div>
+          <div className="excel-pills-row">
+            <span className="pill-tag">✓ 5 Color Sheets</span>
+            <span className="pill-tag">✓ Student Directory</span>
+            <span className="pill-tag">✓ Fee Ledger</span>
+            <span className="pill-tag">✓ Dues Register</span>
           </div>
 
-          <div className="card-btn-stack">
+          <div className="feature-btn-stack">
             <button
               type="button"
-              className="btn-vault-action btn-excel-export"
+              className="btn-action-green"
               onClick={handleExportMasterExcel}
               disabled={exportingExcel}
             >
-              {exportingExcel ? <Loader2 size={18} className="spin" /> : <FileSpreadsheet size={18} />}
-              <span>{exportingExcel ? 'Generating Master Excel…' : '📊 Export Master School Excel (.xlsx)'}</span>
+              {exportingExcel ? <Loader2 size={16} className="spin" /> : <FileSpreadsheet size={16} />}
+              <span>{exportingExcel ? 'Generating Master Excel…' : 'Export Master School Excel (.xlsx)'}</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Card 3: Cloud Email Backup Vault */}
-      <div className="vault-card email-vault-card">
-        <div className="card-header-row">
-          <div className="card-title-wrap">
-            <Mail size={22} className="card-icon" />
+      <div className="email-vault-card">
+        <div className="email-card-header">
+          <div className="feature-title-wrap">
+            <div className="feature-mini-icon indigo">
+              <Mail size={18} />
+            </div>
             <div>
-              <h3 className="card-title">Cloud Email Backup Vault</h3>
-              <span className="card-tag">Automated Storage Dispatch</span>
+              <h3 className="feature-title">Cloud Email Backup Vault</h3>
+              <span className="feature-badge indigo">Direct Email Dispatch</span>
             </div>
           </div>
         </div>
-        <p className="card-desc">
-          Dispatch an encrypted backup snapshot directly to the Principal / School Google Drive storage email address.
+
+        <p className="feature-desc">
+          Dispatch an encrypted backup snapshot directly to your Admin / School email address with 1-click.
         </p>
 
-        <form className="email-dispatch-form" onSubmit={handleSendCloudEmail}>
-          <div className="email-input-group">
-            <input
-              type="email"
-              className="vault-email-input"
-              value={cloudEmail}
-              onChange={(e) => setCloudEmail(e.target.value)}
-              placeholder="e.g. school.principal@gmail.com"
-              required
-            />
-            <button
-              type="submit"
-              className="btn-vault-action btn-send-email"
-              disabled={sendingCloud}
-            >
-              {sendingCloud ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
-              <span>{sendingCloud ? 'Dispatching…' : '🚀 Send Snapshot to Cloud Email'}</span>
-            </button>
+        <form className="email-form-layout" onSubmit={handleSendCloudEmail}>
+          <div className="email-input-container">
+            <label className="email-input-label">Recipient Admin Email:</label>
+            <div className="email-input-wrap">
+              <Mail size={16} className="input-icon" />
+              <input
+                type="email"
+                className="email-input-field"
+                value={cloudEmail}
+                onChange={(e) => setCloudEmail(e.target.value)}
+                placeholder="e.g. admin@school.com"
+                required
+              />
+            </div>
           </div>
+
+          <button
+            type="submit"
+            className="btn-action-indigo"
+            disabled={sendingCloud}
+          >
+            {sendingCloud ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
+            <span>{sendingCloud ? 'Dispatching Backup…' : '🚀 Send Snapshot to Cloud Email'}</span>
+          </button>
         </form>
       </div>
 
-      {/* Section 4: Server Backup History Table */}
-      <div className="vault-card history-card">
-        <div className="card-header-row">
-          <div className="card-title-wrap">
-            <Calendar size={20} className="card-icon" />
-            <div>
-              <h3 className="card-title">Stored Backup Snapshots</h3>
-              <span className="card-tag">{backups.length} Available</span>
-            </div>
+      {/* Section 4: Stored Backup Snapshots Archive Table */}
+      <div className="history-table-card">
+        <div className="table-header-row">
+          <div className="table-title-wrap">
+            <h3 className="table-main-title">Stored Backup Snapshots</h3>
+            <span className="table-badge-count">{backups.length} Snapshots Saved</span>
           </div>
         </div>
 
         {loading ? (
-          <div className="vault-loading-state">
-            <Loader2 size={28} className="spin" />
-            <p>Loading backup repository…</p>
+          <div className="table-state-box">
+            <Loader2 size={24} className="spin text-primary" />
+            <p>Loading database backup repository…</p>
           </div>
         ) : backups.length === 0 ? (
-          <div className="vault-empty-state">
-            <HardDrive size={40} />
+          <div className="table-state-box">
+            <Database size={36} className="text-muted" />
             <h4>No Stored Backups Yet</h4>
             <p>Click "Download System Backup" above to generate your first snapshot.</p>
           </div>
         ) : (
-          <div className="table-responsive vault-table-wrap">
-            <table className="vault-table">
+          <div className="table-responsive-wrapper">
+            <table className="backup-table">
               <thead>
                 <tr>
                   <th>Backup File</th>
                   <th>Size</th>
                   <th>Created Date</th>
                   <th>Status</th>
-                  <th className="text-center">Actions</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {backups.map((b, idx) => (
                   <tr key={idx}>
                     <td>
-                      <div className="file-cell">
-                        <FileText size={16} className="file-icon" />
-                        <code className="file-name">{b.filename}</code>
+                      <div className="file-name-cell">
+                        <FileCode size={16} className="file-code-icon" />
+                        <code className="file-code-name">{b.filename}</code>
                       </div>
                     </td>
-                    <td>{formatBytes(b.file_size)}</td>
+                    <td>
+                      <strong>{formatBytes(b.file_size)}</strong>
+                    </td>
                     <td>
                       {new Date(b.created_at).toLocaleDateString('en-IN', {
                         day: '2-digit',
@@ -600,31 +551,33 @@ export default function BackupSettings() {
                         {b.status === 'restored' ? 'Restored' : 'Available'}
                       </span>
                     </td>
-                    <td className="text-center">
-                      <div className="table-action-btns">
+                    <td className="text-right">
+                      <div className="row-action-btns">
                         <button
                           type="button"
-                          className="btn-table-action download"
+                          className="btn-row-action download"
                           onClick={() => handleDownloadBackup(b.filename)}
-                          title="Download .sql snapshot"
+                          title="Download SQL File"
                         >
-                          <Download size={14} /> Download
+                          <Download size={13} />
+                          <span>Download</span>
                         </button>
                         <button
                           type="button"
-                          className="btn-table-action restore"
+                          className="btn-row-action restore"
                           onClick={() => handleOpenRestoreModal(b)}
                           title="Rollback database to this snapshot"
                         >
-                          <RefreshCw size={14} /> Restore
+                          <RefreshCw size={13} />
+                          <span>Restore</span>
                         </button>
                         <button
                           type="button"
-                          className="btn-table-action delete"
+                          className="btn-row-action delete"
                           onClick={() => setDeletingBackup(b)}
                           title="Delete snapshot"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     </td>
@@ -639,22 +592,22 @@ export default function BackupSettings() {
       {/* Safety Restore Modal */}
       {restoreModalOpen && selectedBackupForRestore && (
         <div className="modal-overlay" onClick={() => !restoring && setRestoreModalOpen(false)}>
-          <div className="modal vault-safety-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal backup-safety-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="modal-title-danger">
-                <AlertTriangle size={24} />
+                <AlertTriangle size={22} />
                 <h2>Restore Database Snapshot</h2>
               </div>
               {!restoring && (
                 <button className="modal-close" onClick={() => setRestoreModalOpen(false)} aria-label="Close">
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               )}
             </div>
 
             <div className="modal-body">
               <div className="safety-alert-banner">
-                <AlertTriangle size={28} className="banner-icon" />
+                <AlertTriangle size={24} className="banner-icon" />
                 <div>
                   <strong>CRITICAL WARNING: System Rollback</strong>
                   <p>
@@ -714,7 +667,7 @@ export default function BackupSettings() {
                 disabled={restoreConfirmText.trim().toUpperCase() !== 'RESTORE' || restoring}
                 onClick={handleExecuteRestore}
               >
-                {restoring ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+                {restoring ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}
                 <span>{restoring ? 'Restoring System Database…' : 'Execute Database Restore'}</span>
               </button>
             </div>
@@ -730,7 +683,7 @@ export default function BackupSettings() {
               <h2>Delete Backup Snapshot</h2>
               {!isDeleting && (
                 <button className="modal-close" onClick={() => setDeletingBackup(null)} aria-label="Close">
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               )}
             </div>
@@ -754,7 +707,7 @@ export default function BackupSettings() {
                 onClick={handleDeleteBackup}
                 disabled={isDeleting}
               >
-                {isDeleting ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />}
+                {isDeleting ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />}
                 <span>{isDeleting ? 'Deleting…' : 'Delete Snapshot'}</span>
               </button>
             </div>

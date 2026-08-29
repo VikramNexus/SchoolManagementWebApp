@@ -1,104 +1,148 @@
 /**
- * BackupSettings CSS — School Management System
- * Premium styling, responsive cards, and desktop-only Excel vault media queries.
+ * Backup Desk Styles — School Management System
+ * Ultra-Clean, Eye-Comfort, Modern Theme Matching Payments & Receipts suite.
  */
 
-.backup-vault-container {
+.backup-desk-container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   width: 100%;
+  animation: fadeInBackupDesk 0.25s ease;
+}
+
+@keyframes fadeInBackupDesk {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Header Card */
-.vault-header-card {
+.backup-header-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(10px);
+  padding: 1.25rem 1.5rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.vault-header-content {
+.header-left-info {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.vault-icon-badge {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #0284c7, #38bdf8);
-  color: #fff;
+.backup-icon-badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+  flex-shrink: 0;
 }
 
-.vault-title {
+.backup-title {
   margin: 0;
   font-size: 1.35rem;
-  font-weight: 700;
-  color: #f8fafc;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
 }
 
-.vault-subtitle {
-  margin: 0.25rem 0 0;
-  font-size: 0.88rem;
-  color: #94a3b8;
+.backup-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+  font-weight: 500;
 }
 
-.btn-vault-refresh {
+.header-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.btn-backup-refresh {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.6rem 1rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  color: #e2e8f0;
+  gap: 0.45rem;
+  padding: 0.6rem 1.1rem;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  border: 1.5px solid #cbd5e1;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
-.btn-vault-refresh:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+.btn-backup-refresh:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
 }
 
-/* KPI Stats Grid */
-.vault-stats-grid {
+/* KPI Summary Stats Grid */
+.backup-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1rem;
 }
 
-.vault-stat-item {
+.stat-card {
   display: flex;
   align-items: center;
   gap: 1rem;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 1.1rem 1.25rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-radius: 14px;
+  padding: 1.15rem 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
 .stat-icon-wrap {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-icon-wrap.icon-blue {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.stat-icon-wrap.icon-green {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.stat-icon-wrap.icon-purple {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.stat-icon-wrap.icon-amber {
+  background: #fef3c7;
+  color: #d97706;
 }
 
 .stat-info {
@@ -107,9 +151,9 @@
 }
 
 .stat-label {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: #64748b;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -117,244 +161,373 @@
 .stat-value {
   margin: 0.15rem 0 0;
   font-size: 1.15rem;
-  font-weight: 700;
+  font-weight: 800;
   color: #0f172a;
 }
 
-/* Main Actions Grid */
-.vault-actions-grid {
+.stat-sub {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 0.15rem;
+}
+
+/* Features Grid */
+.backup-features-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 1.25rem;
 }
 
-.vault-card {
+.feature-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.card-header-row {
+.feature-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.card-title-wrap {
+.feature-title-wrap {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.card-icon {
+.feature-mini-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feature-mini-icon.blue {
+  background: #e0f2fe;
   color: #0284c7;
 }
 
-.excel-icon {
+.feature-mini-icon.green {
+  background: #dcfce7;
   color: #16a34a;
 }
 
-.card-title {
+.feature-mini-icon.indigo {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.feature-title {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: 1.05rem;
+  font-weight: 800;
   color: #0f172a;
 }
 
-.card-tag {
+.feature-badge {
   display: inline-block;
   font-size: 0.72rem;
   font-weight: 700;
-  color: #0284c7;
-  background: rgba(2, 132, 199, 0.1);
   padding: 0.15rem 0.5rem;
   border-radius: 6px;
   margin-top: 0.15rem;
 }
 
-.excel-tag {
-  color: #16a34a;
-  background: rgba(22, 163, 74, 0.1);
+.feature-badge.blue {
+  background: #f0f9ff;
+  color: #0284c7;
 }
 
-.card-desc {
+.feature-badge.green {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.feature-badge.indigo {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.feature-desc {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   color: #64748b;
   line-height: 1.5;
 }
 
-.excel-features-list {
+.excel-pills-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
 }
 
-.feature-pill {
-  font-size: 0.76rem;
+.pill-tag {
+  font-size: 0.75rem;
   font-weight: 600;
   color: #166534;
   background: #dcfce7;
-  padding: 0.25rem 0.6rem;
+  padding: 0.2rem 0.55rem;
   border-radius: 6px;
 }
 
-.card-btn-stack {
+.feature-btn-stack {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
   margin-top: auto;
 }
 
-.btn-vault-action {
+.btn-action-primary {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  border-radius: 9px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
   font-size: 0.92rem;
   font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
   border: none;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.25);
+  transition: all 0.15s ease;
 }
 
-.btn-primary-backup {
-  background: linear-gradient(135deg, #0284c7, #0369a1);
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
-}
-
-.btn-primary-backup:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0369a1, #075985);
+.btn-action-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
   transform: translateY(-1px);
 }
 
-.btn-cloud-drive {
-  background: linear-gradient(135deg, #4f46e5, #6366f1);
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
-}
-
-.btn-cloud-drive:hover:not(:disabled) {
-  background: linear-gradient(135deg, #4338ca, #4f46e5);
-  transform: translateY(-1px);
-}
-
-.btn-upload-backup {
+.btn-action-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 10px;
   background: #f8fafc;
-  border: 1px solid #cbd5e1;
+  border: 1.5px solid #cbd5e1;
   color: #334155;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
 }
 
-.btn-upload-backup:hover:not(:disabled) {
+.btn-action-secondary:hover:not(:disabled) {
   background: #f1f5f9;
+  border-color: #94a3b8;
   color: #0f172a;
 }
 
-.btn-excel-export {
-  background: linear-gradient(135deg, #16a34a, #15803d);
+.btn-action-green {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
+  font-size: 0.92rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(22, 163, 74, 0.25);
+  transition: all 0.15s ease;
 }
 
-.btn-excel-export:hover:not(:disabled) {
-  background: linear-gradient(135deg, #15803d, #166534);
+.btn-action-green:hover:not(:disabled) {
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%);
   transform: translateY(-1px);
 }
 
-/* Email Vault Card */
+/* Cloud Email Vault Card */
 .email-vault-card {
   background: #ffffff;
-}
-
-.email-dispatch-form {
-  margin-top: 0.5rem;
-}
-
-.email-input-group {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
   display: flex;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 1rem;
 }
 
-.vault-email-input {
+.email-form-layout {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.email-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
   flex: 1;
-  padding: 0.7rem 1rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  min-width: 260px;
+}
+
+.email-input-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.email-input-wrap {
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0 0.85rem;
+  transition: all 0.15s ease;
+}
+
+.email-input-wrap:focus-within {
+  border-color: #4f46e5;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.input-icon {
+  color: #64748b;
+  margin-right: 0.5rem;
+}
+
+.email-input-field {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 0.75rem 0;
   font-size: 0.92rem;
+  font-weight: 600;
   color: #0f172a;
   outline: none;
 }
 
-.vault-email-input:focus {
-  border-color: #0284c7;
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
-}
-
-.btn-send-email {
-  background: #1e293b;
-  color: #ffffff;
-  padding: 0.7rem 1.25rem;
-  white-space: nowrap;
-}
-
-.btn-send-email:hover:not(:disabled) {
-  background: #0f172a;
-}
-
-/* Stored Backups History Table */
-.vault-table-wrap {
-  border: 1px solid #e2e8f0;
+.btn-action-indigo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.4rem;
   border-radius: 10px;
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  color: #ffffff;
+  font-size: 0.92rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(79, 70, 229, 0.25);
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-action-indigo:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+  transform: translateY(-1px);
+}
+
+/* History Snapshots Table Card */
+.history-table-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.table-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.table-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.table-main-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.table-badge-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0284c7;
+  background: #e0f2fe;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+}
+
+.table-responsive-wrapper {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   overflow-x: auto;
 }
 
-.vault-table {
+.backup-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.88rem;
 }
 
-.vault-table th {
+.backup-table th {
   background: #f8fafc;
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1rem;
   font-weight: 700;
   color: #475569;
   text-align: left;
   border-bottom: 1px solid #e2e8f0;
 }
 
-.vault-table td {
-  padding: 0.85rem 1rem;
+.backup-table td {
+  padding: 0.95rem 1rem;
   border-bottom: 1px solid #f1f5f9;
   color: #1e293b;
 }
 
-.file-cell {
+.file-name-cell {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.file-icon {
+.file-code-icon {
   color: #0284c7;
 }
 
-.file-name {
-  font-weight: 600;
+.file-code-name {
+  font-weight: 700;
   color: #0f172a;
+  background: #f1f5f9;
+  padding: 0.15rem 0.45rem;
+  border-radius: 5px;
 }
 
 .status-pill {
   display: inline-block;
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.65rem;
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 700;
@@ -370,59 +543,58 @@
   color: #92400e;
 }
 
-.table-action-btns {
+.row-action-btns {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
 }
 
-.btn-table-action {
+.btn-row-action {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.4rem 0.75rem;
-  border-radius: 6px;
+  padding: 0.45rem 0.8rem;
+  border-radius: 7px;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1.5px solid transparent;
   transition: all 0.15s ease;
 }
 
-.btn-table-action.download {
+.btn-row-action.download {
   background: #f0f9ff;
   color: #0284c7;
   border-color: #bae6fd;
 }
 
-.btn-table-action.download:hover {
+.btn-row-action.download:hover {
   background: #e0f2fe;
 }
 
-.btn-table-action.restore {
+.btn-row-action.restore {
   background: #fef2f2;
   color: #dc2626;
   border-color: #fecaca;
 }
 
-.btn-table-action.restore:hover {
+.btn-row-action.restore:hover {
   background: #fee2e2;
 }
 
-.btn-table-action.delete {
+.btn-row-action.delete {
   background: #f8fafc;
   color: #64748b;
   border-color: #e2e8f0;
 }
 
-.btn-table-action.delete:hover {
+.btn-row-action.delete:hover {
   background: #fee2e2;
   color: #dc2626;
 }
 
 /* Empty & Loading States */
-.vault-empty-state,
-.vault-loading-state {
+.table-state-box {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -434,7 +606,7 @@
 }
 
 /* Safety Restore Modal */
-.vault-safety-modal {
+.backup-safety-modal {
   max-width: 520px;
 }
 
@@ -496,26 +668,25 @@
 }
 
 /* ==========================================================================
-   CRITICAL RESPONSIVE RULE:
-   Master Excel Archive (.xlsx) ONLY appears on Desktop view (min-width: 769px)
-   and is COMPLETELY HIDDEN on Mobile View (max-width: 768px).
+   DESKTOP ONLY vs MOBILE RESPONSIVE
    ========================================================================== */
 @media (max-width: 768px) {
   .desktop-only-excel-vault {
     display: none !important;
   }
 
-  .vault-header-card {
+  .backup-header-card {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
   }
 
-  .vault-actions-grid {
+  .backup-features-grid {
     grid-template-columns: 1fr;
   }
 
-  .email-input-group {
+  .email-form-layout {
     flex-direction: column;
+    align-items: stretch;
   }
 }
