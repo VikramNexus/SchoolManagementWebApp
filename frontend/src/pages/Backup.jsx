@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
+import { saveFileToDeviceStorage } from '../utils/fileDownloader';
 import './Backup.css';
 
 export default function Backup() {
@@ -87,14 +88,16 @@ export default function Backup() {
       const response = await api.get(`/backup/download/${filename}`, {
         responseType: 'blob',
       });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const saveRes = await saveFileToDeviceStorage({
+        data: response.data,
+        filename,
+        mimeType: 'application/octet-stream',
+      });
+      if (saveRes?.platform === 'native') {
+        toast.success(`✓ Backup Saved to Phone Storage (Documents/${filename})`);
+      } else {
+        toast.success(`Backup downloaded: ${filename}`);
+      }
     } catch (err) {
       toast.error('Failed to download backup');
     }

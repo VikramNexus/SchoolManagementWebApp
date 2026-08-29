@@ -22,6 +22,7 @@ import {
   AlertCircle,
   Clock,
   CreditCard,
+  Users,
 } from 'lucide-react';
 import './FeeLedgerTable.css';
 
@@ -62,6 +63,7 @@ function formatDateDDMMYY(dateStr) {
 export default function FeeLedgerTable({
   monthlyFees = [],
   studentMonthlyRate = 0,
+  initialOpeningBalance = 0,
   admissionDate = null,
   loading = false,
   onAssignMonth = null,
@@ -114,13 +116,8 @@ export default function FeeLedgerTable({
     const admMonth = !isNaN(adm.getTime()) ? adm.getMonth() + 1 : new Date().getMonth() + 1;
     const admYear = !isNaN(adm.getTime()) ? adm.getFullYear() : new Date().getFullYear();
 
-    if (admMonth === 12) {
-      nextMonth = 1;
-      nextYear = admYear + 1;
-    } else {
-      nextMonth = admMonth + 1;
-      nextYear = admYear;
-    }
+    nextMonth = admMonth;
+    nextYear = admYear;
   } else {
     const now = new Date();
     nextMonth = now.getMonth() + 1;
@@ -129,8 +126,8 @@ export default function FeeLedgerTable({
 
   const nextMonthLabel = `${SHORT_MONTHS[nextMonth - 1]}-${String(nextYear).slice(-2)}`;
 
-  // Calculate dynamic running balances
-  let runningOpeningBalance = 0;
+  // Calculate dynamic running balances starting from initial opening dues balance
+  let runningOpeningBalance = Number(initialOpeningBalance || 0);
   let sumTotalFees = 0;
   let sumTotalPaid = 0;
 
@@ -198,6 +195,7 @@ export default function FeeLedgerTable({
       isCleared,
       isPartial,
       installments: fee.installments || [],
+      sibling_breakdown: fee.sibling_breakdown || [],
     };
   });
 
@@ -232,10 +230,14 @@ export default function FeeLedgerTable({
 
   const handleDeleteMonth = async (row) => {
     if (!onDeleteMonthFee) return;
+    if (row.paid > 0) {
+      alert(`Cannot delete ${row.monthLabel} fee because ₹${row.paid.toLocaleString('en-IN')} payment has already been recorded. Please delete or revert the payment receipt first from the Recent Payments section.`);
+      return;
+    }
     if (!window.confirm(`Are you sure you want to delete the assigned month fee for ${row.monthLabel}?`)) return;
     try {
       setDeletingId(row.id);
-      await onDeleteMonthFee(row.id);
+      await onDeleteMonthFee(row);
     } finally {
       setDeletingId(null);
     }
@@ -318,24 +320,31 @@ export default function FeeLedgerTable({
               ) : (
                 ledgerRows.map((row) => {
                   const isExpanded = !!expandedRows[row.id];
+                  const hasSiblings = row.sibling_breakdown && row.sibling_breakdown.length > 1;
                   const hasInstallments = row.installments && row.installments.length > 0;
+                  const isExpandable = hasInstallments || hasSiblings;
 
                   return (
                     <React.Fragment key={row.id}>
                       <tr className={isExpanded ? 'row-expanded' : ''}>
                         <td className="month-cell-bold">
                           <div className="month-cell-content" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            {hasInstallments && (
+                            {isExpandable && (
                               <button
                                 type="button"
                                 className="expand-toggle-btn"
                                 onClick={() => toggleRowExpansion(row.id)}
-                                title={isExpanded ? 'Hide payment receipts breakdown' : 'View payment receipts breakdown'}
+                                title={isExpanded ? 'Hide breakdown' : 'View breakdown'}
                               >
                                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                               </button>
                             )}
                             <span className="month-tag-pill">{row.monthLabel}</span>
+                            {hasSiblings && (
+                              <span className="parts-badge" style={{ background: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe' }} title="Combined family siblings fee">
+                                {row.sibling_breakdown.length} Siblings
+                              </span>
+                            )}
                             {hasInstallments && (
                               <span className="parts-badge" title="Validated receipts allocated to this month">
                                 {row.installments.length} receipt{row.installments.length > 1 ? 's' : ''}
@@ -409,62 +418,112 @@ export default function FeeLedgerTable({
                               </button>
                             </div>
                           ) : (
-                            <div className="action-inline-btns">
-                              <button
-                                className="btn-icon edit-btn"
-                                onClick={() => handleStartEdit(row)}
-                                title="Edit Monthly Fee Amount"
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <button
-                                className="btn-icon delete-btn"
-                                onClick={() => handleDeleteMonth(row)}
-                                disabled={deletingId === row.id || row.paid > 0}
-                                title={row.paid > 0 ? "Cannot delete month with recorded payments" : "Delete Month Entry"}
-                              >
-                                {deletingId === row.id ? <Loader2 size={13} className="spin" /> : <Trash2 size={14} />}
-                              </button>
+                            <div className="action-inline-btns" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              {row.closingBalance > 0 && onRecordPayment && (
+                                <button
+                                  type="button"
+                                  className="btn-pay-row-mini"
+                                  onClick={() => onRecordPayment(row)}
+                                  title={`Pay ${row.monthLabel}`}
+                                  style={{
+                                    background: '#2563eb',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    padding: '3px 7px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                  }}
+                                >
+                                  <CreditCard size={11} /> Pay
+                                </button>
+                              )}
+                              {onUpdateMonthFee && (
+                                <button
+                                  className="btn-icon edit-btn"
+                                  onClick={() => handleStartEdit(row)}
+                                  title="Edit Monthly Fee Amount"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                              )}
+                              {onDeleteMonthFee && (
+                                <button
+                                  className="btn-icon delete-btn"
+                                  onClick={() => handleDeleteMonth(row)}
+                                  disabled={deletingId === row.id}
+                                  title={row.paid > 0 ? "Payment recorded for this month (click to see details)" : "Delete Month Entry"}
+                                  style={{ opacity: row.paid > 0 ? 0.6 : 1 }}
+                                >
+                                  {deletingId === row.id ? <Loader2 size={13} className="spin" /> : <Trash2 size={14} />}
+                                </button>
+                              )}
                             </div>
                           )}
                         </td>
                       </tr>
 
-                      {/* Expandable Installment / Receipts Row */}
-                      {isExpanded && hasInstallments && (
+                      {/* Expandable Drawer (Sibling Breakdown + Payment Receipts) */}
+                      {isExpanded && isExpandable && (
                         <tr className="installments-subrow">
                           <td colSpan={11} className="installments-drawer-cell">
-                            <div className="installments-drawer-content">
-                              <div className="drawer-header">
-                                <Receipt size={14} className="drawer-icon" />
-                                <span>Validated Payment Receipts Allocated to {row.monthLabel}</span>
-                              </div>
-                              <div className="drawer-receipts-list">
-                                {row.installments.map((inst, idx) => (
-                                  <div key={idx} className="drawer-receipt-item">
-                                    <span className="inst-rcp-num">{inst.receipt_number || `RCP-${inst.id}`}</span>
-                                    <span className="inst-rcp-date">
-                                      📅 {inst.payment_date ? formatDateDDMMYY(inst.payment_date) : '—'}
-                                    </span>
-                                    <span className="inst-rcp-mode">
-                                      {inst.payment_mode === 'IN_ACCOUNT' ? '🏦 In Account' : '💵 Cash'}
-                                    </span>
-                                    <span className="inst-rcp-amount">
-                                      Allocated: <strong>{formatCurrency(inst.allocated_amount || inst.amount)}</strong>
-                                    </span>
-                                    {onViewReceipt && (
-                                      <button
-                                        type="button"
-                                        className="btn-view-rcp-mini"
-                                        onClick={() => onViewReceipt(inst.id)}
-                                        title="View Official JPG Receipt & WhatsApp Share"
-                                      >
-                                        <Receipt size={12} /> View Receipt
-                                      </button>
-                                    )}
+                            <div className="installments-drawer-content" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                              {hasSiblings && (
+                                <div className="drawer-siblings-section">
+                                  <div className="drawer-header" style={{ color: '#4338ca', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 600, fontSize: '0.8rem' }}>
+                                    <Users size={14} />
+                                    <span>Sibling Monthly Fee Breakdown ({row.monthLabel}):</span>
                                   </div>
-                                ))}
-                              </div>
+                                  <div className="drawer-siblings-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.4rem' }}>
+                                    {row.sibling_breakdown.map((sib) => (
+                                      <div key={sib.student_id} className="drawer-sibling-chip" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '4px 10px', fontSize: '0.78rem', color: '#1e293b' }}>
+                                        <strong>{sib.student_name}</strong> <span style={{ color: '#64748b' }}>({sib.class_name})</span>: <strong style={{ color: '#0f172a' }}>{formatCurrency(sib.fee_amount)}</strong>
+                                        {sib.due_amount === 0 ? <span style={{ color: '#16a34a', fontWeight: 'bold', marginLeft: '4px' }}>✓ Paid</span> : <span style={{ color: '#dc2626', marginLeft: '4px' }}>({formatCurrency(sib.due_amount)} Due)</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {hasInstallments && (
+                                <div className="drawer-receipts-section">
+                                  <div className="drawer-header">
+                                    <Receipt size={14} className="drawer-icon" />
+                                    <span>Validated Payment Receipts Allocated to {row.monthLabel}</span>
+                                  </div>
+                                  <div className="drawer-receipts-list">
+                                    {row.installments.map((inst, idx) => (
+                                      <div key={idx} className="drawer-receipt-item">
+                                        <span className="inst-rcp-num">{inst.receipt_number || `RCP-${inst.id}`}</span>
+                                        {inst.student_name && <span style={{ color: '#475569', fontSize: '0.75rem', fontWeight: 600 }}>({inst.student_name})</span>}
+                                        <span className="inst-rcp-date">
+                                          📅 {inst.payment_date ? formatDateDDMMYY(inst.payment_date) : '—'}
+                                        </span>
+                                        <span className="inst-rcp-mode">
+                                          {inst.payment_mode === 'IN_ACCOUNT' ? '🏦 In Account' : '💵 Cash'}
+                                        </span>
+                                        <span className="inst-rcp-amount">
+                                          Allocated: <strong>{formatCurrency(inst.allocated_amount || inst.amount)}</strong>
+                                        </span>
+                                        {onViewReceipt && (
+                                          <button
+                                            type="button"
+                                            className="btn-view-rcp-mini"
+                                            onClick={() => onViewReceipt(inst.id)}
+                                            title="View Official JPG Receipt & WhatsApp Share"
+                                          >
+                                            <Receipt size={12} /> View Receipt
+                                          </button>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>

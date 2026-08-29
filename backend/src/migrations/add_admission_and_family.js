@@ -33,6 +33,14 @@ async function migrate() {
       console.log('ℹ️ payment_category already exists in payments table');
     }
 
+    // 2b. Make users.email nullable
+    try {
+      await db.query('ALTER TABLE `users` MODIFY `email` VARCHAR(120) NULL DEFAULT NULL');
+      console.log('✅ Updated users.email to allow NULL');
+    } catch (e) {
+      console.log('ℹ️ users.email already modified or error:', e.message);
+    }
+
     // 3. Ensure standard fee types exist
     const standardFeeTypes = [
       { name: 'Admission Fee', description: 'One-time admission charge at enrollment', is_recurring: 0 },
@@ -63,4 +71,11 @@ async function migrate() {
   }
 }
 
-migrate();
+module.exports = { migrate };
+
+// Allow running directly
+if (require.main === module) {
+  migrate()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
+}

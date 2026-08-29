@@ -63,6 +63,21 @@ async function deployDatabase() {
       console.log('✅ Default Admin User created: username "admin", password "admin123"');
     }
 
+    // Ensure users table has security_question and security_answer_hash columns
+    console.log('🔄 Verifying users table security columns...');
+    const [uCols] = await conn.query("SHOW COLUMNS FROM users");
+    const uColNames = uCols.map(c => c.Field);
+
+    if (!uColNames.includes('security_question')) {
+      await conn.query("ALTER TABLE users ADD COLUMN security_question VARCHAR(255) DEFAULT NULL AFTER full_name");
+      console.log('  ✅ Added security_question to users');
+    }
+    if (!uColNames.includes('security_answer_hash')) {
+      await conn.query("ALTER TABLE users ADD COLUMN security_answer_hash VARCHAR(255) DEFAULT NULL AFTER security_question");
+      console.log('  ✅ Added security_answer_hash to users');
+    }
+    console.log('✅ Users security columns verified!');
+
     // Ensure admission & family fields migration on students
     console.log('🔄 Verifying student columns...');
     const [sCols] = await conn.query("SHOW COLUMNS FROM students");
@@ -72,7 +87,7 @@ async function deployDatabase() {
       await conn.query("ALTER TABLE students ADD COLUMN admission_receipt_no VARCHAR(50) DEFAULT NULL");
     }
     if (!sColNames.includes('family_id')) {
-      await conn.query("ALTER TABLE students ADD COLUMN family_id VARCHAR(50) DEFAULT NULL");
+      await conn.query("ALTER TABLE students ADD COLUMN family_id VARCHAR(64) DEFAULT NULL");
     }
     if (!sColNames.includes('whatsapp_number')) {
       await conn.query("ALTER TABLE students ADD COLUMN whatsapp_number VARCHAR(20) DEFAULT NULL");
@@ -86,6 +101,13 @@ async function deployDatabase() {
     if (!sColNames.includes('gender')) {
       await conn.query("ALTER TABLE students ADD COLUMN gender ENUM('male', 'female', 'other') DEFAULT 'male'");
     }
+    if (!sColNames.includes('status') || !sColNames.some(c => c.Field === 'status' && c.Type.includes('deleted'))) {
+      // Check if status enum has 'deleted' option
+      const statusCol = sCols.find(c => c.Field === 'status');
+      if (statusCol && !statusCol.Type.includes('deleted')) {
+        await conn.query("ALTER TABLE students MODIFY COLUMN status ENUM('active', 'inactive', 'deleted') NOT NULL DEFAULT 'active'");
+      }
+    }
     console.log('✅ Student columns verified!');
 
     // Ensure payments table has payment_category & family_id
@@ -94,7 +116,7 @@ async function deployDatabase() {
     const pColNames = pCols.map(c => c.Field);
 
     if (!pColNames.includes('payment_category')) {
-      await conn.query("ALTER TABLE payments ADD COLUMN payment_category ENUM('MONTHLY_FEE', 'ADMISSION_CHARGE', 'FAMILY_FEE', 'ADDITIONAL_FEE') NOT NULL DEFAULT 'MONTHLY_FEE'");
+      await conn.query("ALTER TABLE payments ADD COLUMN payment_category ENUM('MONTHLY_FEE', 'ADMISSION_CHARGE', 'FAMILY_FEE', 'CUSTOM_FEE') NOT NULL DEFAULT 'MONTHLY_FEE'");
     }
     if (!pColNames.includes('family_id')) {
       await conn.query("ALTER TABLE payments ADD COLUMN family_id VARCHAR(50) DEFAULT NULL");

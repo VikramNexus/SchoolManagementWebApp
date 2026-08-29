@@ -68,7 +68,7 @@ async function getReceipt(req, res) {
 
   try {
     let payment = await db.queryOne(
-      `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`created_at\` as receipt_created_at,
+      `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`generated_at\` as receipt_created_at,
               s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`, s.\`phone\`, s.\`whatsapp_number\`,
               c.\`name\` as class_name, sec.\`name\` as section_name
        FROM \`payments\` p
@@ -76,20 +76,22 @@ async function getReceipt(req, res) {
        LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
        LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
        LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
-       WHERE p.\`id\` = ?`,
-      [paymentId]
+       WHERE p.\`id\` = ? OR r.\`id\` = ? OR r.\`receipt_number\` = ? OR p.\`receipt_number\` = ?`,
+      [paymentId, paymentId, paymentId, paymentId]
     );
 
     if (!payment) {
-      return res.status(404).json({ success: false, message: 'Payment not found.' });
+      return res.status(404).json({ success: false, message: 'Payment or receipt not found.' });
     }
+
+    const actualPaymentId = payment.id;
 
     // If receipt not generated yet, auto-generate it now
     if (!payment.receipt_id || !payment.file_path) {
       try {
-        await generateAndSaveReceipt(paymentId);
+        await generateAndSaveReceipt(actualPaymentId);
         payment = await db.queryOne(
-          `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`created_at\` as receipt_created_at,
+          `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`generated_at\` as receipt_created_at,
                   s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`, s.\`phone\`, s.\`whatsapp_number\`,
                   c.\`name\` as class_name, sec.\`name\` as section_name
            FROM \`payments\` p
@@ -98,7 +100,7 @@ async function getReceipt(req, res) {
            LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
            LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
            WHERE p.\`id\` = ?`,
-          [paymentId]
+          [actualPaymentId]
         );
       } catch (genErr) {
         console.error('[getReceipt auto-gen]', genErr);
@@ -106,7 +108,7 @@ async function getReceipt(req, res) {
     }
 
     // Get allocations
-    const allocations = await getPaymentAllocations(paymentId);
+    const allocations = await getPaymentAllocations(actualPaymentId);
 
     // Get school settings
     const school = await db.queryOne(
@@ -114,20 +116,24 @@ async function getReceipt(req, res) {
        FROM \`school_settings\` WHERE \`id\` = 1`
     ) || { school_name: 'Aryavart Public School' };
 
-    // Get outstanding
-    const monthlyOutstanding = await db.queryOne(
-      `SELECT COALESCE(SUM(\`due_amount\`), 0) as total
-       FROM \`monthly_fees\`
-       WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
-      [payment.student_id]
-    );
+    // Get outstanding safely
+    let monthlyOutstanding = { total: 0 };
+    let additionalOutstanding = { total: 0 };
+    if (payment.student_id) {
+      monthlyOutstanding = await db.queryOne(
+        `SELECT COALESCE(SUM(\`due_amount\`), 0) as total
+         FROM \`monthly_fees\`
+         WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
+        [payment.student_id]
+      ) || { total: 0 };
 
-    const additionalOutstanding = await db.queryOne(
-      `SELECT COALESCE(SUM(\`due_amount\`), 0) as total
-       FROM \`student_additional_fees\`
-       WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
-      [payment.student_id]
-    );
+      additionalOutstanding = await db.queryOne(
+        `SELECT COALESCE(SUM(\`amount\`), 0) as total
+         FROM \`student_additional_fees\`
+         WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
+        [payment.student_id]
+      ) || { total: 0 };
+    }
 
     return res.json({
       success: true,
@@ -217,16 +223,23 @@ async function downloadReceipt(req, res) {
  * Query: student_id, start_date, end_date, class_id, category, page, limit
  */
 async function listReceipts(req, res) {
-  const { search, student_id, start_date, end_date, class_id, category, sort_by = 'payment_date', sort_order = 'desc', page = 1, limit = 25 } = req.query;
+  const { search, student_id, tab, type, start_date, end_date, class_id, category, sort_by = 'payment_date', sort_order = 'desc', page = 1, limit = 20 } = req.query;
 
   try {
     const conditions = [];
     const values = [];
 
+    const activeTab = tab || type || '';
+    if (activeTab === 'monthly') {
+      conditions.push("(p.`payment_category` != 'ADMISSION_CHARGE' AND (p.`notes` IS NULL OR (p.`notes` NOT LIKE '%Admission%' AND p.`notes` NOT LIKE '%Enrollment%')))");
+    } else if (activeTab === 'admissions' || activeTab === 'admission') {
+      conditions.push("(p.`payment_category` = 'ADMISSION_CHARGE' OR p.`notes` LIKE '%Admission%' OR p.`notes` LIKE '%Enrollment%')");
+    }
+
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
-      conditions.push('(s.`full_name` LIKE ? OR s.`admission_no` LIKE ? OR r.`receipt_number` LIKE ?)');
-      values.push(term, term, term);
+      conditions.push('(s.`full_name` LIKE ? OR s.`admission_no` LIKE ? OR r.`receipt_number` LIKE ? OR p.`receipt_number` LIKE ? OR s.`phone` LIKE ?)');
+      values.push(term, term, term, term, term);
     }
 
     if (student_id) {
@@ -251,36 +264,54 @@ async function listReceipts(req, res) {
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const offset = (Number(page) - 1) * Number(limit);
-    const limitNum = Number(limit);
-    const offsetNum = Number(offset);
+    const limitNum = Math.max(1, Number(limit) || 20);
+    const pageNum = Math.max(1, Number(page) || 1);
+    const offsetNum = (pageNum - 1) * limitNum;
 
     const orderDirection = sort_order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
     let orderByClause = `p.\`payment_date\` ${orderDirection}, p.\`created_at\` ${orderDirection}`;
     if (sort_by === 'amount') {
       orderByClause = `p.\`amount\` ${orderDirection}`;
-    } else if (sort_by === 'student_name') {
+    } else if (sort_by === 'student_name' || sort_by === 'full_name') {
       orderByClause = `s.\`full_name\` ${orderDirection}`;
     } else if (sort_by === 'receipt_number') {
-      orderByClause = `r.\`receipt_number\` ${orderDirection}`;
+      orderByClause = `COALESCE(r.\`receipt_number\`, p.\`receipt_number\`) ${orderDirection}`;
     }
 
     const countSql = `
       SELECT COUNT(*) as total
-      FROM \`receipts\` r
-      LEFT JOIN \`payments\` p ON p.\`id\` = r.\`payment_id\`
-      LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+      FROM \`payments\` p
+      JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+      LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
       ${whereClause}
     `;
 
     const dataSql = `
-      SELECT r.*, p.\`amount\`, p.\`payment_date\`, p.\`payment_mode\`,
-             s.\`full_name\` as student_name, s.\`admission_no\`, s.\`category\` as student_category,
-             c.\`name\` as class_name
-      FROM \`receipts\` r
-      LEFT JOIN \`payments\` p ON p.\`id\` = r.\`payment_id\`
-      LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+      SELECT
+        p.\`id\` as payment_id,
+        p.\`id\`,
+        COALESCE(r.\`id\`, p.\`id\`) as id,
+        COALESCE(r.\`receipt_number\`, p.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_number,
+        COALESCE(r.\`receipt_number\`, p.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_no,
+        r.\`file_path\`,
+        p.\`amount\`,
+        p.\`payment_date\`,
+        p.\`payment_mode\`,
+        p.\`payment_category\`,
+        p.\`notes\`,
+        s.\`full_name\`,
+        s.\`full_name\` as student_name,
+        s.\`admission_no\`,
+        s.\`category\` as student_category,
+        s.\`phone\`,
+        s.\`whatsapp_number\`,
+        c.\`name\` as class_name,
+        sec.\`name\` as section_name
+      FROM \`payments\` p
+      JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+      LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
       LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+      LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
       ${whereClause}
       ORDER BY ${orderByClause}
       LIMIT ${limitNum} OFFSET ${offsetNum}
@@ -293,12 +324,19 @@ async function listReceipts(req, res) {
 
     return res.json({
       success: true,
-      receipts,
+      receipts: (receipts || []).map(r => ({
+        ...r,
+        amount: Number(r.amount || 0),
+        full_name: r.full_name || r.student_name || '—',
+        student_name: r.full_name || r.student_name || '—',
+        admission_no: r.admission_no || '—',
+        receipt_number: r.receipt_number || `RCP-${r.payment_id || r.id}`,
+      })),
       pagination: {
-        page: Number(page),
-        limit: Number(limit),
+        page: pageNum,
+        limit: limitNum,
         total: countResult.total,
-        totalPages: Math.ceil(countResult.total / Number(limit)),
+        totalPages: Math.ceil(countResult.total / limitNum),
       },
     });
   } catch (err) {
@@ -340,7 +378,7 @@ async function sendReceiptWhatsApp(req, res) {
   const { paymentId } = req.params;
 
   try {
-    const payment = await db.queryOne(
+    let payment = await db.queryOne(
       `SELECT p.*, r.\`receipt_number\`,
               s.\`id\` as student_id, s.\`full_name\`, s.\`admission_no\`, s.\`phone\`, s.\`whatsapp_number\`,
               c.\`name\` as class_name, sec.\`name\` as section_name
@@ -352,6 +390,23 @@ async function sendReceiptWhatsApp(req, res) {
        WHERE p.\`id\` = ?`,
       [paymentId]
     );
+
+    // Fallback: If paymentId was passed as a student_id, look up student's latest payment
+    if (!payment) {
+      payment = await db.queryOne(
+        `SELECT p.*, r.\`receipt_number\`,
+                s.\`id\` as student_id, s.\`full_name\`, s.\`admission_no\`, s.\`phone\`, s.\`whatsapp_number\`,
+                c.\`name\` as class_name, sec.\`name\` as section_name
+         FROM \`payments\` p
+         LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
+         JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+         LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+         LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
+         WHERE s.\`id\` = ?
+         ORDER BY p.\`id\` DESC LIMIT 1`,
+        [paymentId]
+      );
+    }
 
     if (!payment) {
       return res.status(404).json({ success: false, message: 'Payment not found.' });
@@ -502,6 +557,120 @@ _${school.school_name}_`;
   }
 }
 
+/**
+ * POST /api/receipts/send-whatsapp-jpg/:paymentId
+ * Dispatch payment receipt as a high-res JPEG image directly via WhatsApp in background
+ */
+async function sendReceiptWhatsAppImage(req, res) {
+  const { paymentId } = req.params;
+  const { imageBase64, phone } = req.body || {};
+
+  try {
+    let payment = await db.queryOne(
+      `SELECT p.*, r.\`receipt_number\`,
+              s.\`id\` as student_id, s.\`full_name\`, s.\`admission_no\`, s.\`phone\`, s.\`whatsapp_number\`,
+              c.\`name\` as class_name
+       FROM \`payments\` p
+       LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
+       JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+       LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+       WHERE p.\`id\` = ?`,
+      [paymentId]
+    );
+
+    // Fallback: If paymentId was passed as a student_id, look up student's latest payment
+    if (!payment) {
+      payment = await db.queryOne(
+        `SELECT p.*, r.\`receipt_number\`,
+                s.\`id\` as student_id, s.\`full_name\`, s.\`admission_no\`, s.\`phone\`, s.\`whatsapp_number\`,
+                c.\`name\` as class_name
+         FROM \`payments\` p
+         LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
+         JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+         LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+         WHERE s.\`id\` = ?
+         ORDER BY p.\`id\` DESC LIMIT 1`,
+        [paymentId]
+      );
+    }
+
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found.' });
+    }
+
+    const recipientPhone = phone || payment.whatsapp_number || payment.phone;
+    if (!recipientPhone) {
+      return res.status(400).json({ success: false, message: 'No phone number provided.' });
+    }
+
+    const school = await db.queryOne('SELECT `school_name` FROM `school_settings` WHERE `id` = 1') || { school_name: 'Aryavart Public School' };
+    const rNo = payment.receipt_number || `RCP-${payment.id}`;
+    const caption = `🧾 *Official Fee Receipt (${rNo})*\nStudent: *${payment.full_name}* (${payment.admission_no || '—'})\nAmount Paid: *₹${Number(payment.amount).toLocaleString('en-IN')}*\n_${school.school_name}_`;
+
+    const { sendWhatsAppImage } = require('../services/whatsappService');
+    const result = await sendWhatsAppImage(recipientPhone, imageBase64, caption, {
+      student_id: payment.student_id,
+      payment_id: payment.id,
+    });
+
+    return res.json({
+      success: true,
+      message: `Official Receipt JPEG image sent to ${recipientPhone} via WhatsApp in background.`,
+      recipient: recipientPhone,
+      mode: result.mode,
+    });
+  } catch (err) {
+    console.error('[receiptController.sendReceiptWhatsAppImage]', err);
+    return res.status(500).json({ success: false, message: 'Failed to send WhatsApp JPEG receipt: ' + err.message });
+  }
+}
+
+/**
+ * POST /api/receipts/send-dues-whatsapp-jpg/:studentId
+ * Dispatch Dues Statement as a high-res JPEG image directly via WhatsApp in background
+ */
+async function sendDuesWhatsAppImage(req, res) {
+  const { studentId } = req.params;
+  const { imageBase64, phone } = req.body || {};
+
+  try {
+    const student = await db.queryOne(
+      `SELECT s.*, c.\`name\` as class_name
+       FROM \`students\` s
+       LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+       WHERE s.\`id\` = ? AND s.\`status\` != 'deleted'`,
+      [studentId]
+    );
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found.' });
+    }
+
+    const recipientPhone = phone || student.whatsapp_number || student.phone;
+    if (!recipientPhone) {
+      return res.status(400).json({ success: false, message: 'No phone number provided.' });
+    }
+
+    const school = await db.queryOne('SELECT `school_name` FROM `school_settings` WHERE `id` = 1') || { school_name: 'Aryavart Public School' };
+    const caption = `⚠️ *Official Fee Dues Statement*\nStudent: *${student.full_name}* (${student.admission_no || '—'})\nClass: *${student.class_name || '—'}*\n_${school.school_name}_`;
+
+    const { sendWhatsAppImage } = require('../services/whatsappService');
+    const result = await sendWhatsAppImage(recipientPhone, imageBase64, caption, {
+      student_id: student.id,
+    });
+
+    return res.json({
+      success: true,
+      message: `Official Dues Statement JPEG image sent to ${recipientPhone} via WhatsApp in background.`,
+      recipient: recipientPhone,
+      mode: result.mode,
+    });
+  } catch (err) {
+    console.error('[receiptController.sendDuesWhatsAppImage]', err);
+    return res.status(500).json({ success: false, message: 'Failed to send WhatsApp JPEG dues notice: ' + err.message });
+  }
+}
+
 module.exports = {
   generateReceipt,
   getReceipt,
@@ -510,4 +679,6 @@ module.exports = {
   generateDuesNotice,
   sendReceiptWhatsApp,
   sendDuesNoticeWhatsApp,
+  sendReceiptWhatsAppImage,
+  sendDuesWhatsAppImage,
 };

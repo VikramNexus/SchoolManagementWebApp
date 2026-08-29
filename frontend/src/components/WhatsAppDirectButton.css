@@ -1,7 +1,13 @@
 /**
- * WhatsApp Direct Dispatch Button Styles
- * Sleek WhatsApp Emerald Styling, Glowing Success Animation & Micro-States
+ * WhatsApp Direct Dispatch Button & Format Choice Menu Styles
+ * Sleek WhatsApp Emerald Styling, Dropdown Format Picker & Smooth Micro-Animations
  */
+
+.wa-button-wrapper {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
 
 .btn-whatsapp-direct {
   display: inline-flex;
@@ -67,6 +73,16 @@
   padding: 0.25rem;
 }
 
+.wa-chevron-indicator {
+  transition: transform 0.2s ease;
+  margin-left: 2px;
+  opacity: 0.85;
+}
+
+.wa-chevron-indicator.open {
+  transform: rotate(180deg);
+}
+
 /* State: Sending */
 .btn-whatsapp-direct.sending {
   background: #0d9488;
@@ -99,21 +115,131 @@
   animation: wa-scale-pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-@keyframes wa-scale-pop {
-  0% { transform: scale(0.3); opacity: 0; }
-  70% { transform: scale(1.25); }
-  100% { transform: scale(1); opacity: 1; }
+/* Format Choice Dropdown Menu */
+.wa-format-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1050;
+  min-width: 280px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.2), 0 4px 12px rgba(15, 23, 42, 0.08);
+  padding: 0.5rem;
+  animation: wa-dropdown-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
 }
 
-@keyframes wa-pulse {
-  0% { transform: scale(0.96); }
-  50% { transform: scale(1.04); }
-  100% { transform: scale(1); }
+@keyframes wa-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-/* State: Error */
-.btn-whatsapp-direct.error {
-  background: #dc2626 !important;
-  border-color: #b91c1c !important;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
+.wa-dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.6rem 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #0f766e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wa-header-icon {
+  color: #16a34a;
+}
+
+.wa-dropdown-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.wa-dropdown-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.6rem 0.65rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.wa-dropdown-item:hover {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  transform: translateX(2px);
+}
+
+.wa-dropdown-item:active {
+  transform: scale(0.98);
+}
+
+.wa-item-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.wa-item-icon-box.text-box {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.wa-item-icon-box.jpg-box {
+  background: #eff6ff;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+
+.wa-item-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.wa-item-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.wa-pill-tag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  text-transform: uppercase;
+}
+
+.wa-item-desc {
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.25;
 }

@@ -1,6 +1,6 @@
 /**
  * PendingFees Page — School Management System (Frontend)
- * Eye-Comfort, Receipt-Themed Outstanding Fee Dues & Ledger
+ * Eye-Comfort, Receipt-Themed Outstanding Fee Dues, Admission Dues & Ledger
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -22,24 +22,30 @@ import {
   RefreshCw,
   MessageSquare,
   Sparkles,
+  GraduationCap,
+  Check,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import RecordPaymentModal from '../components/RecordPaymentModal';
 import WhatsAppDirectButton from '../components/WhatsAppDirectButton';
+import JpgReceiptModal from '../components/JpgReceiptModal';
+import { saveFileToDeviceStorage } from '../utils/fileDownloader';
 import './PendingFees.css';
 
 export default function PendingFees() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  const [activeTab, setActiveTab] = useState('monthly'); // 'monthly' | 'admissions'
   const [students, setStudents] = useState([]);
   const [summary, setSummary] = useState({
     total_students_with_dues: 0,
     total_outstanding: 0,
     total_monthly_dues: 0,
     total_additional_dues: 0,
+    total_admission_dues: 0,
   });
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +58,10 @@ export default function PendingFees() {
 
   // Modals
   const [selectedStudentForPayment, setSelectedStudentForPayment] = useState(null);
+  const [paymentModalOptions, setPaymentModalOptions] = useState({});
   const [downloadingDuesId, setDownloadingDuesId] = useState(null);
+  const [selectedDuesNoticeData, setSelectedDuesNoticeData] = useState(null);
+  const [duesModalOpen, setDuesModalOpen] = useState(false);
 
   // Fetch classes
   useEffect(() => {
@@ -71,12 +80,15 @@ export default function PendingFees() {
       setError(null);
 
       const params = new URLSearchParams();
+      if (activeTab === 'monthly') params.append('tab', 'monthly');
       if (search) params.append('search', search);
       if (classFilter) params.append('class_id', classFilter);
       if (categoryFilter) params.append('category', categoryFilter);
       params.append('limit', '100');
 
-      const res = await api.get(`/reports/pending-dues-list?${params.toString()}`);
+      const endpoint = activeTab === 'admissions' ? `/reports/admission-dues-list?${params.toString()}` : `/reports/pending-dues-list?${params.toString()}`;
+
+      const res = await api.get(endpoint);
       if (res.data.success) {
         setStudents(res.data.students || []);
         if (res.data.summary) {
@@ -89,7 +101,7 @@ export default function PendingFees() {
     } finally {
       setLoading(false);
     }
-  }, [search, classFilter, categoryFilter]);
+  }, [activeTab, search, classFilter, categoryFilter]);
 
   useEffect(() => {
     fetchPendingDues();
@@ -103,21 +115,87 @@ export default function PendingFees() {
         responseType: 'blob',
       });
 
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Dues_Notice_${student.admission_no || student.id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
+      const filename = `Dues_Notice_${student.admission_no || student.id}.pdf`;
+      const saveRes = await saveFileToDeviceStorage({
+        data: res.data,
+        filename,
+        mimeType: 'application/pdf',
+      });
 
-      toast.success(`Dues Notice PDF generated for ${student.full_name}.`);
+      if (saveRes?.platform === 'native') {
+        toast.success(`✓ Dues Notice Saved to Phone Storage (Documents/${filename})`);
+      } else {
+        toast.success(`Dues Notice PDF generated for ${student.full_name}.`);
+      }
     } catch (err) {
       toast.error('Failed to generate Dues Notice PDF.');
     } finally {
       setDownloadingDuesId(null);
+    }
+  };
+
+  const handleOpenJpgDues = (std) => {
+    const dueAmount = activeTab === 'admissions' ? (std.admission_dues || std.total_dues) : std.total_dues;
+    setSelectedDuesNoticeData({
+      student: {
+        id: std.id,
+        full_name: std.full_name,
+        admission_no: std.admission_no,
+        class_name: std.class_name,
+        section_name: std.section_name,
+        category: std.category,
+        father_name: std.father_name || std.parent_name,
+        phone: std.phone || std.whatsapp_number,
+      },
+      payment: {
+        amount: dueAmount,
+        payment_date: new Date().toISOString(),
+        payment_mode: 'OUTSTANDING_FEE_NOTICE',
+      },
+      receipt: {
+        receipt_number: `NOTICE-${std.admission_no || std.id}`,
+      },
+      allocations: [
+        ...(activeTab === 'admissions'
+          ? [{
+              description: 'Admission & Initial Charges Outstanding',
+              fee_amount: dueAmount,
+              allocated_amount: dueAmount,
+            }]
+          : [
+              {
+                description: 'Monthly Tuition Fee Outstanding',
+                fee_amount: std.monthly_dues,
+                allocated_amount: std.monthly_dues,
+              },
+              ...(Number(std.additional_dues) > 0 ? [{
+                description: 'Additional / Hostel / Transport Dues',
+                fee_amount: std.additional_dues,
+                allocated_amount: std.additional_dues,
+              }] : []),
+            ]),
+      ],
+      summary: {
+        total_amount: dueAmount,
+      },
+    });
+    setDuesModalOpen(true);
+  };
+
+  const handleOpenCollectPayment = (std, isAdmissionDue = false) => {
+    setSelectedStudentForPayment(std);
+    if (isAdmissionDue || activeTab === 'admissions') {
+      setPaymentModalOptions({
+        defaultCategory: 'ADMISSION_CHARGE',
+        defaultAmount: std.admission_dues || std.total_dues,
+        defaultNotes: `[Admission Collection] Admission dues settled for ${std.full_name}`,
+      });
+    } else {
+      setPaymentModalOptions({
+        defaultCategory: 'MONTHLY_TUITION',
+        defaultAmount: std.total_dues,
+        defaultNotes: '',
+      });
     }
   };
 
@@ -143,7 +221,7 @@ export default function PendingFees() {
 
   return (
     <div className="pending-fees-container">
-      {/* Header Card (Eye-Comfort Theme) */}
+      {/* Header Card */}
       <div className="pending-header-card">
         <div className="header-left-wrap">
           <div className="pending-icon-badge">
@@ -152,7 +230,7 @@ export default function PendingFees() {
           <div>
             <h1 className="pending-heading">Student Pending Dues &amp; Ledger</h1>
             <p className="pending-subheading">
-              Track outstanding student balances, record payments to settle dues, and generate official dues notice receipts.
+              Track outstanding student balances, clear admission dues, and generate official dues notices.
             </p>
           </div>
         </div>
@@ -179,6 +257,33 @@ export default function PendingFees() {
         </div>
       </div>
 
+      {/* Tab Switcher: Monthly Fee Dues vs Admission Dues */}
+      <div className="pending-tab-nav-bar">
+        <button
+          type="button"
+          className={`pending-tab-pill ${activeTab === 'monthly' ? 'active' : ''}`}
+          onClick={() => setActiveTab('monthly')}
+        >
+          <CreditCard size={16} />
+          <span>📅 Monthly Fee Dues</span>
+          {activeTab === 'monthly' && (
+            <span className="pending-tab-badge">{summary.total_students_with_dues}</span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`pending-tab-pill ${activeTab === 'admissions' ? 'active' : ''}`}
+          onClick={() => setActiveTab('admissions')}
+        >
+          <GraduationCap size={17} />
+          <span>🎓 Admission & Extra Dues</span>
+          {activeTab === 'admissions' && (
+            <span className="pending-tab-badge">{summary.total_students_with_dues}</span>
+          )}
+        </button>
+      </div>
+
       {error && (
         <div className="pending-alert-banner" role="alert">
           <AlertCircle size={20} />
@@ -189,19 +294,23 @@ export default function PendingFees() {
         </div>
       )}
 
-      {/* Summary KPI Cards Grid (Receipt Look) */}
+      {/* Summary KPI Cards Grid */}
       <div className="dues-summary-grid">
         {/* Total Outstanding */}
         <div className="summary-stat-card red">
           <div className="stat-card-top">
-            <span className="stat-card-tag red">Overdue Balance</span>
+            <span className="stat-card-tag red">
+              {activeTab === 'admissions' ? 'Pending Admission Dues' : 'Overdue Balance'}
+            </span>
             <div className="stat-card-icon red">
               <IndianRupee size={20} />
             </div>
           </div>
-          <span className="stat-card-label">Total Outstanding Dues</span>
+          <span className="stat-card-label">
+            {activeTab === 'admissions' ? 'Total Admission Dues Pending' : 'Total Outstanding Dues'}
+          </span>
           <span className="stat-card-value text-red">
-            {formatCurrency(summary.total_outstanding)}
+            {formatCurrency(activeTab === 'admissions' ? (summary.total_admission_dues || summary.total_outstanding) : summary.total_outstanding)}
           </span>
           <span className="stat-card-subtext">Across all active students</span>
         </div>
@@ -214,11 +323,11 @@ export default function PendingFees() {
               <Users size={20} />
             </div>
           </div>
-          <span className="stat-card-label">Students With Pending Dues</span>
+          <span className="stat-card-label">Students With Pending Balance</span>
           <span className="stat-card-value">
             {summary.total_students_with_dues} Students
           </span>
-          <span className="stat-card-subtext">Active student accounts</span>
+          <span className="stat-card-subtext">Require dues settlement</span>
         </div>
 
         {/* Avg Pending Per Student */}
@@ -232,7 +341,11 @@ export default function PendingFees() {
           <span className="stat-card-label">Avg Pending Per Student</span>
           <span className="stat-card-value">
             {summary.total_students_with_dues > 0
-              ? formatCurrency(summary.total_outstanding / summary.total_students_with_dues)
+              ? formatCurrency(
+                  (activeTab === 'admissions'
+                    ? (summary.total_admission_dues || summary.total_outstanding)
+                    : summary.total_outstanding) / summary.total_students_with_dues
+                )
               : '₹0'}
           </span>
           <span className="stat-card-subtext">Average outstanding balance</span>
@@ -241,19 +354,34 @@ export default function PendingFees() {
         {/* Monthly vs Additional Breakdown */}
         <div className="summary-stat-card cyan">
           <div className="stat-card-top">
-            <span className="stat-card-tag cyan">Dues Breakdown</span>
+            <span className="stat-card-tag cyan">Dues Category</span>
             <div className="stat-card-icon cyan">
               <FileText size={20} />
             </div>
           </div>
-          <span className="stat-card-label">Monthly &amp; Add. Breakdown</span>
+          <span className="stat-card-label">
+            {activeTab === 'admissions' ? 'Admission Assessment' : 'Monthly & Add. Breakdown'}
+          </span>
           <div className="breakdown-stat-rows">
-            <div className="breakdown-mini-row">
-              <span>Monthly:</span> <strong>{formatCurrency(summary.total_monthly_dues)}</strong>
-            </div>
-            <div className="breakdown-mini-row">
-              <span>Additional:</span> <strong>{formatCurrency(summary.total_additional_dues)}</strong>
-            </div>
+            {activeTab === 'admissions' ? (
+              <>
+                <div className="breakdown-mini-row">
+                  <span>Category:</span> <strong>Admission Charges</strong>
+                </div>
+                <div className="breakdown-mini-row">
+                  <span>Dues Total:</span> <strong>{formatCurrency(summary.total_admission_dues || summary.total_outstanding)}</strong>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="breakdown-mini-row">
+                  <span>Monthly:</span> <strong>{formatCurrency(summary.total_monthly_dues)}</strong>
+                </div>
+                <div className="breakdown-mini-row">
+                  <span>Additional:</span> <strong>{formatCurrency(summary.total_additional_dues)}</strong>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -306,9 +434,8 @@ export default function PendingFees() {
           {hasActiveFilters && (
             <button
               type="button"
-              className="btn-filter-reset"
+              className="btn-clear-pending-filters"
               onClick={handleResetFilters}
-              title="Reset all filters"
             >
               <RotateCcw size={14} />
               <span>Reset</span>
@@ -317,144 +444,178 @@ export default function PendingFees() {
         </div>
       </div>
 
-      {/* Outstanding Ledger Table Card */}
+      {/* Main Ledger Table Card */}
       <div className="pending-table-card">
-        <div className="table-header-bar">
-          <div className="table-header-left">
-            <span className="table-header-title">Outstanding Student Ledger</span>
-            <span className="table-count-pill red">{students.length} Accounts with Dues</span>
+        <div className="pending-table-header">
+          <div>
+            <h2 className="table-heading">
+              {activeTab === 'admissions' ? '🎓 Students with Pending Admission Charges' : 'Student Dues Breakdown'}
+            </h2>
+            <span className="table-count-tag">{students.length} Records</span>
           </div>
         </div>
 
         {loading ? (
-          <div className="table-loading-cell">
-            <div className="cell-loader-wrap">
-              <Loader2 size={24} className="spin text-primary" />
-              <span>Loading student outstanding fee ledgers...</span>
-            </div>
+          <div className="pending-loading-state">
+            <Loader2 size={32} className="spin" />
+            <p>Loading {activeTab === 'admissions' ? 'admission dues records' : 'outstanding dues'}…</p>
           </div>
         ) : students.length === 0 ? (
-          <div className="table-empty-cell">
-            <div className="empty-state-box">
-              <CheckCircle2 size={42} className="text-success" />
-              <p className="empty-title">All Caught Up! No Outstanding Dues</p>
-              <p className="empty-desc">
-                {hasActiveFilters
-                  ? 'No students with pending dues match your filter criteria.'
-                  : 'All active students have fully cleared their fee balances for the current session.'}
-              </p>
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  className="btn-reset-empty"
-                  onClick={handleResetFilters}
-                >
-                  Clear Filters
-                </button>
-              )}
+          <div className="pending-empty-state">
+            <div className="empty-icon-wrap green">
+              <CheckCircle2 size={48} />
             </div>
+            <h3>No {activeTab === 'admissions' ? 'Admission' : ''} Pending Dues!</h3>
+            <p>
+              {hasActiveFilters
+                ? 'No students found matching your search and filter criteria.'
+                : activeTab === 'admissions'
+                ? 'All admitted students have settled their admission charges in full.'
+                : 'All active students have fully cleared their monthly tuition and additional fees.'}
+            </p>
           </div>
         ) : (
-          <div className="table-responsive-wrapper">
-            <table className="pending-ledger-table" role="table">
+          <div className="table-responsive pending-table-wrapper">
+            <table className="pending-dues-table">
               <thead>
                 <tr>
-                  <th>Adm No</th>
-                  <th>Student Name</th>
-                  <th>Class / Sec</th>
-                  <th>Category</th>
-                  <th>Monthly Dues</th>
-                  <th>Additional Dues</th>
-                  <th>Total Dues</th>
-                  <th className="th-actions">Actions</th>
+                  <th>Student Name &amp; Adm No</th>
+                  <th>Class</th>
+                  <th>Father / Parent Name</th>
+                  {activeTab === 'admissions' ? (
+                    <>
+                      <th className="text-right">Assessed Charges</th>
+                      <th className="text-right">Paid So Far</th>
+                      <th className="text-right">Remaining Due</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="text-right">Monthly Tuition Dues</th>
+                      <th className="text-right">Additional Dues</th>
+                      <th className="text-right">Total Outstanding</th>
+                    </>
+                  )}
+                  <th className="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {students.map((std) => (
-                  <tr key={std.id} className="dues-data-row">
-                    <td>
-                      <span className="admission-code-pill">{std.admission_no}</span>
-                    </td>
-                    <td>
-                      <div className="student-profile-cell">
-                        <strong className="student-fullname">{std.full_name}</strong>
-                        {std.parent_name && (
-                          <small className="student-parent-text">P: {std.parent_name}</small>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="class-section-pill">
-                        <span className="class-name-txt">{std.class_name || 'Class —'}</span>
-                        {std.section_name && (
-                          <span className="sec-tag">{std.section_name}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`student-cat-pill ${std.category}`}>
-                        {formatCategory(std.category)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="monthly-due-amount">
-                        {formatCurrency(std.monthly_dues)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="add-due-amount">
-                        {formatCurrency(std.additional_dues)}
-                      </span>
-                    </td>
-                    <td>
-                      <strong className="total-due-highlight">
-                        {formatCurrency(std.total_dues)}
-                      </strong>
-                    </td>
-                    <td className="td-actions">
-                      <div className="dues-action-buttons">
-                        <WhatsAppDirectButton
-                          compact
-                          size="sm"
-                          onSend={() => api.post(`/receipts/send-dues-whatsapp/${std.id}`)}
-                          phone={std.phone}
-                        />
-                        <button
-                          type="button"
-                          className="btn-pay-dues-action"
-                          onClick={() => setSelectedStudentForPayment(std)}
-                          title="Record payment to clear dues"
-                        >
-                          <CreditCard size={14} />
-                          <span>Pay Dues</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-receipt-notice-action"
-                          onClick={() => handleDownloadDuesNotice(std)}
-                          disabled={downloadingDuesId === std.id}
-                          title="Generate & Download Dues Notice PDF"
-                        >
-                          {downloadingDuesId === std.id ? (
-                            <Loader2 size={14} className="spin" />
-                          ) : (
-                            <FileText size={14} />
-                          )}
-                          <span>Dues Receipt</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-view-profile-action"
-                          onClick={() => navigate(`/students/${std.id}`)}
-                          title="View Full Ledger Profile"
-                          aria-label="View Profile"
-                        >
-                          <Eye size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {students.map((std) => {
+                  const isAdmTab = activeTab === 'admissions';
+                  const dueVal = isAdmTab ? (std.admission_dues || std.total_dues) : std.total_dues;
+
+                  return (
+                    <tr key={std.id} className="pending-table-row">
+                      <td className="student-name-cell">
+                        <div className="student-info-block">
+                          <button
+                            type="button"
+                            className="student-name-link"
+                            onClick={() => navigate(`/students/${std.id}`)}
+                            title="Open Student Profile & Fee Ledger"
+                          >
+                            {std.full_name}
+                          </button>
+                          <span className="student-adm-tag">{std.admission_no || 'ADM-—'}</span>
+                        </div>
+                      </td>
+
+                      <td className="class-cell">
+                        <span className="class-pill">
+                          {std.class_name ? `${std.class_name}${std.section_name ? `-${std.section_name}` : ''}` : '—'}
+                        </span>
+                      </td>
+
+                      <td className="parent-cell">
+                        <span className="parent-text">{std.father_name || std.parent_name || '—'}</span>
+                      </td>
+
+                      {isAdmTab ? (
+                        <>
+                          <td className="text-right assessed-cell">
+                            <strong>₹{Number(std.total_assessed_admission || std.total_dues || 0).toLocaleString('en-IN')}</strong>
+                          </td>
+                          <td className="text-right paid-cell text-green font-semibold">
+                            ₹{Number(std.admission_paid || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="text-right total-due-cell">
+                            <span className="total-due-badge red">
+                              ₹{Number(dueVal).toLocaleString('en-IN')}
+                            </span>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="text-right amount-cell">
+                            <span className="due-amount-text">
+                              {Number(std.monthly_dues) > 0 ? formatCurrency(std.monthly_dues) : '—'}
+                            </span>
+                          </td>
+                          <td className="text-right amount-cell">
+                            <span className="due-amount-text">
+                              {Number(std.additional_dues) > 0 ? formatCurrency(std.additional_dues) : '—'}
+                            </span>
+                          </td>
+                          <td className="text-right total-due-cell">
+                            <span className="total-due-badge red">
+                              {formatCurrency(std.total_dues)}
+                            </span>
+                          </td>
+                        </>
+                      )}
+
+                      <td className="actions-cell text-center">
+                        <div className="action-buttons-group">
+                          {/* Collect Due Button */}
+                          <button
+                            type="button"
+                            className="btn-action-collect-due"
+                            onClick={() => handleOpenCollectPayment(std, isAdmTab)}
+                            title="Collect payment & generate official receipt"
+                          >
+                            <CreditCard size={13} />
+                            <span>{isAdmTab ? 'Collect Admission Due' : 'Collect Fee'}</span>
+                          </button>
+
+                          {/* WhatsApp Direct Dues Notice */}
+                          <WhatsAppDirectButton
+                            compact
+                            size="sm"
+                            onSend={() => api.post(`/receipts/send-dues-whatsapp/${std.id}`)}
+                            onOpenJpg={() => handleOpenJpgDues(std)}
+                            phone={std.whatsapp_number || std.phone}
+                            itemTitle="Dues Statement"
+                          />
+
+                          {/* Download PDF Dues Notice */}
+                          <button
+                            type="button"
+                            className="btn-action-dues-notice"
+                            onClick={() => handleDownloadDuesNotice(std)}
+                            disabled={downloadingDuesId === std.id}
+                            title="Download PDF Dues Notice"
+                          >
+                            {downloadingDuesId === std.id ? (
+                              <Loader2 size={13} className="spin" />
+                            ) : (
+                              <Download size={13} />
+                            )}
+                            <span>PDF</span>
+                          </button>
+
+                          {/* Profile Button */}
+                          <button
+                            type="button"
+                            className="btn-action-profile-link"
+                            onClick={() => navigate(`/students/${std.id}`)}
+                            title="View Complete Student Profile"
+                          >
+                            <Eye size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -465,11 +626,27 @@ export default function PendingFees() {
       {selectedStudentForPayment && (
         <RecordPaymentModal
           initialStudent={selectedStudentForPayment}
+          defaultCategory={paymentModalOptions.defaultCategory || 'MONTHLY_TUITION'}
+          defaultAmount={paymentModalOptions.defaultAmount || ''}
+          defaultNotes={paymentModalOptions.defaultNotes || ''}
           onClose={() => setSelectedStudentForPayment(null)}
           onSaved={() => {
             setSelectedStudentForPayment(null);
             fetchPendingDues();
           }}
+        />
+      )}
+
+      {/* Universal High-Res Dues Notice JPG Modal */}
+      {duesModalOpen && selectedDuesNoticeData && (
+        <JpgReceiptModal
+          isOpen={duesModalOpen}
+          onClose={() => {
+            setDuesModalOpen(false);
+            setSelectedDuesNoticeData(null);
+          }}
+          data={selectedDuesNoticeData}
+          type="dues"
         />
       )}
     </div>

@@ -2,7 +2,8 @@
  * Receipts Page — School Management System (Frontend)
  *
  * Displays generated receipts with interactive summary KPIs,
- * column sorting, inline viewing, PDF download, and payment creation/editing.
+ * dedicated "All Receipts" vs "🎓 Admission Receipts" tabs,
+ * column sorting, inline JPG/PDF preview, and background WhatsApp direct messaging.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -29,6 +30,7 @@ import {
   CheckCircle,
   Clock,
   Sparkles,
+  GraduationCap,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -36,10 +38,12 @@ import EditPaymentModal from '../components/EditPaymentModal';
 import RecordPaymentModal from '../components/RecordPaymentModal';
 import WhatsAppDirectButton from '../components/WhatsAppDirectButton';
 import JpgReceiptModal from '../components/JpgReceiptModal';
+import { saveFileToDeviceStorage } from '../utils/fileDownloader';
 import './Receipts.css';
 
 export default function Receipts() {
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState('monthly'); // 'monthly' | 'admissions'
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -69,7 +73,7 @@ export default function Receipts() {
   const [editingPayment, setEditingPayment] = useState(null);
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
-  const [generatingId, setGeneratingId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
 
   // Fetch classes
   useEffect(() => {
@@ -93,6 +97,7 @@ export default function Receipts() {
       setError(null);
 
       const params = new URLSearchParams({
+        tab: activeTab,
         page: page.toString(),
         limit: '20',
         sort_by: sortField,
@@ -120,7 +125,7 @@ export default function Receipts() {
     } finally {
       setLoading(false);
     }
-  }, [search, classFilter, categoryFilter, startDate, endDate, sortField, sortOrder, page, toast]);
+  }, [activeTab, search, classFilter, categoryFilter, startDate, endDate, sortField, sortOrder, page, toast]);
 
   useEffect(() => {
     fetchReceipts();
@@ -149,136 +154,163 @@ export default function Receipts() {
     }).format(amount || 0);
   };
 
-  const [downloadingId, setDownloadingId] = useState(null);
+  const handleView = async (receiptOrId) => {
+    if (!receiptOrId) return;
+    const paymentId = typeof receiptOrId === 'object'
+      ? (receiptOrId.payment_id || receiptOrId.id || receiptOrId.receipt_number)
+      : receiptOrId;
 
-  const handleView = async (paymentId) => {
     try {
       setLoadingReceipt(true);
-      setViewModalOpen(true);
       const res = await api.get(`/receipts/${paymentId}`);
-      if (res.data.success) {
-        setSelectedReceipt(res.data);
+      if (res.data && res.data.success) {
+        setSelectedReceipt({
+          ...res.data,
+          student: res.data.student || {
+            full_name: receiptOrId.student_name,
+            admission_no: receiptOrId.admission_no,
+            class_name: receiptOrId.class_name,
+            section_name: receiptOrId.section_name,
+            phone: receiptOrId.phone || receiptOrId.whatsapp_number,
+          },
+          payment: res.data.payment || receiptOrId,
+        });
+        setViewModalOpen(true);
+      } else {
+        throw new Error(res.data?.message || 'Receipt data incomplete');
       }
     } catch (err) {
-      toast.error('Failed to fetch receipt details.');
-      setViewModalOpen(false);
+      console.warn('[Receipts.handleView] Using row data fallback:', err.message);
+      if (typeof receiptOrId === 'object') {
+        setSelectedReceipt({
+          school: {
+            school_name: 'Aryavart Shikshan Sansthan',
+            phone: '+91-9876543210',
+            address: 'Knowledge Campus, Main Road',
+          },
+          receipt: {
+            id: receiptOrId.id,
+            receipt_number: receiptOrId.receipt_number || `RCP-${receiptOrId.payment_id || receiptOrId.id}`,
+            file_path: receiptOrId.file_path,
+            created_at: receiptOrId.generated_at || receiptOrId.payment_date,
+          },
+          payment: {
+            id: receiptOrId.payment_id || receiptOrId.id,
+            amount: receiptOrId.amount,
+            payment_date: receiptOrId.payment_date,
+            payment_mode: receiptOrId.payment_mode,
+            notes: receiptOrId.notes,
+          },
+          student: {
+            full_name: receiptOrId.student_name,
+            admission_no: receiptOrId.admission_no,
+            class_name: receiptOrId.class_name,
+            section_name: receiptOrId.section_name,
+            category: receiptOrId.student_category,
+            phone: receiptOrId.phone || receiptOrId.whatsapp_number,
+          },
+          allocations: [],
+          summary: { total_amount: receiptOrId.amount },
+        });
+        setViewModalOpen(true);
+      } else {
+        toast.error(err.response?.data?.message || 'Failed to fetch receipt details.');
+      }
     } finally {
       setLoadingReceipt(false);
     }
   };
 
-  const handleGenerate = async (paymentId) => {
-    try {
-      setGeneratingId(paymentId);
-      const res = await api.post(`/receipts/generate/${paymentId}`);
-      if (res.data.success) {
-        toast.success('Receipt generated successfully.');
-        fetchReceipts();
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to generate receipt.');
-    } finally {
-      setGeneratingId(null);
-    }
-  };
-
-  const handleDownload = async (paymentId, receiptNo = '') => {
+  const handleDownload = async (paymentId, rNo) => {
     try {
       setDownloadingId(paymentId);
       const res = await api.get(`/receipts/download/${paymentId}`, {
         responseType: 'blob',
       });
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Receipt_${receiptNo || paymentId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
-      toast.success('Receipt PDF downloaded successfully.');
-      fetchReceipts();
+      const filename = `Receipt_${rNo || paymentId}.pdf`;
+      const saveRes = await saveFileToDeviceStorage({
+        data: res.data,
+        filename,
+        mimeType: 'application/pdf',
+      });
+      if (saveRes?.platform === 'native') {
+        toast.success(`✓ Receipt PDF Saved to Phone Storage (Documents/${filename})`);
+      } else {
+        toast.success('Receipt PDF downloaded successfully.');
+      }
     } catch (err) {
-      console.error('[handleDownload]', err);
-      toast.error('Failed to download receipt PDF.');
+      console.error('[Receipts.handleDownload]', err);
+      toast.error(err.response?.data?.message || 'Failed to download receipt PDF.');
     } finally {
       setDownloadingId(null);
     }
   };
 
-  const totalSum = receipts.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-  const pdfGeneratedCount = receipts.filter(r => !!r.file_path).length;
-
   return (
     <div className="receipts-page">
-      {/* Header with Quick Actions */}
+      {/* Header Banner Card */}
       <div className="receipts-header-card">
         <div className="header-left-info">
           <div className="receipts-icon-badge">
-            <Receipt size={24} />
+            <Receipt size={26} />
           </div>
           <div>
-            <h1 className="receipts-title">Fee Receipts Ledger</h1>
+            <h1 className="receipts-title">Official Receipts Desk</h1>
             <p className="receipts-subtitle">
-              Manage, search, preview, and download official PDF fee payment receipts.
+              Browse, view high-res JPG receipts, dispatch background WhatsApp messages, and audit collections.
             </p>
           </div>
         </div>
         <div className="header-actions-group">
           <button
             type="button"
-            className="btn btn-primary btn-record-pay"
+            className="btn-record-pay"
             onClick={() => setRecordPaymentOpen(true)}
           >
             <Plus size={16} /> Record Payment
           </button>
           <button
             type="button"
-            className="btn btn-secondary btn-refresh"
+            className="btn-refresh"
             onClick={fetchReceipts}
             disabled={loading}
-            title="Refresh receipts list"
+            title="Refresh receipts"
           >
-            <RefreshCw size={16} className={loading ? 'spin' : ''} /> Refresh
+            <RefreshCw size={16} className={loading ? 'spin' : ''} />
           </button>
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="receipts-kpi-grid">
-        <div className="receipt-kpi-card">
-          <div className="kpi-icon-wrap blue">
-            <Receipt size={20} />
-          </div>
-          <div className="kpi-text">
-            <span className="kpi-label">Total Receipts Issued</span>
-            <span className="kpi-value">{totalRecords}</span>
-          </div>
-        </div>
+      {/* Tab Switcher: Monthly Receipts vs Admission Receipts */}
+      <div className="receipts-tab-nav-bar">
+        <button
+          type="button"
+          className={`tab-nav-pill ${activeTab === 'monthly' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('monthly');
+            setPage(1);
+          }}
+        >
+          <Receipt size={16} />
+          <span>📅 Monthly Fee Receipts</span>
+          {activeTab === 'monthly' && <span className="tab-count-badge">{totalRecords}</span>}
+        </button>
 
-        <div className="receipt-kpi-card">
-          <div className="kpi-icon-wrap green">
-            <IndianRupee size={20} />
-          </div>
-          <div className="kpi-text">
-            <span className="kpi-label">Total Amount Paid</span>
-            <span className="kpi-value text-green">{formatCurrency(totalSum)}</span>
-          </div>
-        </div>
-
-        <div className="receipt-kpi-card">
-          <div className="kpi-icon-wrap purple">
-            <FileText size={20} />
-          </div>
-          <div className="kpi-text">
-            <span className="kpi-label">PDF Receipts Generated</span>
-            <span className="kpi-value">{pdfGeneratedCount} / {receipts.length}</span>
-          </div>
-        </div>
+        <button
+          type="button"
+          className={`tab-nav-pill ${activeTab === 'admissions' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('admissions');
+            setPage(1);
+          }}
+        >
+          <GraduationCap size={17} />
+          <span>🎓 Admission Receipts</span>
+          {activeTab === 'admissions' && <span className="tab-count-badge">{totalRecords}</span>}
+        </button>
       </div>
 
-      {/* Filters Bar */}
+      {/* Filters Card */}
       <div className="receipts-filters-card">
         <div className="search-box-wrap">
           <div className="search-prefix-icon">
@@ -287,7 +319,7 @@ export default function Receipts() {
           <input
             type="search"
             className="receipts-search-input"
-            placeholder="Search by student name, admission no, or receipt #…"
+            placeholder="Search by student name, admission no, receipt # or phone…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -309,8 +341,7 @@ export default function Receipts() {
           )}
         </div>
 
-        {/* 2x2 Format: 4 Sorting & Filtering Controls */}
-        <div className="filter-controls-grid-2x2">
+        <div className="filter-controls-grid">
           <div className="filter-control-item">
             <span className="control-label">Class</span>
             <select
@@ -368,226 +399,215 @@ export default function Receipts() {
             />
           </div>
         </div>
-
-        {(search || classFilter || categoryFilter || startDate || endDate) && (
-          <button
-            type="button"
-            className="btn btn-secondary clear-filters-btn"
-            onClick={() => {
-              setSearch('');
-              setClassFilter('');
-              setCategoryFilter('');
-              setStartDate('');
-              setEndDate('');
-              setPage(1);
-            }}
-          >
-            <X size={14} /> Clear Filters
-          </button>
-        )}
       </div>
 
-      {error && (
-        <div className="error-banner">
-          <span>{error}</span>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={fetchReceipts}>
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* Receipts Table */}
+      {/* Receipts Table Card */}
       <div className="receipts-table-card">
         <div className="table-header-bar">
           <div className="table-header-left">
-            <span className="table-title">Generated Receipts</span>
-            <span className="records-pill">{totalRecords} records</span>
+            <h2 className="table-title">
+              {activeTab === 'admissions' ? '🎓 Official Admission Receipts' : 'Official Fee Receipts Registry'}
+            </h2>
+            <span className="records-pill">{totalRecords} Records</span>
           </div>
         </div>
 
-        <div className="table-responsive-wrapper">
-          <table className="receipts-data-table">
-            <thead>
-              <tr>
-                <th className="sortable-th" onClick={() => handleSort('receipt_number')}>
-                  Receipt # {renderSortIcon('receipt_number')}
-                </th>
-                <th className="sortable-th" onClick={() => handleSort('payment_date')}>
-                  Payment Date {renderSortIcon('payment_date')}
-                </th>
-                <th className="sortable-th" onClick={() => handleSort('student_name')}>
-                  Student Name {renderSortIcon('student_name')}
-                </th>
-                <th>Admission No</th>
-                <th>Class / Sec</th>
-                <th>Category</th>
-                <th className="sortable-th text-right" onClick={() => handleSort('amount')}>
-                  Amount (₹) {renderSortIcon('amount')}
-                </th>
-                <th>Payment Mode</th>
-                <th>PDF Status</th>
-                <th className="text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && receipts.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="table-loading">
-                    <Loader2 size={24} className="spin" />
-                    <span>Loading fee receipts…</span>
-                  </td>
-                </tr>
-              ) : receipts.length === 0 ? (
-                <tr>
-                  <td colSpan={10}>
-                    <div className="empty-receipts-state">
-                      <div className="empty-icon-wrap">
-                        <Receipt size={40} />
+        {loading ? (
+          <div className="receipts-loading-state">
+            <Loader2 size={32} className="spin" />
+            <p>Loading {activeTab === 'admissions' ? 'admission receipts' : 'receipts registry'}…</p>
+          </div>
+        ) : error ? (
+          <div className="receipts-error-state">
+            <p className="error-msg">{error}</p>
+            <button className="btn btn-secondary btn-sm" onClick={fetchReceipts}>
+              Retry
+            </button>
+          </div>
+        ) : receipts.length === 0 ? (
+          <div className="receipts-empty-state">
+            <div className="empty-icon-wrap">
+              {activeTab === 'admissions' ? <GraduationCap size={48} /> : <Receipt size={48} />}
+            </div>
+            <h3>No {activeTab === 'admissions' ? 'Admission' : ''} Receipts Found</h3>
+            <p>
+              {search || classFilter || startDate || endDate
+                ? 'Try adjusting your search criteria or date filters.'
+                : activeTab === 'admissions'
+                ? 'No admission receipts have been generated yet.'
+                : 'No receipts have been recorded yet.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="table-responsive receipts-table-wrapper">
+              <table className="receipts-table">
+                <thead>
+                  <tr>
+                    <th className="sortable" onClick={() => handleSort('payment_date')}>
+                      <div className="th-content">
+                        <span>Receipt Date</span>
+                        {renderSortIcon('payment_date')}
                       </div>
-                      <h3>No Receipts Found</h3>
-                      <p>
-                        No fee payment receipts matched your filter criteria. Record a student fee payment to generate official receipts.
-                      </p>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => setRecordPaymentOpen(true)}
-                      >
-                        <Plus size={16} /> Record Payment Now
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                receipts.map((r) => (
-                  <tr key={r.payment_id}>
-                    <td>
-                      <code className="receipt-code-pill">{r.receipt_number || `RCP-${r.payment_id}`}</code>
-                    </td>
-                    <td className="date-text">
-                      {new Date(r.payment_date || r.generated_at).toLocaleDateString('en-IN', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </td>
-                    <td>
-                      <strong className="student-name-text">{r.student_name}</strong>
-                    </td>
-                    <td>
-                      <code className="adm-code">{r.admission_no}</code>
-                    </td>
-                    <td>
-                      <span className="class-badge">
-                        {r.class_name ? `${r.class_name}` : '—'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`category-badge ${r.student_category}`}>
-                        {r.student_category === 'hosteller' ? 'Hosteller' : 'Day Scholar'}
-                      </span>
-                    </td>
-                    <td className="amount-cell text-right">
-                      <strong>{formatCurrency(r.amount)}</strong>
-                    </td>
-                    <td>
-                      <span className={`mode-pill ${(r.payment_mode || 'CASH').toLowerCase().includes('account') ? 'account' : 'cash'}`}>
-                        {(r.payment_mode || 'CASH').toLowerCase().includes('account') ? '🏦 In Account' : '💵 Cash'}
-                      </span>
-                    </td>
-                    <td>
-                      {r.file_path ? (
-                        <span className="status-badge active">
-                          <CheckCircle size={12} /> Ready
-                        </span>
-                      ) : (
-                        <span className="status-badge pending">
-                          <Clock size={12} /> Pending
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="action-btns">
-                        <button
-                          type="button"
-                          className="btn-action view"
-                          onClick={() => handleView(r.payment_id)}
-                          title="View Receipt Details"
-                        >
-                          <Eye size={15} /> View
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-action edit"
-                          onClick={() => setEditingPayment(r)}
-                          title="Edit Payment Information"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-action generate"
-                          onClick={() => handleGenerate(r.payment_id)}
-                          disabled={generatingId === r.payment_id}
-                          title="Generate Branded PDF Receipt"
-                        >
-                          {generatingId === r.payment_id ? (
-                            <Loader2 size={14} className="spin" />
-                          ) : (
-                            <FileText size={14} />
-                          )}
-                        </button>
-                        <WhatsAppDirectButton
-                          compact
-                          size="sm"
-                          onSend={() => api.post(`/receipts/send-whatsapp/${r.payment_id}`)}
-                          phone={r.phone}
-                        />
-                        <button
-                          type="button"
-                          className="btn-action download"
-                          onClick={() => handleDownload(r.payment_id, r.receipt_number)}
-                          disabled={downloadingId === r.payment_id}
-                          title="Download Official PDF Receipt"
-                        >
-                          {downloadingId === r.payment_id ? (
-                            <Loader2 size={14} className="spin" />
-                          ) : (
-                            <Download size={14} />
-                          )}
-                        </button>
+                    </th>
+                    <th>Receipt No</th>
+                    <th className="sortable" onClick={() => handleSort('student_name')}>
+                      <div className="th-content">
+                        <span>Student &amp; Adm No</span>
+                        {renderSortIcon('student_name')}
                       </div>
-                    </td>
+                    </th>
+                    <th>Class</th>
+                    <th>Receipt Type</th>
+                    <th className="sortable text-right" onClick={() => handleSort('amount')}>
+                      <div className="th-content justify-end">
+                        <span>Amount Paid</span>
+                        {renderSortIcon('amount')}
+                      </div>
+                    </th>
+                    <th>Mode</th>
+                    <th>Notes</th>
+                    <th className="text-center">Actions</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {receipts.map((r) => {
+                    const paymentId = r.payment_id || r.id;
+                    const rNo = r.receipt_number || `RCP-${String(paymentId).padStart(6, '0')}`;
+                    const modeStr = (r.payment_mode || 'CASH').toLowerCase();
+                    const isAdmission = r.payment_category === 'ADMISSION_CHARGE' || (r.notes && r.notes.includes('Admission')) || rNo.startsWith('ADM');
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="pagination-bar">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
-            >
-              <ChevronLeft size={16} /> Previous
-            </button>
-            <span className="page-info-text">
-              Page <strong>{page}</strong> of <strong>{totalPages}</strong> ({totalRecords} total items)
-            </span>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              Next <ChevronRight size={16} />
-            </button>
-          </div>
+                    return (
+                      <tr key={r.id} className="receipt-row">
+                        <td className="receipt-date-cell">
+                          {r.payment_date
+                            ? new Date(r.payment_date).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="receipt-num-cell">
+                          <button
+                            type="button"
+                            className="receipt-chip-btn"
+                            onClick={() => handleView(r)}
+                            title="View Full-Page JPG Receipt"
+                          >
+                            <Receipt size={13} />
+                            <span>{rNo}</span>
+                          </button>
+                        </td>
+                        <td className="student-cell">
+                          <div className="student-name-block">
+                            <span className="student-name font-bold">{r.full_name || r.student_name || '—'}</span>
+                            <span className="student-adm-no font-mono">{r.admission_no || '—'}</span>
+                          </div>
+                        </td>
+                        <td className="class-cell">
+                          <span className="class-badge">
+                            {r.class_name ? `${r.class_name}${r.section_name ? `-${r.section_name}` : ''}` : '—'}
+                          </span>
+                        </td>
+                        <td className="type-cell">
+                          {isAdmission ? (
+                            <span className="adm-receipt-badge">
+                              <GraduationCap size={12} /> Admission
+                            </span>
+                          ) : (
+                            <span className="tuition-receipt-badge">
+                              <Receipt size={12} /> Tuition Fee
+                            </span>
+                          )}
+                        </td>
+                        <td className="amount-cell text-right">
+                          <span className="amount-val-badge">
+                            {formatCurrency(r.amount)}
+                          </span>
+                        </td>
+                        <td className="mode-cell">
+                          {modeStr.includes('account') || modeStr.includes('bank') || modeStr.includes('online') || modeStr.includes('in_account') ? (
+                            <span className="remark-in-account">in acc.</span>
+                          ) : (
+                            <span className="remark-cash">cash</span>
+                          )}
+                        </td>
+                        <td className="notes-cell" title={r.notes || ''}>
+                          {r.notes || <span className="text-muted">—</span>}
+                        </td>
+                        <td className="actions-cell text-center">
+                          <div className="action-btns">
+                            <button
+                              type="button"
+                              className="btn-action view"
+                              onClick={() => handleView(r)}
+                              title="View & Download Official JPG Receipt"
+                            >
+                              <Eye size={13} /> JPG View
+                            </button>
+                            <WhatsAppDirectButton
+                              compact
+                              size="sm"
+                              onSend={() => api.post(`/receipts/send-whatsapp/${paymentId}`)}
+                              onOpenJpg={() => handleView(r)}
+                              phone={r.phone || r.whatsapp_number}
+                              itemTitle="Receipt"
+                            />
+                            <button
+                              type="button"
+                              className="btn-action download"
+                              onClick={() => handleDownload(paymentId, rNo)}
+                              disabled={downloadingId === paymentId}
+                              title="Download PDF Receipt"
+                            >
+                              {downloadingId === paymentId ? <Loader2 size={13} className="spin" /> : <Download size={13} />}
+                              <span>PDF</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-action edit"
+                              onClick={() => setEditingPayment(r)}
+                              title="Edit Payment Record"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="receipts-pagination">
+                <div className="pagination-info">
+                  Showing Page <strong>{page}</strong> of <strong>{totalPages}</strong> ({totalRecords} Total Records)
+                </div>
+                <div className="pagination-buttons">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                  >
+                    <ChevronLeft size={16} /> Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                  >
+                    Next <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -605,25 +625,31 @@ export default function Receipts() {
       {/* Edit Payment Modal */}
       {editingPayment && (
         <EditPaymentModal
-          payment={editingPayment}
+          isOpen={!!editingPayment}
           onClose={() => setEditingPayment(null)}
-          onSaved={() => {
+          payment={{
+            ...editingPayment,
+            id: editingPayment.payment_id || editingPayment.id,
+          }}
+          onSuccess={() => {
             setEditingPayment(null);
             fetchReceipts();
           }}
         />
       )}
 
-      {/* Universal JPG Receipt Modal with WhatsApp Sharing & JPG Download */}
-      <JpgReceiptModal
-        isOpen={viewModalOpen && !loadingReceipt && !!selectedReceipt}
-        onClose={() => {
-          setViewModalOpen(false);
-          setSelectedReceipt(null);
-        }}
-        data={selectedReceipt}
-        type="payment"
-      />
+      {/* Universal Full-Page JPG Receipt Modal */}
+      {viewModalOpen && selectedReceipt && (
+        <JpgReceiptModal
+          isOpen={viewModalOpen}
+          onClose={() => {
+            setViewModalOpen(false);
+            setSelectedReceipt(null);
+          }}
+          data={selectedReceipt}
+          type={selectedReceipt.type || 'payment'}
+        />
+      )}
     </div>
   );
 }

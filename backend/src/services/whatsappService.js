@@ -427,8 +427,61 @@ function interpolateTemplate(template, data) {
     .replace(/\{section_name\}/g, data.section_name || '');
 }
 
+/**
+ * Send an image (JPEG / PNG) via WhatsApp in the background
+ */
+async function sendWhatsAppImage(to, imagePayload, caption = '', options = {}) {
+  const { student_id = null, template_id = null, payment_id = null } = options;
+
+  await initMessagingSettings();
+
+  const localStatus = localGateway.getStatus();
+  if (localStatus.connected) {
+    try {
+      const sentResult = await localGateway.sendImageMessage(to, imagePayload, caption);
+      const log = await logMessage({
+        student_id,
+        template_id,
+        channel: 'whatsapp',
+        recipient: to,
+        message: `[Image Receipt] ${caption || ''}`,
+        status: 'sent',
+        error_message: null,
+      });
+      return {
+        success: true,
+        mode: 'background',
+        message: `WhatsApp JPEG Receipt sent to ${to}`,
+        log,
+      };
+    } catch (err) {
+      console.warn('[whatsappService] Linked phone sendImage failed:', err.message);
+      throw err;
+    }
+  }
+
+  // If mock mode or not linked
+  const log = await logMessage({
+    student_id,
+    template_id,
+    channel: 'whatsapp',
+    recipient: to,
+    message: `[Mock Mode Image Receipt] ${caption || ''}`,
+    status: 'sent',
+    error_message: null,
+  });
+
+  return {
+    success: true,
+    mode: 'mock',
+    message: `WhatsApp JPEG Receipt logged in mock mode for ${to}`,
+    log,
+  };
+}
+
 module.exports = {
   sendWhatsApp,
+  sendWhatsAppImage,
   sendWhatsAppTemplate,
   sendBulkWhatsApp,
   getWhatsAppSettings,

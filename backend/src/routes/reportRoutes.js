@@ -7,6 +7,7 @@
 const express = require('express');
 const {
   getPendingDuesList,
+  getAdmissionDuesList,
   getDemographicsReport,
   getCollectionsReport,
 } = require('../controllers/reportController');
@@ -17,6 +18,7 @@ const router = express.Router();
 router.use(authenticateToken);
 
 router.get('/pending-dues-list', getPendingDuesList);
+router.get('/admission-dues-list', getAdmissionDuesList);
 router.get('/demographics', getDemographicsReport);
 router.get('/collections', getCollectionsReport);
 

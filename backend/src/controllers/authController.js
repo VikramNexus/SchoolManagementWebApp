@@ -144,6 +144,8 @@ async function updateProfile(req, res) {
     return res.status(400).json({ success: false, message: 'Username cannot be empty.' });
   }
 
+  const trimmedEmail = email && email.trim() ? email.trim() : null;
+
   try {
     // Check if username is already taken by another user
     const existingUsername = await db.queryOne(
@@ -155,10 +157,10 @@ async function updateProfile(req, res) {
     }
 
     // Check if email is already taken if provided
-    if (email && email.trim()) {
+    if (trimmedEmail) {
       const existingEmail = await db.queryOne(
         'SELECT id FROM users WHERE email = ? AND id != ? LIMIT 1',
-        [email.trim(), userId]
+        [trimmedEmail, userId]
       );
       if (existingEmail) {
         return res.status(409).json({ success: false, message: 'Email address is already registered.' });
@@ -169,7 +171,7 @@ async function updateProfile(req, res) {
       `UPDATE users
        SET full_name = ?, username = ?, email = ?
        WHERE id = ?`,
-      [full_name?.trim() || null, username.trim(), email?.trim() || null, userId]
+      [full_name?.trim() || null, username.trim(), trimmedEmail, userId]
     );
 
     const updatedUser = await db.queryOne(
@@ -291,7 +293,7 @@ async function updateAllAdminSettings(req, res) {
     }
 
     // 2. Check if new email is already taken by another user
-    const trimmedEmail = email?.trim() || null;
+    const trimmedEmail = email && email.trim() ? email.trim() : null;
     if (trimmedEmail && trimmedEmail.toLowerCase() !== (user.email || '').toLowerCase()) {
       const existingEmail = await db.queryOne(
         'SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ? LIMIT 1',

@@ -1,9 +1,10 @@
 /**
  * JpgReceiptModal Component — School Management System
- * Universal High-Resolution JPG Receipt & Statement Viewer with WhatsApp Share
+ * Universal High-Resolution Full-Page JPG Receipt & Statement Viewer with Background WhatsApp Dispatch
+ * Seamlessly auto-scales on mobile viewports so Logo, School Name, Demographics & Tables fit perfectly without clipping.
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Download,
   Share2,
@@ -15,24 +16,28 @@ import {
   GraduationCap,
   Building2,
   CheckCircle2,
+  Send,
 } from 'lucide-react';
-import { downloadElementAsJpg, shareReceiptViaWhatsApp } from '../utils/receiptGenerator';
+import { captureElementAsJpg, downloadElementAsJpg } from '../utils/receiptGenerator';
 import { WhatsAppIcon } from './WhatsAppDirectButton';
 import { useToast } from './Toast';
+import { api } from '../context/AuthContext';
 import './JpgReceiptModal.css';
 
 export default function JpgReceiptModal({
   isOpen,
   onClose,
   data = {},
-  type = 'payment', // 'payment' | 'admission' | 'family' | 'ledger'
+  type = 'payment', // 'payment' | 'admission' | 'family' | 'dues'
 }) {
   const receiptRef = useRef(null);
+  const scrollBodyRef = useRef(null);
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
-  const [sharing, setSharing] = useState(false);
-
-  if (!isOpen || !data) return null;
+  const [sendingWa, setSendingWa] = useState(false);
+  const [sentSuccess, setSentSuccess] = useState(false);
+  const [scale, setScale] = useState(1);
+  const [scaledHeight, setScaledHeight] = useState('auto');
 
   const {
     school = {
@@ -46,23 +51,73 @@ export default function JpgReceiptModal({
     receipt = {},
     allocations = [],
     summary = {},
-  } = data;
+  } = data || {};
 
-  const receiptNumber = receipt?.receipt_number || payment?.receipt_number || `RCP-${payment?.id || Date.now().toString().slice(-6)}`;
+  const schoolName = school?.school_name || data?.school_name || 'Aryavart Shikshan Sansthan';
+  const schoolAddress = school?.address || data?.address || 'Near Knowledge Hub, Main Campus';
+  const schoolPhone = school?.phone || data?.phone || '+91-9876543210';
+  const schoolLogoUrl = school?.logo_url || data?.logo_url;
+
+  // Auto-calculate scale on window resize or when modal opens to fit narrow screens with zero clipping
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const computeScale = () => {
+      if (scrollBodyRef.current && receiptRef.current) {
+        const availableWidth = scrollBodyRef.current.clientWidth - 24; // padding allowance
+        const targetWidth = 580;
+        if (availableWidth > 0 && availableWidth < targetWidth) {
+          const s = Math.max(0.4, availableWidth / targetWidth);
+          setScale(s);
+          setScaledHeight(`${receiptRef.current.offsetHeight * s}px`);
+        } else {
+          setScale(1);
+          setScaledHeight('auto');
+        }
+      }
+    };
+
+    computeScale();
+    const t1 = setTimeout(computeScale, 50);
+    const t2 = setTimeout(computeScale, 200);
+    window.addEventListener('resize', computeScale);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('resize', computeScale);
+    };
+  }, [isOpen, data]);
+
+  if (!isOpen || !data) return null;
+
+  const receiptNumber =
+    receipt?.receipt_number ||
+    payment?.receipt_number ||
+    `RCP-${payment?.id || Date.now().toString().slice(-6)}`;
   const paymentDate = payment?.payment_date
-    ? new Date(payment.payment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    ? new Date(payment.payment_date).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    : new Date().toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
 
-  const parentPhone = student?.phone || student?.father_phone || student?.contact_no || payment?.phone || '';
+  const parentPhone =
+    student?.phone || student?.father_phone || student?.whatsapp_number || payment?.phone || '';
   const totalAmount = payment?.amount || summary?.total_amount || 0;
 
+  // 1. Download Full-Page High-Res JPG without clipping
   const handleDownloadJpg = async () => {
     if (!receiptRef.current) return;
     setDownloading(true);
     try {
       const filename = `Receipt_${receiptNumber}_${student?.full_name || 'Student'}`;
       await downloadElementAsJpg(receiptRef.current, filename);
-      toast.success('JPG Receipt downloaded successfully!');
+      toast.success('Full-Page JPG Receipt downloaded successfully!');
     } catch (err) {
       console.error('[Download JPG]', err);
       toast.error('Failed to generate JPG receipt');
@@ -71,23 +126,45 @@ export default function JpgReceiptModal({
     }
   };
 
-  const handleWhatsAppShare = async () => {
+  // 2. Send JPEG Receipt directly via WhatsApp in BACKGROUND
+  const handleSendWhatsAppBackground = async () => {
     if (!receiptRef.current) return;
-    setSharing(true);
+    setSendingWa(true);
+    setSentSuccess(false);
+
     try {
-      await shareReceiptViaWhatsApp({
-        element: receiptRef.current,
+      // Capture full-page high-resolution canvas
+      const dataUrl = await captureElementAsJpg(receiptRef.current);
+
+      let targetUrl = '';
+      if (type === 'admission' || type === 'family') {
+        const targetId = student?.id || payment?.student_id || student?.student_id || data?.students?.[0]?.student_id || data?.students?.[0]?.id || 1;
+        targetUrl = `/admissions/send-whatsapp-jpg/${targetId}`;
+      } else if (type === 'dues') {
+        const targetId = student?.id || payment?.student_id;
+        targetUrl = `/receipts/send-dues-whatsapp-jpg/${targetId}`;
+      } else {
+        const targetId = payment?.id || receipt?.payment_id || student?.id;
+        targetUrl = `/receipts/send-whatsapp-jpg/${targetId}`;
+      }
+
+      const res = await api.post(targetUrl, {
+        imageBase64: dataUrl,
         phone: parentPhone,
-        studentName: student?.full_name || 'Student',
-        receiptNo: receiptNumber,
-        amount: totalAmount,
       });
-      toast.success('Opening WhatsApp share...');
+
+      if (res.data && res.data.success) {
+        setSentSuccess(true);
+        toast.success(`✓ Official JPEG Receipt sent to parent's WhatsApp (${parentPhone || 'Parent'}) in background!`);
+        setTimeout(() => setSentSuccess(false), 4000);
+      } else {
+        throw new Error(res.data?.message || 'Failed to send');
+      }
     } catch (err) {
-      console.error('[Share WhatsApp]', err);
-      toast.error('Failed to share via WhatsApp');
+      console.error('[Send WhatsApp Background]', err);
+      toast.error(err.response?.data?.message || 'Failed to send JPEG via WhatsApp. Make sure your WhatsApp phone is linked in Settings.');
     } finally {
-      setSharing(false);
+      setSendingWa(false);
     }
   };
 
@@ -110,170 +187,204 @@ export default function JpgReceiptModal({
         </div>
 
         {/* Scrollable Receipt Canvas Container */}
-        <div className="jpg-receipt-scroll-body">
-          {/* Printable / Capturable Receipt Card */}
-          <div className="official-receipt-sheet" ref={receiptRef}>
-            {/* Decorative Top Border */}
-            <div className="receipt-sheet-top-stripe" />
+        <div className="jpg-receipt-scroll-body" ref={scrollBodyRef}>
+          {/* Scaled Preview Wrapper to guarantee full visibility on mobile */}
+          <div
+            className="receipt-scale-wrapper"
+            style={{
+              width: scale < 1 ? `${580 * scale}px` : '100%',
+              maxWidth: '580px',
+              height: scale < 1 ? scaledHeight : 'auto',
+              minHeight: scale < 1 ? scaledHeight : 'auto',
+              position: 'relative',
+              margin: '0 auto',
+            }}
+          >
+            {/* Printable / Capturable Receipt Card */}
+            <div
+              className="official-receipt-sheet"
+              ref={receiptRef}
+              style={{
+                width: '580px',
+                minWidth: '580px',
+                maxWidth: '580px',
+                transform: scale < 1 ? `scale(${scale})` : 'none',
+                transformOrigin: 'top left',
+                position: scale < 1 ? 'absolute' : 'relative',
+                top: 0,
+                left: 0,
+              }}
+            >
+              {/* Decorative Top Border */}
+              <div className="receipt-sheet-top-stripe" />
 
-            {/* School Letterhead Header */}
-            <div className="receipt-letterhead">
-              <div className="letterhead-logo">
-                <GraduationCap size={40} className="school-cap-icon" />
-              </div>
-              <div className="letterhead-content">
-                <h1 className="school-title">{school.school_name || 'Aryavart Shikshan Sansthan'}</h1>
-                <p className="school-tagline">Excellence in Education &amp; Holistic Student Development</p>
-                <p className="school-contact-line">
-                  📍 {school.address || 'Main Campus'} &bull; 📞 {school.phone || '+91-9876543210'}
-                </p>
-              </div>
-            </div>
-
-            {/* Receipt Type & Serial Banner */}
-            <div className="receipt-banner-strip">
-              <div className="receipt-badge-title">
-                {type === 'admission'
-                  ? 'OFFICIAL ADMISSION & ENROLLMENT RECEIPT'
-                  : type === 'family'
-                  ? 'FAMILY MULTI-STUDENT FEE RECEIPT'
-                  : 'FEE PAYMENT ACKNOWLEDGEMENT RECEIPT'}
-              </div>
-              <div className="receipt-meta-grid">
-                <div>
-                  <span className="meta-lbl">Receipt No:</span>
-                  <span className="meta-val highlight">{receiptNumber}</span>
+              {/* School Letterhead Header */}
+              <div className="receipt-letterhead">
+                <div className="letterhead-logo">
+                  {schoolLogoUrl ? (
+                    <img src={schoolLogoUrl} alt="School Logo" className="school-logo-img" />
+                  ) : (
+                    <GraduationCap size={36} className="school-cap-icon" />
+                  )}
                 </div>
-                <div>
-                  <span className="meta-lbl">Issue Date:</span>
-                  <span className="meta-val">{paymentDate}</span>
-                </div>
-                <div>
-                  <span className="meta-lbl">Academic Year:</span>
-                  <span className="meta-val">{school.academic_year || '2025-2026'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Student Profile Info Grid */}
-            <div className="receipt-info-box">
-              <div className="info-col">
-                <div className="info-row">
-                  <span className="info-k">Student Name:</span>
-                  <span className="info-v font-bold">{student.full_name || 'N/A'}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-k">Admission No:</span>
-                  <span className="info-v">{student.admission_no || 'N/A'}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-k">Class &amp; Section:</span>
-                  <span className="info-v">
-                    {student.class_name || 'N/A'} {student.section_name ? `(${student.section_name})` : ''}
-                  </span>
+                <div className="letterhead-content">
+                  <h1 className="school-title">{schoolName}</h1>
+                  <p className="school-tagline">Excellence in Education &amp; Holistic Student Development</p>
+                  <p className="school-contact-line">
+                    📍 {schoolAddress} &bull; 📞 {schoolPhone}
+                  </p>
                 </div>
               </div>
 
-              <div className="info-col">
-                <div className="info-row">
-                  <span className="info-k">Father's Name:</span>
-                  <span className="info-v">{student.father_name || 'N/A'}</span>
+              {/* Receipt Type & Serial Banner */}
+              <div className="receipt-banner-strip">
+                <div className="receipt-badge-title">
+                  {type === 'admission'
+                    ? 'OFFICIAL ADMISSION & ENROLLMENT RECEIPT'
+                    : type === 'family'
+                    ? 'FAMILY MULTI-STUDENT FEE RECEIPT'
+                    : type === 'dues'
+                    ? 'OFFICIAL FEE DUES STATEMENT'
+                    : 'FEE PAYMENT ACKNOWLEDGEMENT RECEIPT'}
                 </div>
-                <div className="info-row">
-                  <span className="info-k">Category:</span>
-                  <span className="info-v capitalize">
-                    {student.category === 'hosteller' ? 'Hostel Resident' : 'Day Scholar'}
-                  </span>
-                </div>
-                <div className="info-row">
-                  <span className="info-k">Contact No:</span>
-                  <span className="info-v">{parentPhone || 'N/A'}</span>
+                <div className="receipt-meta-grid">
+                  <div>
+                    <span className="meta-lbl">Receipt No:</span>
+                    <span className="meta-val highlight">{receiptNumber}</span>
+                  </div>
+                  <div>
+                    <span className="meta-lbl">Issue Date:</span>
+                    <span className="meta-val">{paymentDate}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Fee Items Table */}
-            <div className="receipt-table-wrapper">
-              <table className="official-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '45px' }}>#</th>
-                    <th>Fee Description / Period</th>
-                    <th className="text-right">Total Fee</th>
-                    <th className="text-right">Amount Paid</th>
-                    <th className="text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allocations && allocations.length > 0 ? (
-                    allocations.map((item, idx) => (
-                      <tr key={idx}>
-                        <td>{idx + 1}</td>
-                        <td className="font-medium">
-                          {item.fee_month
-                            ? `${new Date(2000, item.fee_month - 1).toLocaleString('en-IN', { month: 'long' })} ${item.fee_year || ''} Tuition Fee`
-                            : item.description || item.fee_type_name || 'Fee Installment'}
-                        </td>
-                        <td className="text-right">₹{Number(item.fee_amount || item.amount || totalAmount).toLocaleString('en-IN')}</td>
+              {/* Student Demographics Grid */}
+              <div className="receipt-student-details">
+                <div className="detail-col">
+                  <div className="detail-row">
+                    <span className="lbl">Student Name:</span>
+                    <span className="val font-bold">{student.full_name || 'Student Name'}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="lbl">Admission No:</span>
+                    <span className="val font-mono">{student.admission_no || 'N/A'}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="lbl">Class &amp; Section:</span>
+                    <span className="val">
+                      {student.class_name || 'Class'}{' '}
+                      {student.section_name ? `(${student.section_name})` : ''}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-col">
+                  <div className="detail-row">
+                    <span className="lbl">Father / Guardian:</span>
+                    <span className="val">{student.father_name || student.parent_name || '—'}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="lbl">Contact Number:</span>
+                    <span className="val">{parentPhone || '—'}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="lbl">Category:</span>
+                    <span className="val">
+                      {student.category === 'hosteller' ? 'Hosteller (Hostel Accommodation)' : 'Day Scholar'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Itemized Fee Breakdown Table */}
+              <div className="receipt-table-wrapper">
+                <table className="receipt-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '45px' }}>#</th>
+                      <th>Fee Description / Period</th>
+                      <th className="text-right">Total Fee</th>
+                      <th className="text-right">Amount Paid</th>
+                      <th className="text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allocations && allocations.length > 0 ? (
+                      allocations.map((item, idx) => (
+                        <tr key={idx}>
+                          <td>{idx + 1}</td>
+                          <td className="font-medium">
+                            {item.fee_month
+                              ? `${new Date(2000, item.fee_month - 1).toLocaleString('en-IN', {
+                                  month: 'long',
+                                })} ${item.fee_year || ''} Tuition Fee`
+                              : item.description || item.fee_type_name || 'Fee Installment'}
+                          </td>
+                          <td className="text-right">
+                            ₹{Number(item.fee_amount || item.amount || totalAmount).toLocaleString('en-IN')}
+                          </td>
+                          <td className="text-right text-green font-bold">
+                            ₹{Number(item.allocated_amount || item.amount || totalAmount).toLocaleString('en-IN')}
+                          </td>
+                          <td className="text-center">
+                            <span className="paid-tag">PAID</span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td>1</td>
+                        <td className="font-medium">School Fee Payment</td>
+                        <td className="text-right">₹{Number(totalAmount).toLocaleString('en-IN')}</td>
                         <td className="text-right text-green font-bold">
-                          ₹{Number(item.allocated_amount || item.amount || totalAmount).toLocaleString('en-IN')}
+                          ₹{Number(totalAmount).toLocaleString('en-IN')}
                         </td>
                         <td className="text-center">
                           <span className="paid-tag">PAID</span>
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td>1</td>
-                      <td className="font-medium">School Fee Payment</td>
-                      <td className="text-right">₹{Number(totalAmount).toLocaleString('en-IN')}</td>
-                      <td className="text-right text-green font-bold">₹{Number(totalAmount).toLocaleString('en-IN')}</td>
-                      <td className="text-center">
-                        <span className="paid-tag">PAID</span>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Payment Summary & Stamp Section */}
-            <div className="receipt-footer-section">
-              <div className="payment-mode-box">
-                <div className="pay-mode-row">
-                  <span className="pm-label">Payment Channel:</span>
-                  <span className="pm-badge">
-                    {payment.payment_mode === 'IN_ACCOUNT' ? '🏦 Bank / In Account' : '💵 Cash Handover'}
-                  </span>
-                </div>
-                {payment.notes && (
-                  <div className="pay-mode-row">
-                    <span className="pm-label">Remarks:</span>
-                    <span className="pm-val">{payment.notes}</span>
-                  </div>
-                )}
-                <div className="thank-you-msg">
-                  ✓ Computer Generated Valid Financial Receipt. Keep safe for future reference.
-                </div>
+                    )}
+                  </tbody>
+                </table>
               </div>
 
-              {/* Total Box */}
-              <div className="total-and-signature-box">
-                <div className="grand-total-card">
-                  <div className="gt-title">TOTAL RECEIVED</div>
-                  <div className="gt-amount">₹{Number(totalAmount).toLocaleString('en-IN')}</div>
+              {/* Payment Summary & Stamp Section */}
+              <div className="receipt-footer-section">
+                <div className="payment-mode-box">
+                  <div className="pay-mode-row">
+                    <span className="pm-label">Payment Channel:</span>
+                    <span className="pm-badge">
+                      {payment.payment_mode === 'IN_ACCOUNT' ? '🏦 Bank / In Account' : '💵 Cash Handover'}
+                    </span>
+                  </div>
+                  {payment.notes && (
+                    <div className="pay-mode-row">
+                      <span className="pm-label">Remarks:</span>
+                      <span className="pm-val">{payment.notes}</span>
+                    </div>
+                  )}
+                  <div className="thank-you-msg">
+                    ✓ Computer Generated Valid Financial Receipt. Keep safe for future reference.
+                  </div>
                 </div>
 
-                <div className="official-stamp-box">
-                  <div className="seal-stamp-circle">
-                    <span>ARYAVART</span>
-                    <small>OFFICIAL SEAL</small>
-                    <span>✓ VERIFIED</span>
+                <div className="total-summary-card">
+                  <div className="grand-total-row">
+                    <span>Grand Total Paid:</span>
+                    <strong className="grand-total-val">₹{Number(totalAmount).toLocaleString('en-IN')}</strong>
                   </div>
-                  <div className="signature-line">
-                    <div className="sig-rule" />
-                    <span>Authorized Signatory</span>
+
+                  <div className="stamp-signature-grid">
+                    <div className="official-stamp-circle">
+                      <span>ARYAVART</span>
+                      <small>OFFICIAL SEAL</small>
+                      <span>✓ VERIFIED</span>
+                    </div>
+                    <div className="signature-line">
+                      <div className="sig-rule" />
+                      <span>Authorized Signatory</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -285,13 +396,25 @@ export default function JpgReceiptModal({
         <div className="jpg-receipt-modal-actions">
           <button
             type="button"
-            className="btn-action-wa"
-            onClick={handleWhatsAppShare}
-            disabled={sharing}
-            title="Share receipt image & details on WhatsApp"
+            className={`btn-action-wa ${sentSuccess ? 'success' : ''}`}
+            onClick={handleSendWhatsAppBackground}
+            disabled={sendingWa}
+            title="Send JPEG receipt directly to WhatsApp in the background"
           >
-            {sharing ? <Loader2 size={16} className="spin" /> : <WhatsAppIcon size={16} />}
-            <span>{sharing ? 'Opening WhatsApp…' : 'Share on WhatsApp'}</span>
+            {sendingWa ? (
+              <Loader2 size={16} className="spin" />
+            ) : sentSuccess ? (
+              <CheckCircle2 size={16} />
+            ) : (
+              <WhatsAppIcon size={16} />
+            )}
+            <span>
+              {sendingWa
+                ? 'Sending in Background…'
+                : sentSuccess
+                ? '✓ JPEG Sent to WhatsApp!'
+                : 'Send JPEG via WhatsApp (Background)'}
+            </span>
           </button>
 
           <button
@@ -299,10 +422,10 @@ export default function JpgReceiptModal({
             className="btn-action-jpg"
             onClick={handleDownloadJpg}
             disabled={downloading}
-            title="Download high quality JPG image"
+            title="Download full page high quality JPG image"
           >
             {downloading ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
-            <span>{downloading ? 'Exporting JPG…' : 'Download JPG Receipt'}</span>
+            <span>{downloading ? 'Exporting Full JPG…' : 'Download JPG Receipt'}</span>
           </button>
 
           <button

@@ -2,6 +2,7 @@
  * Payments Page — School Management System (Frontend)
  *
  * Displays fee collections ledger with summary KPI cards,
+ * dedicated "All Payments" vs "Admission Collections" tabs,
  * column sorting, allocation breakdown, receipt download, payment editing,
  * and reversible payment deletion with student ledger balance restoration.
  */
@@ -27,6 +28,8 @@ import {
   RefreshCw,
   AlertTriangle,
   CheckCircle,
+  GraduationCap,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -35,10 +38,12 @@ import RecordPaymentModal from '../components/RecordPaymentModal';
 import AssignFeeModal from '../components/AssignFeeModal';
 import EditPaymentModal from '../components/EditPaymentModal';
 import JpgReceiptModal from '../components/JpgReceiptModal';
+import WhatsAppDirectButton from '../components/WhatsAppDirectButton';
 import './Payments.css';
 
 export default function Payments() {
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState('monthly'); // 'monthly' | 'admissions'
   const [payments, setPayments] = useState([]);
   const [summaryData, setSummaryData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -103,6 +108,7 @@ export default function Payments() {
       setError(null);
 
       const params = new URLSearchParams({
+        tab: activeTab,
         page: page.toString(),
         limit: '20',
         sort_by: sortField,
@@ -115,8 +121,10 @@ export default function Payments() {
       if (startDate) params.append('start_date', startDate);
       if (endDate) params.append('end_date', endDate);
 
+      const endpoint = `/payments?${params.toString()}`;
+
       const [historyRes, summaryRes] = await Promise.all([
-        api.get(`/payments?${params.toString()}`),
+        api.get(endpoint),
         api.get(`/payments/summary?${startDate ? `start_date=${startDate}&` : ''}${endDate ? `end_date=${endDate}` : ''}`),
       ]);
 
@@ -138,7 +146,7 @@ export default function Payments() {
     } finally {
       setLoading(false);
     }
-  }, [search, classFilter, categoryFilter, startDate, endDate, sortField, sortOrder, page, toast]);
+  }, [activeTab, search, classFilter, categoryFilter, startDate, endDate, sortField, sortOrder, page, toast]);
 
   useEffect(() => {
     fetchPayments();
@@ -207,16 +215,60 @@ export default function Payments() {
     return date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
   };
 
-  const handleViewReceipt = async (paymentId) => {
+  const handleViewReceipt = async (paymentOrItem) => {
+    if (!paymentOrItem) return;
+    const paymentId = typeof paymentOrItem === 'object'
+      ? (paymentOrItem.id || paymentOrItem.payment_id || paymentOrItem.receipt_number || paymentOrItem.receipt_no)
+      : paymentOrItem;
+
     try {
       setLoadingReceiptId(paymentId);
       const res = await api.get(`/receipts/${paymentId}`);
-      if (res.data.success) {
-        setSelectedReceiptData(res.data);
+      if (res.data && res.data.success) {
+        setSelectedReceiptData({
+          ...res.data,
+          student: res.data.student || {
+            full_name: paymentOrItem.full_name,
+            admission_no: paymentOrItem.admission_no,
+            class_name: paymentOrItem.class_name,
+            section_name: paymentOrItem.section_name,
+            phone: paymentOrItem.phone || paymentOrItem.whatsapp_number,
+          },
+          payment: res.data.payment || paymentOrItem,
+        });
         setReceiptModalOpen(true);
+      } else {
+        throw new Error('Could not load receipt data');
       }
     } catch (err) {
-      toast.error('Failed to load receipt details.');
+      console.error('[View Receipt Error]', err);
+      // Fallback local receipt data
+      setSelectedReceiptData({
+        school: {
+          school_name: 'Aryavart Shikshan Sansthan',
+          address: 'Near Knowledge Hub, Main Campus',
+          phone: '+91-9876543210',
+          email: 'info@aryavart.edu.in',
+        },
+        student: {
+          full_name: paymentOrItem.full_name || 'Student',
+          admission_no: paymentOrItem.admission_no || 'ADM-PAID',
+          class_name: paymentOrItem.class_name || 'Class',
+          section_name: paymentOrItem.section_name || '',
+          phone: paymentOrItem.phone || paymentOrItem.whatsapp_number || '',
+        },
+        payment: {
+          id: paymentOrItem.id,
+          receipt_number: paymentOrItem.receipt_number || `RCP-${paymentOrItem.id}`,
+          amount: paymentOrItem.amount,
+          payment_mode: paymentOrItem.payment_mode || 'CASH',
+          payment_date: paymentOrItem.payment_date || new Date().toISOString(),
+          notes: paymentOrItem.notes,
+        },
+        allocations: paymentOrItem.allocations || [],
+        summary: { total_amount: paymentOrItem.amount },
+      });
+      setReceiptModalOpen(true);
     } finally {
       setLoadingReceiptId(null);
     }
@@ -224,16 +276,16 @@ export default function Payments() {
 
   return (
     <div className="payments-page">
-      {/* Header Card */}
-      <div className="payments-header-card">
-        <div className="header-left-info">
-          <div className="payments-icon-badge">
+      {/* Header Banner */}
+      <div className="payments-header">
+        <div className="header-title-group">
+          <div className="header-icon-badge">
             <CreditCard size={24} />
           </div>
           <div>
-            <h1 className="payments-title">Payment Collections Ledger</h1>
-            <p className="payments-subtitle">
-              Track fee collections, manage cash / in-account entries, and audit allocations.
+            <h1>Payment &amp; Collections Desk</h1>
+            <p className="subtitle">
+              Track fee collections, manage admission entries, cash / in-account entries, and audit allocations.
             </p>
           </div>
         </div>
@@ -262,6 +314,35 @@ export default function Payments() {
             <RefreshCw size={16} className={loading ? 'spin' : ''} />
           </button>
         </div>
+      </div>
+
+      {/* Tab Switcher: Monthly Payments vs Admission Payments */}
+      <div className="payments-tab-nav-bar">
+        <button
+          type="button"
+          className={`tab-nav-pill ${activeTab === 'monthly' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('monthly');
+            setPage(1);
+          }}
+        >
+          <CreditCard size={16} />
+          <span>📅 Monthly Payments</span>
+          {activeTab === 'monthly' && <span className="tab-count-badge">{totalRecords}</span>}
+        </button>
+
+        <button
+          type="button"
+          className={`tab-nav-pill ${activeTab === 'admissions' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('admissions');
+            setPage(1);
+          }}
+        >
+          <GraduationCap size={17} />
+          <span>🎓 Admission Payments</span>
+          {activeTab === 'admissions' && <span className="tab-count-badge">{totalRecords}</span>}
+        </button>
       </div>
 
       {/* Cash Collection Summary Cards */}
@@ -357,304 +438,257 @@ export default function Payments() {
             />
           </div>
         </div>
-
-        {(search || classFilter || categoryFilter || startDate || endDate) && (
-          <button
-            type="button"
-            className="btn btn-secondary clear-filters-btn"
-            onClick={() => {
-              setSearch('');
-              setClassFilter('');
-              setCategoryFilter('');
-              setStartDate('');
-              setEndDate('');
-              setPage(1);
-            }}
-          >
-            <X size={14} /> Clear Filters
-          </button>
-        )}
       </div>
-
-      {error && (
-        <div className="error-banner">
-          <span>{error}</span>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={fetchPayments}>
-            Retry
-          </button>
-        </div>
-      )}
 
       {/* Payments Table Card */}
       <div className="payments-table-card">
-        <div className="table-header-bar">
-          <div className="table-header-left">
-            <span className="table-title">Collections Register</span>
-            <span className="records-pill">{totalRecords} transactions</span>
+        {loading ? (
+          <div className="payments-loading-state">
+            <Loader2 size={32} className="spin" />
+            <p>Loading {activeTab === 'admissions' ? 'admission collections' : 'payment records'}…</p>
           </div>
-          <div className="table-header-right">
-            <span className="filtered-total-text">
-              Filtered Total: <strong>{formatCurrency(totalAmount)}</strong>
-            </span>
+        ) : error ? (
+          <div className="payments-error-state">
+            <p className="error-msg">{error}</p>
+            <button className="btn btn-secondary btn-sm" onClick={fetchPayments}>
+              Retry
+            </button>
           </div>
-        </div>
-
-        <div className="table-responsive-wrapper">
-          <table className="payments-data-table">
-            <thead>
-              <tr>
-                <th className="sortable-th col-receipt" onClick={() => handleSort('receipt_number')}>
-                  Receipt # {renderSortIcon('receipt_number')}
-                </th>
-                <th className="sortable-th col-date" onClick={() => handleSort('payment_date')}>
-                  Date {renderSortIcon('payment_date')}
-                </th>
-                <th className="sortable-th col-student" onClick={() => handleSort('student_name')}>
-                  Student Name {renderSortIcon('student_name')}
-                </th>
-                <th className="col-adm">Adm No</th>
-                <th className="col-class">Class</th>
-                <th className="col-category">Category</th>
-                <th className="sortable-th col-amount text-right" onClick={() => handleSort('amount')}>
-                  Amount (₹) {renderSortIcon('amount')}
-                </th>
-                <th className="col-mode">Mode</th>
-                <th className="col-recorder">Recorder</th>
-                <th className="col-actions text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && payments.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="table-loading">
-                    <Loader2 size={24} className="spin" />
-                    <span>Loading payment records…</span>
-                  </td>
-                </tr>
-              ) : payments.length === 0 ? (
-                <tr>
-                  <td colSpan={10}>
-                    <div className="empty-payments-state">
-                      <div className="empty-icon-wrap">
-                        <CreditCard size={40} />
+        ) : payments.length === 0 ? (
+          <div className="payments-empty-state">
+            <div className="empty-icon-wrap">
+              {activeTab === 'admissions' ? <GraduationCap size={48} /> : <IndianRupee size={48} />}
+            </div>
+            <h3>No {activeTab === 'admissions' ? 'Admission Collection' : 'Payment'} Records Found</h3>
+            <p>
+              {search || classFilter || startDate || endDate
+                ? 'Try adjusting your search criteria or date filters.'
+                : activeTab === 'admissions'
+                ? 'No payments have been collected at the admissions desk yet.'
+                : 'No payments have been collected yet. Click "Record Payment" to record a collection.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="table-responsive">
+              <table className="payments-table">
+                <thead>
+                  <tr>
+                    <th className="sortable" onClick={() => handleSort('payment_date')}>
+                      <div className="th-content">
+                        <span>Payment Date</span>
+                        {renderSortIcon('payment_date')}
                       </div>
-                      <h3>No Payment Records Found</h3>
-                      <p>
-                        No fee payments matched your search or filters. Click below to record a new fee payment.
-                      </p>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => setRecordModalOpen(true)}
-                      >
-                        <Plus size={16} /> Record Payment Now
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                payments.map((p) => (
-                  <tr key={p.id}>
-                    <td className="col-receipt">
-                      <code className="receipt-code-pill">{p.receipt_no || p.receipt_number || `RCP-${p.id}`}</code>
-                    </td>
-                    <td className="col-date date-text">
-                      {new Date(p.payment_date || p.created_at).toLocaleDateString('en-IN', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </td>
-                    <td className="col-student">
-                      <strong className="student-name-text">{p.student_name}</strong>
-                    </td>
-                    <td className="col-adm">
-                      <code className="adm-code">{p.student_admission_no || p.admission_no}</code>
-                    </td>
-                    <td className="col-class">
-                      <span className="class-badge">
-                        {p.class_name ? `${p.class_name}${p.section_name ? `-${p.section_name}` : ''}` : '—'}
-                      </span>
-                    </td>
-                    <td className="col-category">
-                      <span className={`category-badge ${p.student_category}`}>
-                        {p.student_category === 'hosteller' ? 'Hosteller' : 'Day Scholar'}
-                      </span>
-                    </td>
-                    <td className="col-amount text-right amount-cell">
-                      <strong>{formatCurrency(p.amount)}</strong>
-                    </td>
-                    <td className="col-mode">
-                      <span className={`mode-pill ${(p.payment_mode || 'CASH').toLowerCase().includes('account') ? 'account' : 'cash'}`}>
-                        {(p.payment_mode || 'CASH').toLowerCase().includes('account') ? '🏦 In Account' : '💵 Cash'}
-                      </span>
-                    </td>
-                    <td className="col-recorder recorder-text">
-                      {p.recorder_name || p.recorder_username || 'Admin'}
-                    </td>
-                    <td className="col-actions">
-                      <div className="action-btns">
-                        <button
-                          type="button"
-                          className="btn-action receipt-btn"
-                          onClick={() => handleViewReceipt(p.id)}
-                          disabled={loadingReceiptId === p.id}
-                          title="View & Download Official JPG Receipt & WhatsApp Share"
-                        >
-                          {loadingReceiptId === p.id ? <Loader2 size={13} className="spin" /> : <Receipt size={13} />}
-                          <span>Receipt</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-action view"
-                          onClick={() => handleOpenDetails(p.id)}
-                          title="View Allocation Breakdown"
-                        >
-                          <Eye size={14} /> Allocation
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-action edit"
-                          onClick={() => setEditingPayment(p)}
-                          title="Edit Payment"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-action delete"
-                          onClick={() => setDeletingPayment(p)}
-                          title="Delete Payment & Restore Dues"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                    </th>
+                    <th>Receipt No</th>
+                    <th className="sortable" onClick={() => handleSort('full_name')}>
+                      <div className="th-content">
+                        <span>Student &amp; Adm No</span>
+                        {renderSortIcon('full_name')}
                       </div>
-                    </td>
+                    </th>
+                    <th>Class</th>
+                    {activeTab === 'admissions' && <th>Total Assessed</th>}
+                    <th className="sortable text-right" onClick={() => handleSort('amount')}>
+                      <div className="th-content justify-end">
+                        <span>{activeTab === 'admissions' ? 'Paid at Admission' : 'Amount Paid'}</span>
+                        {renderSortIcon('amount')}
+                      </div>
+                    </th>
+                    {activeTab === 'admissions' && <th>Remaining Dues</th>}
+                    <th>Mode</th>
+                    <th>Notes</th>
+                    <th className="text-center">Actions</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {payments.map((p) => {
+                    const receiptNum = p.receipt_number || `RCP-${String(p.id).padStart(6, '0')}`;
+                    const modeStr = (p.payment_mode || p.mode || 'CASH').toLowerCase();
+                    const remDues = Number(p.remaining_dues || 0);
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="pagination-bar">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
-            >
-              <ChevronLeft size={16} /> Previous
-            </button>
-            <span className="page-info-text">
-              Page <strong>{page}</strong> of <strong>{totalPages}</strong> ({totalRecords} total items)
-            </span>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              Next <ChevronRight size={16} />
-            </button>
-          </div>
+                    return (
+                      <tr key={p.id} className="payment-row">
+                        <td className="payment-date-cell">
+                          {p.payment_date
+                            ? new Date(p.payment_date).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="receipt-num-cell">
+                          <button
+                            type="button"
+                            className="receipt-chip-btn"
+                            onClick={() => handleViewReceipt(p)}
+                            title="Click to view & download official JPG receipt"
+                          >
+                            <Receipt size={13} />
+                            <span>{receiptNum}</span>
+                          </button>
+                        </td>
+                        <td className="student-cell">
+                          <div className="student-name-block">
+                            <span className="student-name font-bold">{p.full_name || '—'}</span>
+                            <span className="student-adm-no font-mono">{p.admission_no || '—'}</span>
+                          </div>
+                        </td>
+                        <td className="class-cell">
+                          <span className="class-badge">
+                            {p.class_name ? `${p.class_name}${p.section_name ? `-${p.section_name}` : ''}` : '—'}
+                          </span>
+                        </td>
+                        {activeTab === 'admissions' && (
+                          <td className="assessed-cell">
+                            <strong>₹{Number(p.total_assessed || p.amount || 0).toLocaleString('en-IN')}</strong>
+                          </td>
+                        )}
+                        <td className="amount-cell text-right">
+                          <span className="amount-val-badge">
+                            {formatCurrency(p.amount)}
+                          </span>
+                        </td>
+                        {activeTab === 'admissions' && (
+                          <td className="dues-cell">
+                            {remDues > 0 ? (
+                              <span className="pending-dues-tag">
+                                🔴 Due ₹{remDues.toLocaleString('en-IN')}
+                              </span>
+                            ) : (
+                              <span className="cleared-tag">🟢 All Cleared</span>
+                            )}
+                          </td>
+                        )}
+                        <td className="mode-cell">
+                          {modeStr.includes('account') || modeStr.includes('bank') || modeStr.includes('online') || modeStr.includes('in_account') ? (
+                            <span className="remark-in-account">in acc.</span>
+                          ) : (
+                            <span className="remark-cash">cash</span>
+                          )}
+                        </td>
+                        <td className="notes-cell" title={p.notes || ''}>
+                          {p.notes || <span className="text-muted">—</span>}
+                        </td>
+                        <td className="actions-cell text-center">
+                          <div className="action-btns">
+                            <button
+                              type="button"
+                              className="btn-action receipt-btn"
+                              onClick={() => handleViewReceipt(p)}
+                              disabled={loadingReceiptId === p.id}
+                              title="View & Download Official JPG Receipt"
+                            >
+                              {loadingReceiptId === p.id ? <Loader2 size={13} className="spin" /> : <Receipt size={13} />}
+                              <span>Receipt</span>
+                            </button>
+                            <WhatsAppDirectButton
+                              compact
+                              size="sm"
+                              onSend={() => api.post(`/receipts/send-whatsapp/${p.id}`)}
+                              onOpenJpg={() => handleViewReceipt(p)}
+                              phone={p.phone || p.whatsapp_number}
+                              itemTitle="Receipt"
+                            />
+                            <button
+                              type="button"
+                              className="btn-action view"
+                              onClick={() => handleOpenDetails(p.id)}
+                              title="View Allocation Breakdown"
+                            >
+                              <Eye size={14} /> Allocation
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-action edit"
+                              onClick={() => setEditingPayment(p)}
+                              title="Edit Payment Record"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-action delete text-danger"
+                              onClick={() => setDeletingPayment(p)}
+                              title="Delete Payment & Revert Student Dues"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="payments-pagination">
+                <div className="pagination-info">
+                  Showing Page <strong>{page}</strong> of <strong>{totalPages}</strong> ({totalRecords} Total Records)
+                </div>
+                <div className="pagination-buttons">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                  >
+                    <ChevronLeft size={16} /> Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                  >
+                    Next <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Record Payment Modal */}
-      {recordModalOpen && (
-        <RecordPaymentModal
-          onClose={() => setRecordModalOpen(false)}
-          onSaved={() => {
-            setRecordModalOpen(false);
-            fetchPayments();
-          }}
-        />
-      )}
-
-      {/* Assign Fee Modal */}
-      {assignModalOpen && (
-        <AssignFeeModal
-          onClose={() => setAssignModalOpen(false)}
-          onSaved={() => {
-            setAssignModalOpen(false);
-            fetchPayments();
-          }}
-        />
-      )}
-
-      {/* Edit Payment Modal */}
-      {editingPayment && (
-        <EditPaymentModal
-          payment={editingPayment}
-          onClose={() => setEditingPayment(null)}
-          onSaved={() => {
-            setEditingPayment(null);
-            fetchPayments();
-          }}
-        />
-      )}
-
       {/* Delete Payment Confirmation Modal */}
       {deletingPayment && (
-        <div className="modal-overlay" onClick={() => !isDeleting && setDeletingPayment(null)}>
-          <div className="modal modal-md delete-payment-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setDeletingPayment(null)}>
+          <div className="modal-content modal-delete-confirm" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header delete-header">
-              <div className="modal-title-wrap">
-                <div className="delete-icon-badge">
-                  <AlertTriangle size={20} />
-                </div>
-                <h2>Delete Payment Record</h2>
+              <div className="header-icon-danger">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h2>Delete Payment Record?</h2>
+                <p className="subtitle">This action will reverse all allocated student dues.</p>
               </div>
               <button
                 type="button"
                 className="modal-close"
-                onClick={() => !isDeleting && setDeletingPayment(null)}
-                disabled={isDeleting}
+                onClick={() => setDeletingPayment(null)}
                 aria-label="Close"
               >
                 <X size={20} />
               </button>
             </div>
-
-            <div className="modal-body">
-              <div className="delete-warning-banner">
+            <div className="modal-body delete-body">
+              <div className="delete-warning-box">
                 <p>
-                  Are you sure you want to delete this payment? This action will:
+                  You are about to delete payment record for student{' '}
+                  <strong>{deletingPayment.full_name}</strong> of amount{' '}
+                  <strong>{formatCurrency(deletingPayment.amount)}</strong>.
                 </p>
-                <ul>
-                  <li><strong>Revert the payment</strong> from the database.</li>
-                  <li><strong>Restore outstanding dues</strong> back onto the student's profile and fee ledger.</li>
-                  <li><strong>Delete the generated receipt</strong> and remove its PDF file.</li>
+                <ul className="delete-effects-list">
+                  <li>Student's monthly fee and admission fee dues will be restored to UNPAID.</li>
+                  <li>Linked receipt number ({deletingPayment.receipt_number || `RCP-${deletingPayment.id}`}) will be deleted.</li>
+                  <li>Audit log entry will be recorded.</li>
                 </ul>
               </div>
-
-              <div className="payment-delete-preview">
-                <div className="preview-row">
-                  <span className="preview-label">Student Name:</span>
-                  <strong>{deletingPayment.student_name}</strong>
-                </div>
-                <div className="preview-row">
-                  <span className="preview-label">Admission No:</span>
-                  <code>{deletingPayment.student_admission_no || deletingPayment.admission_no}</code>
-                </div>
-                <div className="preview-row">
-                  <span className="preview-label">Receipt Number:</span>
-                  <code className="receipt-code-pill">{deletingPayment.receipt_no || deletingPayment.receipt_number || `RCP-${deletingPayment.id}`}</code>
-                </div>
-                <div className="preview-row">
-                  <span className="preview-label">Payment Amount:</span>
-                  <strong className="text-danger">{formatCurrency(deletingPayment.amount)}</strong>
-                </div>
-                <div className="preview-row">
-                  <span className="preview-label">Payment Date:</span>
-                  <span>{new Date(deletingPayment.payment_date || deletingPayment.created_at).toLocaleDateString('en-IN')}</span>
-                </div>
-              </div>
             </div>
-
             <div className="modal-footer">
               <button
                 type="button"
@@ -666,120 +700,141 @@ export default function Payments() {
               </button>
               <button
                 type="button"
-                className="btn btn-danger btn-confirm-delete"
+                className="btn btn-danger"
                 onClick={handleDeleteConfirm}
                 disabled={isDeleting}
               >
-                {isDeleting ? (
-                  <>
-                    <Loader2 size={16} className="spin" /> Deleting &amp; Restoring Dues…
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={16} /> Yes, Delete Payment
-                  </>
-                )}
+                {isDeleting ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />}
+                <span>{isDeleting ? 'Deleting…' : 'Yes, Delete Payment'}</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Allocation Details Modal */}
+      {/* Payment Allocation Details Modal */}
       {detailsModalOpen && (
         <div className="modal-overlay" onClick={() => setDetailsModalOpen(false)}>
-          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content modal-details" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div className="modal-title-wrap">
-                <Receipt size={20} className="modal-receipt-icon" />
-                <h2>Payment Allocation Breakdown</h2>
+              <div className="modal-header-left">
+                <div className="modal-header-icon">
+                  <Eye size={20} />
+                </div>
+                <div>
+                  <h2>Payment Allocation Breakdown</h2>
+                  <p className="subtitle">Detailed breakdown of how this payment was allocated</p>
+                </div>
               </div>
               <button
                 type="button"
-                className="modal-close"
+                className="modal-close-btn"
                 onClick={() => setDetailsModalOpen(false)}
                 aria-label="Close"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
-
             <div className="modal-body">
-              {loadingDetails || !selectedPaymentDetails ? (
-                <div className="modal-loading">
-                  <Loader2 size={24} className="spin" />
-                  <span>Loading allocation breakdown…</span>
+              {loadingDetails ? (
+                <div className="loading-state">
+                  <Loader2 size={32} className="spin text-primary" />
+                  <p>Loading breakdown…</p>
                 </div>
-              ) : (
-                <div className="payment-details-content">
-                  <div className="detail-meta-grid">
-                    <div>
-                      <span className="meta-label">Receipt Number</span>
-                      <code className="receipt-code-pill">
-                        {selectedPaymentDetails.payment?.receipt_number || selectedPaymentDetails.payment?.receipt_no}
-                      </code>
+              ) : selectedPaymentDetails ? (
+                <div className="details-content">
+                  <div className="details-info-grid">
+                    <div className="info-item">
+                      <span className="info-lbl">Receipt No</span>
+                      <strong className="info-val font-mono">
+                        {selectedPaymentDetails.payment?.receipt_number || `RCP-${selectedPaymentDetails.payment?.id}`}
+                      </strong>
                     </div>
-                    <div>
-                      <span className="meta-label">Student Name</span>
-                      <strong>{selectedPaymentDetails.payment?.full_name || selectedPaymentDetails.payment?.student_name}</strong>
+                    <div className="info-item">
+                      <span className="info-lbl">Student Name</span>
+                      <strong className="info-val">
+                        {selectedPaymentDetails.payment?.full_name || selectedPaymentDetails.payment?.student_name || '—'}
+                      </strong>
                     </div>
-                    <div>
-                      <span className="meta-label">Amount Collected</span>
-                      <strong className="text-success text-lg">{formatCurrency(selectedPaymentDetails.payment?.amount)}</strong>
+                    <div className="info-item">
+                      <span className="info-lbl">Admission No</span>
+                      <strong className="info-val font-mono">
+                        {selectedPaymentDetails.payment?.admission_no || '—'}
+                      </strong>
                     </div>
-                    <div>
-                      <span className="meta-label">Payment Mode</span>
-                      <span className="font-semibold">
-                        {(selectedPaymentDetails.payment?.payment_mode || 'CASH').toLowerCase().includes('account')
-                          ? '🏦 In Account'
-                          : '💵 Cash'}
-                      </span>
+                    <div className="info-item">
+                      <span className="info-lbl">Class & Section</span>
+                      <strong className="info-val">
+                        {selectedPaymentDetails.payment?.class_name
+                          ? `${selectedPaymentDetails.payment.class_name}${selectedPaymentDetails.payment.section_name ? ` (${selectedPaymentDetails.payment.section_name})` : ''}`
+                          : '—'}
+                      </strong>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-lbl">Payment Mode</span>
+                      <strong className="info-val">
+                        {(selectedPaymentDetails.payment?.payment_mode || 'CASH').toUpperCase()}
+                      </strong>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-lbl">Total Amount</span>
+                      <strong className="info-val highlight">
+                        {formatCurrency(selectedPaymentDetails.payment?.amount)}
+                      </strong>
                     </div>
                   </div>
 
-                  <h4 className="allocation-section-title">Settled Monthly Fees &amp; Charges</h4>
-                  {selectedPaymentDetails.allocations.length === 0 ? (
-                    <p className="empty-text">No specific monthly allocations linked to this payment.</p>
-                  ) : (
-                    <table className="data-table compact allocation-table">
+                  <h3 className="section-subheading">Allocated Fee Breakdown</h3>
+                  <div className="allocations-table-wrap">
+                    <table className="allocations-table">
                       <thead>
                         <tr>
-                          <th>Fee Period / Item</th>
-                          <th className="text-right">Total Due</th>
-                          <th className="text-right">Allocated Amount</th>
-                          <th>Status</th>
+                          <th>Fee Period / Description</th>
+                          <th className="text-right">Assessed Fee</th>
+                          <th className="text-right">Amount Allocated</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedPaymentDetails.allocations.map((a, i) => (
-                          <tr key={i}>
-                            <td>
-                              <strong>
-                                {a.fee_month
-                                  ? `${formatMonthName(a.fee_month, a.fee_year)} Monthly Fee`
-                                  : (a.description || 'Custom Fee')}
-                              </strong>
-                            </td>
-                            <td className="text-right">{formatCurrency(a.fee_amount || a.amount)}</td>
-                            <td className="text-right text-success font-semibold">{formatCurrency(a.allocated_amount)}</td>
-                            <td>
-                              <span className="status-pill full-paid">Cleared</span>
+                        {selectedPaymentDetails.allocations && selectedPaymentDetails.allocations.length > 0 ? (
+                          selectedPaymentDetails.allocations.map((a) => (
+                            <tr key={a.id}>
+                              <td>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span style={{ fontWeight: 600 }}>
+                                    {a.fee_month
+                                      ? `${formatMonthName(a.fee_month, a.fee_year)} Monthly Tuition`
+                                      : a.description || 'Admission / Additional Fee'}
+                                  </span>
+                                  {a.fee_month && (
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                      Month: {a.fee_month}/{a.fee_year}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="text-right">{formatCurrency(a.fee_amount || a.allocated_amount)}</td>
+                              <td className="text-right">
+                                <span className="allocated-badge">
+                                  ✓ {formatCurrency(a.allocated_amount)}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={3} className="text-center text-muted" style={{ padding: '1.5rem' }}>
+                              General fee collection allocation
                             </td>
                           </tr>
-                        ))}
+                        )}
                       </tbody>
                     </table>
-                  )}
+                  </div>
                 </div>
-              )}
+              ) : null}
             </div>
-
             <div className="modal-footer">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setDetailsModalOpen(false)}
-              >
+              <button type="button" className="btn btn-secondary" onClick={() => setDetailsModalOpen(false)}>
                 Close
               </button>
             </div>
@@ -787,16 +842,57 @@ export default function Payments() {
         </div>
       )}
 
-      {/* Universal JPG Receipt Modal with WhatsApp Sharing & JPG Download */}
-      <JpgReceiptModal
-        isOpen={receiptModalOpen && !!selectedReceiptData}
-        onClose={() => {
-          setReceiptModalOpen(false);
-          setSelectedReceiptData(null);
-        }}
-        data={selectedReceiptData}
-        type="payment"
-      />
+      {/* Record Payment Modal */}
+      {recordModalOpen && (
+        <RecordPaymentModal
+          isOpen={recordModalOpen}
+          onClose={() => {
+            setRecordModalOpen(false);
+            fetchPayments();
+          }}
+          onSuccess={() => {
+            fetchPayments();
+          }}
+        />
+      )}
+
+      {/* Assign Fee Modal */}
+      {assignModalOpen && (
+        <AssignFeeModal
+          isOpen={assignModalOpen}
+          onClose={() => setAssignModalOpen(false)}
+          onSuccess={() => {
+            setAssignModalOpen(false);
+            fetchPayments();
+          }}
+        />
+      )}
+
+      {/* Edit Payment Modal */}
+      {editingPayment && (
+        <EditPaymentModal
+          isOpen={!!editingPayment}
+          onClose={() => setEditingPayment(null)}
+          payment={editingPayment}
+          onSuccess={() => {
+            setEditingPayment(null);
+            fetchPayments();
+          }}
+        />
+      )}
+
+      {/* Universal Full-Page JPG Receipt Modal */}
+      {receiptModalOpen && selectedReceiptData && (
+        <JpgReceiptModal
+          isOpen={receiptModalOpen}
+          onClose={() => {
+            setReceiptModalOpen(false);
+            setSelectedReceiptData(null);
+          }}
+          data={selectedReceiptData}
+          type={selectedReceiptData.type || 'payment'}
+        />
+      )}
     </div>
   );
 }

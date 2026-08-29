@@ -4,7 +4,7 @@
  * Day 7: Payment History & Financial Validation.
  *
  * Handles:
- *   - Payment history list with search & filters (date-range, class, student category)
+ *   - Payment history list with search & filters (date-range, class, student category, tab: monthly vs admissions)
  *   - Cash collection summaries (daily, weekly, monthly totals)
  *   - Allocation breakdown for individual payments
  */
@@ -12,12 +12,14 @@
 const db = require('../config/db');
 
 /**
- * GET /api/payments/history
+ * GET /api/payments/history or /api/payments
  * Fetch payments list with filters and pagination.
  */
 async function getPaymentHistory(req, res) {
   try {
     const {
+      tab,
+      type,
       search,
       class_id,
       category,
@@ -26,16 +28,24 @@ async function getPaymentHistory(req, res) {
       sort_by = 'payment_date',
       sort_order = 'desc',
       page = 1,
-      limit = 25,
+      limit = 20,
     } = req.query;
 
     const conditions = [];
     const values = [];
 
+    // Tab filter (Monthly vs Admissions)
+    const activeTab = tab || type || '';
+    if (activeTab === 'monthly') {
+      conditions.push("(p.`payment_category` != 'ADMISSION_CHARGE' AND (p.`notes` IS NULL OR (p.`notes` NOT LIKE '%Admission%' AND p.`notes` NOT LIKE '%Enrollment%')))");
+    } else if (activeTab === 'admissions') {
+      conditions.push("(p.`payment_category` = 'ADMISSION_CHARGE' OR p.`notes` LIKE '%Admission%' OR p.`notes` LIKE '%Enrollment%')");
+    }
+
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
-      conditions.push('(s.`full_name` LIKE ? OR s.`admission_no` LIKE ? OR r.`receipt_number` LIKE ? OR p.`receipt_number` LIKE ?)');
-      values.push(term, term, term, term);
+      conditions.push('(s.`full_name` LIKE ? OR s.`admission_no` LIKE ? OR r.`receipt_number` LIKE ? OR p.`receipt_number` LIKE ? OR p.`notes` LIKE ?)');
+      values.push(term, term, term, term, term);
     }
 
     if (class_id) {
@@ -59,7 +69,7 @@ async function getPaymentHistory(req, res) {
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const numLimit = Math.max(1, Number(limit) || 25);
+    const numLimit = Math.max(1, Number(limit) || 20);
     const numPage = Math.max(1, Number(page) || 1);
     const numOffset = (numPage - 1) * numLimit;
 
@@ -68,10 +78,10 @@ async function getPaymentHistory(req, res) {
     let orderByClause = `p.\`payment_date\` ${orderDirection}, p.\`created_at\` ${orderDirection}`;
     if (sort_by === 'amount') {
       orderByClause = `p.\`amount\` ${orderDirection}`;
-    } else if (sort_by === 'student_name') {
+    } else if (sort_by === 'student_name' || sort_by === 'full_name') {
       orderByClause = `s.\`full_name\` ${orderDirection}`;
     } else if (sort_by === 'receipt_number') {
-      orderByClause = `receipt_no ${orderDirection}`;
+      orderByClause = `COALESCE(r.\`receipt_number\`, p.\`receipt_number\`) ${orderDirection}`;
     } else if (sort_by === 'payment_date') {
       orderByClause = `p.\`payment_date\` ${orderDirection}`;
     }
@@ -87,9 +97,15 @@ async function getPaymentHistory(req, res) {
     const dataSql = `
       SELECT
         p.*,
-        COALESCE(r.\`receipt_number\`, p.\`receipt_number\`) as receipt_no,
+        COALESCE(r.\`receipt_number\`, p.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_number,
+        COALESCE(r.\`receipt_number\`, p.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_no,
+        s.\`full_name\`,
         s.\`full_name\` as student_name,
+        s.\`admission_no\`,
         s.\`admission_no\` as student_admission_no,
+        s.\`phone\`,
+        s.\`whatsapp_number\`,
+        s.\`category\`,
         s.\`category\` as student_category,
         c.\`name\` as class_name,
         sec.\`name\` as section_name,
@@ -113,16 +129,23 @@ async function getPaymentHistory(req, res) {
 
     return res.json({
       success: true,
-      payments,
+      payments: (payments || []).map(p => ({
+        ...p,
+        amount: Number(p.amount || 0),
+        full_name: p.full_name || p.student_name || '—',
+        student_name: p.full_name || p.student_name || '—',
+        admission_no: p.admission_no || p.student_admission_no || '—',
+        receipt_number: p.receipt_number || p.receipt_no || `RCP-${p.id}`,
+      })),
       summary: {
-        total_records: summaryResult.total,
-        total_amount: Number(summaryResult.total_amount),
+        total_records: summaryResult ? summaryResult.total : 0,
+        total_amount: summaryResult ? Number(summaryResult.total_amount) : 0,
       },
       pagination: {
         page: numPage,
         limit: numLimit,
-        total: summaryResult.total,
-        totalPages: Math.ceil(summaryResult.total / numLimit),
+        total: summaryResult ? summaryResult.total : 0,
+        totalPages: summaryResult ? Math.ceil(summaryResult.total / numLimit) : 1,
       },
     });
   } catch (err) {
@@ -152,51 +175,60 @@ async function getCollectionSummary(req, res) {
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Daily collections (last 30 days or filtered)
-    const dailySql = `
-      SELECT
-        DATE(\`payment_date\`) as date_str,
-        COUNT(*) as transaction_count,
-        COALESCE(SUM(\`amount\`), 0) as total_amount
-      FROM \`payments\`
-      ${whereClause}
-      GROUP BY DATE(\`payment_date\`)
-      ORDER BY DATE(\`payment_date\`) DESC
-      LIMIT 30
-    `;
+    const today = new Date().toISOString().split('T')[0];
+    const firstDayOfMonth = today.substring(0, 8) + '01';
 
-    // Monthly collections
-    const monthlySql = `
-      SELECT
-        DATE_FORMAT(\`payment_date\`, '%Y-%m') as month_str,
-        COUNT(*) as transaction_count,
-        COALESCE(SUM(\`amount\`), 0) as total_amount
-      FROM \`payments\`
-      ${whereClause}
-      GROUP BY DATE_FORMAT(\`payment_date\`, '%Y-%m')
-      ORDER BY month_str DESC
-      LIMIT 12
-    `;
-
-    // Overall summary
-    const overallSql = `
-      SELECT
-        COUNT(*) as total_count,
-        COALESCE(SUM(\`amount\`), 0) as grand_total
-      FROM \`payments\`
-      ${whereClause}
-    `;
-
-    const [daily, monthly, overall] = await Promise.all([
-      db.query(dailySql, values),
-      db.query(monthlySql, values),
-      db.queryOne(overallSql, values),
+    const [todayTotal, monthTotal, overall, daily, monthly] = await Promise.all([
+      db.queryOne(
+        `SELECT COALESCE(SUM(\`amount\`), 0) as total, COUNT(*) as count
+         FROM \`payments\`
+         WHERE DATE(\`payment_date\`) = ?`,
+        [today]
+      ),
+      db.queryOne(
+        `SELECT COALESCE(SUM(\`amount\`), 0) as total, COUNT(*) as count
+         FROM \`payments\`
+         WHERE DATE(\`payment_date\`) >= ?`,
+        [firstDayOfMonth]
+      ),
+      db.queryOne(
+        `SELECT COALESCE(SUM(\`amount\`), 0) as grand_total, COUNT(*) as total_count
+         FROM \`payments\`
+         ${whereClause}`,
+        values
+      ),
+      db.query(
+        `SELECT DATE(\`payment_date\`) as date, SUM(\`amount\`) as total_amount, COUNT(*) as count
+         FROM \`payments\`
+         ${whereClause}
+         GROUP BY DATE(\`payment_date\`)
+         ORDER BY DATE(\`payment_date\`) DESC
+         LIMIT 7`,
+        values
+      ),
+      db.query(
+        `SELECT DATE_FORMAT(\`payment_date\`, '%Y-%m') as month, SUM(\`amount\`) as total_amount, COUNT(*) as count
+         FROM \`payments\`
+         ${whereClause}
+         GROUP BY DATE_FORMAT(\`payment_date\`, '%Y-%m')
+         ORDER BY month DESC
+         LIMIT 6`,
+        values
+      ),
     ]);
 
     return res.json({
       success: true,
       summary: {
-        total_count: overall.total_count,
+        today: {
+          total_amount: Number(todayTotal.total),
+          count: todayTotal.count,
+        },
+        month_to_date: {
+          total_amount: Number(monthTotal.total),
+          count: monthTotal.count,
+        },
+        total_payments: overall.total_count,
         grand_total: Number(overall.grand_total),
         daily: daily.map(d => ({ ...d, total_amount: Number(d.total_amount) })),
         monthly: monthly.map(m => ({ ...m, total_amount: Number(m.total_amount) })),
@@ -209,7 +241,7 @@ async function getCollectionSummary(req, res) {
 }
 
 /**
- * GET /api/payments/:id/details
+ * GET /api/payments/:id or /api/payments/:id/details
  * Fetch a single payment with its FIFO allocation breakdown.
  */
 async function getPaymentDetails(req, res) {
@@ -219,9 +251,15 @@ async function getPaymentDetails(req, res) {
     const payment = await db.queryOne(
       `SELECT
         p.*,
-        COALESCE(r.\`receipt_number\`, p.\`receipt_number\`) as receipt_no,
+        COALESCE(r.\`receipt_number\`, p.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_number,
+        COALESCE(r.\`receipt_number\`, p.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_no,
+        s.\`full_name\`,
         s.\`full_name\` as student_name,
+        s.\`admission_no\`,
         s.\`admission_no\` as student_admission_no,
+        s.\`phone\`,
+        s.\`whatsapp_number\`,
+        s.\`category\`,
         s.\`category\` as student_category,
         c.\`name\` as class_name,
         sec.\`name\` as section_name,
@@ -248,18 +286,32 @@ async function getPaymentDetails(req, res) {
         mf.\`fee_amount\`,
         mf.\`paid_amount\` as total_fee_paid,
         mf.\`due_amount\` as current_due,
-        mf.\`status\` as fee_status
+        mf.\`status\` as fee_status,
+        saf.\`description\` as additional_fee_description,
+        saf.\`amount\` as additional_fee_amount
        FROM \`payment_allocations\` pa
-       JOIN \`monthly_fees\` mf ON mf.\`id\` = pa.\`monthly_fee_id\`
+       LEFT JOIN \`monthly_fees\` mf ON mf.\`id\` = pa.\`monthly_fee_id\`
+       LEFT JOIN \`student_additional_fees\` saf ON saf.\`id\` = pa.\`additional_fee_id\`
        WHERE pa.\`payment_id\` = ?
-       ORDER BY mf.\`fee_year\` ASC, mf.\`fee_month\` ASC`,
+       ORDER BY pa.\`id\` ASC`,
       [id]
     );
 
     return res.json({
       success: true,
-      payment,
-      allocations: allocations.map(a => ({ ...a, allocated_amount: Number(a.allocated_amount) })),
+      payment: {
+        ...payment,
+        amount: Number(payment.amount || 0),
+        full_name: payment.full_name || payment.student_name || '—',
+        student_name: payment.full_name || payment.student_name || '—',
+        admission_no: payment.admission_no || payment.student_admission_no || '—',
+      },
+      allocations: allocations.map(a => ({
+        ...a,
+        allocated_amount: Number(a.allocated_amount || 0),
+        fee_amount: Number(a.fee_amount || a.additional_fee_amount || a.allocated_amount || 0),
+        description: a.additional_fee_description || null,
+      })),
     });
   } catch (err) {
     console.error('[paymentHistoryController.getPaymentDetails]', err);

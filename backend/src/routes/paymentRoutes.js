@@ -5,7 +5,12 @@
  */
 
 const express = require('express');
-const { recordPayment, updatePayment, deletePayment } = require('../controllers/paymentController');
+const {
+  recordPayment,
+  updatePayment,
+  deletePayment,
+  listAdmissionPayments,
+} = require('../controllers/paymentController');
 const {
   getPaymentHistory,
   getCollectionSummary,
@@ -19,10 +24,11 @@ const router = express.Router();
 router.use(authenticateToken);
 
 router.post('/', recordPayment);
+router.get('/admissions', listAdmissionPayments);
+router.get('/summary', getCollectionSummary);
+router.get('/', getPaymentHistory);
+router.get('/:id', getPaymentDetails);
 router.put('/:id', updatePayment);
 router.delete('/:id', deletePayment);
-router.get('/', getPaymentHistory);
-router.get('/summary', getCollectionSummary);
-router.get('/:id', getPaymentDetails);
 
 module.exports = router;

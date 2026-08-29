@@ -21,6 +21,7 @@ import {
   DollarSign,
   Loader2,
   AlertTriangle,
+  AlertCircle,
   Plus,
   Edit2,
   CreditCard,
@@ -38,6 +39,8 @@ import {
   Layers,
   Search,
   Eye,
+  Gift,
+  IndianRupee,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -49,6 +52,7 @@ import DeleteStudentModal from '../components/DeleteStudentModal';
 import StudentModal from '../components/StudentModal';
 import StudentFeeLedgerModal from '../components/StudentFeeLedgerModal';
 import JpgReceiptModal from '../components/JpgReceiptModal';
+import { saveFileToDeviceStorage } from '../utils/fileDownloader';
 import './StudentProfile.css';
 
 const MONTH_NAMES = [
@@ -83,8 +87,41 @@ export default function StudentProfile() {
   const [selectedReceiptData, setSelectedReceiptData] = useState(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
+  const handleOpenReceipt = async (paymentOrId) => {
+    const paymentId = typeof paymentOrId === 'object'
+      ? (paymentOrId.id || paymentOrId.receipt_number || paymentOrId.receipt_no)
+      : paymentOrId;
+    if (!paymentId) return;
+
+    try {
+      const res = await api.get(`/receipts/${paymentId}`);
+      if (res.data && res.data.success) {
+        setSelectedReceiptData(res.data);
+        setShowReceiptModal(true);
+      } else {
+        throw new Error();
+      }
+    } catch {
+      const foundPayment = (recentPayments || []).find(p => p.id === paymentId) || (typeof paymentOrId === 'object' ? paymentOrId : {});
+      setSelectedReceiptData({
+        student,
+        payment: {
+          id: foundPayment.id || paymentId,
+          amount: foundPayment.amount,
+          payment_date: foundPayment.payment_date,
+          payment_mode: foundPayment.payment_mode,
+          receipt_number: foundPayment.receipt_number || foundPayment.receipt_no || `RCP-${foundPayment.id || paymentId}`,
+        },
+        allocations: [],
+        summary: { total_amount: foundPayment.amount },
+      });
+      setShowReceiptModal(true);
+    }
+  };
+
   // Family & Sibling Account State
   const [familyData, setFamilyData] = useState(null);
+  const [familyLedgerData, setFamilyLedgerData] = useState(null);
   const [showLinkSiblingModal, setShowLinkSiblingModal] = useState(false);
   const [showFamilyPaymentModal, setShowFamilyPaymentModal] = useState(false);
   const [siblingSearchQuery, setSiblingSearchQuery] = useState('');
@@ -142,6 +179,66 @@ export default function StudentProfile() {
       toast.error(err.response?.data?.message || 'Failed to update extra expense.');
     }
   };
+  // Concession / Fee Relief Modal State
+  const [concessionFee, setConcessionFee] = useState(null);
+  const [concessionAmount, setConcessionAmount] = useState('');
+  const [concessionReason, setConcessionReason] = useState('');
+  const [isSubmittingConcession, setIsSubmittingConcession] = useState(false);
+
+  // Delete Payment Modal State
+  const [deletingPayment, setDeletingPayment] = useState(null);
+  const [isDeletingPayment, setIsDeletingPayment] = useState(false);
+
+  const handleOpenConcession = (fee) => {
+    setConcessionFee(fee);
+    const total = Number(fee.amount || 0);
+    const paid = Number(fee.paid_amount || 0);
+    const discount = Number(fee.discount_amount || 0);
+    const maxDue = Math.max(0, total - paid - discount);
+    setConcessionAmount(maxDue > 0 ? String(maxDue) : '');
+    setConcessionReason(fee.discount_reason || 'Management Concession / Special Relief');
+  };
+
+  const handleApplyConcession = async (e) => {
+    e.preventDefault();
+    if (!concessionFee || !concessionAmount || Number(concessionAmount) <= 0) return;
+    try {
+      setIsSubmittingConcession(true);
+      const res = await api.post(`/students/${id}/additional-fees/${concessionFee.id}/discount`, {
+        discount_amount: Number(concessionAmount),
+        discount_reason: concessionReason.trim() || 'Management Concession / Special Relief',
+      });
+      if (res.data.success) {
+        toast.success(res.data.message || 'Fee discount / relief applied successfully.');
+        setConcessionFee(null);
+        fetchProfile();
+      }
+    } catch (err) {
+      console.error('[Apply Concession Error]', err);
+      toast.error(err.response?.data?.message || 'Failed to apply fee discount / relief.');
+    } finally {
+      setIsSubmittingConcession(false);
+    }
+  };
+
+  const handleDeletePayment = async () => {
+    if (!deletingPayment) return;
+    try {
+      setIsDeletingPayment(true);
+      const res = await api.delete(`/payments/${deletingPayment.id}`);
+      if (res.data.success) {
+        toast.success('Payment deleted successfully. Student dues restored.');
+        setDeletingPayment(null);
+        fetchProfile();
+      }
+    } catch (err) {
+      console.error('[Delete Payment Error]', err);
+      toast.error(err.response?.data?.message || 'Failed to delete payment.');
+    } finally {
+      setIsDeletingPayment(false);
+    }
+  };
+
   const [addFeeForm, setAddFeeForm] = useState({
     fee_type_id: '',
     amount: '',
@@ -162,8 +259,12 @@ export default function StudentProfile() {
     let m = new Date().getMonth() + 1;
     let y = new Date().getFullYear();
 
-    if (monthlyFees && monthlyFees.length > 0) {
-      const sorted = [...monthlyFees].sort((a, b) => {
+    const targetFees = (familyData?.has_family && familyData.siblings?.length > 1)
+      ? (familyLedgerData?.monthly_fees || [])
+      : (monthlyFees || []);
+
+    if (targetFees && targetFees.length > 0) {
+      const sorted = [...targetFees].sort((a, b) => {
         if (a.fee_year !== b.fee_year) return a.fee_year - b.fee_year;
         return a.fee_month - b.fee_month;
       });
@@ -199,16 +300,17 @@ export default function StudentProfile() {
       const res = await api.get(`/receipts/dues-notice/${id}`, {
         responseType: 'blob',
       });
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Dues_Notice_${student?.full_name ? student.full_name.replace(/\s+/g, '_') : 'Student'}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
-      toast.success('Dues Receipt PDF downloaded successfully.');
+      const filename = `Dues_Notice_${student?.full_name ? student.full_name.replace(/\s+/g, '_') : 'Student'}.pdf`;
+      const saveRes = await saveFileToDeviceStorage({
+        data: res.data,
+        filename,
+        mimeType: 'application/pdf',
+      });
+      if (saveRes?.platform === 'native') {
+        toast.success(`✓ Dues Notice Saved to Phone Storage (Documents/${filename})`);
+      } else {
+        toast.success('Dues Receipt PDF downloaded successfully.');
+      }
     } catch (err) {
       toast.error('Failed to download Dues Receipt PDF.');
     } finally {
@@ -222,16 +324,17 @@ export default function StudentProfile() {
       const res = await api.get(`/receipts/download/${paymentId}`, {
         responseType: 'blob',
       });
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Receipt_${receiptNumber || paymentId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
-      toast.success('Payment receipt PDF downloaded.');
+      const filename = `Receipt_${receiptNumber || paymentId}.pdf`;
+      const saveRes = await saveFileToDeviceStorage({
+        data: res.data,
+        filename,
+        mimeType: 'application/pdf',
+      });
+      if (saveRes?.platform === 'native') {
+        toast.success(`✓ Receipt PDF Saved to Phone Storage (Documents/${filename})`);
+      } else {
+        toast.success('Payment receipt PDF downloaded.');
+      }
     } catch (err) {
       toast.error('Failed to download payment receipt PDF.');
     } finally {
@@ -261,6 +364,7 @@ export default function StudentProfile() {
         setMonthlyFees(res.data.monthly_fees || []);
         setAdditionalFees(res.data.additional_fees || []);
         setRecentPayments(res.data.recent_payments || []);
+        fetchFamilyData();
       }
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to load student profile';
@@ -284,9 +388,15 @@ export default function StudentProfile() {
 
   const fetchFamilyData = async () => {
     try {
-      const res = await api.get(`/family/by-student/${id}`);
-      if (res.data.success) {
-        setFamilyData(res.data);
+      const [famRes, ledgerRes] = await Promise.all([
+        api.get(`/family/by-student/${id}`).catch(() => ({ data: { success: false } })),
+        api.get(`/family/by-student/${id}/ledger`).catch(() => ({ data: { success: false } })),
+      ]);
+      if (famRes.data?.success) {
+        setFamilyData(famRes.data);
+      }
+      if (ledgerRes.data?.success) {
+        setFamilyLedgerData(ledgerRes.data);
       }
     } catch (err) {
       console.error('Failed to load family data:', err);
@@ -358,18 +468,31 @@ export default function StudentProfile() {
     }
   };
 
-  const handleOpenFamilyPayment = () => {
+  const handleOpenFamilyPayment = (targetMonth = null) => {
     if (!familyData?.siblings) return;
     const initialAllocations = {};
-    familyData.siblings.forEach(s => {
-      initialAllocations[s.id] = s.total_due || 0;
-    });
-    setFamilyPaymentForm({
-      payment_mode: 'CASH',
-      payment_date: new Date().toISOString().slice(0, 10),
-      notes: 'Combined family fee payment',
-      allocations: initialAllocations,
-    });
+
+    if (targetMonth && targetMonth.sibling_breakdown) {
+      targetMonth.sibling_breakdown.forEach(sib => {
+        initialAllocations[sib.student_id] = sib.due_amount > 0 ? sib.due_amount : sib.monthly_rate || 0;
+      });
+      setFamilyPaymentForm({
+        payment_mode: 'CASH',
+        payment_date: new Date().toISOString().slice(0, 10),
+        notes: `Combined family fee for ${targetMonth.month_name} ${targetMonth.fee_year}`,
+        allocations: initialAllocations,
+      });
+    } else {
+      familyData.siblings.forEach(s => {
+        initialAllocations[s.id] = s.total_due > 0 ? s.total_due : s.monthly_fee_rate || 0;
+      });
+      setFamilyPaymentForm({
+        payment_mode: 'CASH',
+        payment_date: new Date().toISOString().slice(0, 10),
+        notes: 'Combined family fee payment',
+        allocations: initialAllocations,
+      });
+    }
     setShowFamilyPaymentModal(true);
   };
 
@@ -403,6 +526,23 @@ export default function StudentProfile() {
       toast.error(err.response?.data?.message || 'Failed to record family payment.');
     } finally {
       setSubmittingFamilyPayment(false);
+    }
+  };
+
+  const handleAssignFamilyNextMonth = async (month, year) => {
+    try {
+      const res = await api.post('/family/assign-month', {
+        student_id: Number(id),
+        fee_month: month,
+        fee_year: year,
+      });
+      if (res.data.success) {
+        toast.success(res.data.message || `Assigned month ${month}/${year} for all family members.`);
+        fetchFamilyData();
+        fetchProfile();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to assign next month for family.');
     }
   };
 
@@ -486,14 +626,29 @@ export default function StudentProfile() {
     e.preventDefault();
     try {
       setGeneratingMonth(true);
-      const res = await api.post(`/students/${id}/generate-month-fee`, {
-        fee_month: Number(assignMonthForm.fee_month),
-        fee_year: Number(assignMonthForm.fee_year),
-      });
-      if (res.data.success) {
-        toast.success(res.data.message || 'Monthly fee assigned successfully.');
-        setShowAssignMonthModal(false);
-        fetchProfile();
+      const isFam = Boolean(familyData?.has_family && familyData.siblings?.length > 1);
+      if (isFam) {
+        const res = await api.post('/family/assign-month', {
+          student_id: Number(id),
+          fee_month: Number(assignMonthForm.fee_month),
+          fee_year: Number(assignMonthForm.fee_year),
+        });
+        if (res.data.success) {
+          toast.success(res.data.message || `Month fee assigned for all family members.`);
+          setShowAssignMonthModal(false);
+          fetchFamilyData();
+          fetchProfile();
+        }
+      } else {
+        const res = await api.post(`/students/${id}/generate-month-fee`, {
+          fee_month: Number(assignMonthForm.fee_month),
+          fee_year: Number(assignMonthForm.fee_year),
+        });
+        if (res.data.success) {
+          toast.success(res.data.message || 'Monthly fee assigned successfully.');
+          setShowAssignMonthModal(false);
+          fetchProfile();
+        }
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to assign monthly fee.');
@@ -502,15 +657,78 @@ export default function StudentProfile() {
     }
   };
 
-  const handleOpenReceipt = async (paymentId) => {
+  const handleQuickAssignMonth = async (month, year) => {
     try {
-      const res = await api.get(`/receipts/${paymentId}`);
+      const res = await api.post(`/students/${id}/generate-month-fee`, {
+        fee_month: Number(month),
+        fee_year: Number(year),
+      });
       if (res.data.success) {
-        setSelectedReceiptData(res.data);
-        setShowReceiptModal(true);
+        toast.success(res.data.message || `Month fee assigned successfully.`);
+        fetchProfile();
       }
     } catch (err) {
-      toast.error('Failed to load receipt details.');
+      toast.error(err.response?.data?.message || 'Failed to assign monthly fee.');
+    }
+  };
+
+  const handleUpdateMonthFee = async (feeId, amount) => {
+    try {
+      const res = await api.patch(`/students/${id}/monthly-fees/${feeId}`, {
+        fee_amount: Number(amount),
+      });
+      if (res.data.success) {
+        toast.success(res.data.message || 'Monthly fee updated successfully.');
+        fetchProfile();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update monthly fee.');
+    }
+  };
+
+  const handleDeleteMonthFee = async (rowOrFeeId) => {
+    try {
+      const feeId = typeof rowOrFeeId === 'object' ? rowOrFeeId.id : rowOrFeeId;
+      const res = await api.delete(`/students/${id}/monthly-fees/${feeId}`);
+      if (res.data.success) {
+        toast.success(res.data.message || 'Monthly fee record deleted.');
+        fetchProfile();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete month fee.');
+    }
+  };
+
+  const handleDeleteFamilyMonthFee = async (rowOrFeeId) => {
+    try {
+      let fee_month, fee_year;
+      if (typeof rowOrFeeId === 'object') {
+        fee_month = rowOrFeeId.fee_month;
+        fee_year = rowOrFeeId.fee_year;
+      } else if (typeof rowOrFeeId === 'string' && rowOrFeeId.startsWith('fam-m-')) {
+        const parts = rowOrFeeId.split('-');
+        fee_month = Number(parts[2]);
+        fee_year = Number(parts[3]);
+      }
+
+      if (!fee_month || !fee_year) {
+        toast.error('Unable to determine month and year to delete.');
+        return;
+      }
+
+      const res = await api.post('/family/delete-month', {
+        student_id: Number(id),
+        fee_month,
+        fee_year,
+      });
+
+      if (res.data.success) {
+        toast.success(res.data.message || 'Family month fee deleted successfully.');
+        fetchProfile();
+        fetchFamilyData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete family month fee.');
     }
   };
 
@@ -521,7 +739,13 @@ export default function StudentProfile() {
 
   const totalOtherExpenseDue = (additionalFees || [])
     .filter(f => f && f.status !== 'PAID')
-    .reduce((sum, f) => sum + Number(f.due_amount !== undefined ? f.due_amount : f.amount || 0), 0);
+    .reduce((sum, f) => {
+      const total = Number(f.amount || 0);
+      const paid = Number(f.paid_amount || 0);
+      const discount = Number(f.discount_amount || 0);
+      const due = f.due_amount !== undefined ? Number(f.due_amount) : Math.max(0, total - paid - discount);
+      return sum + due;
+    }, 0);
 
   const totalOverallDue = totalMonthlyDue + totalOtherExpenseDue;
 
@@ -546,47 +770,6 @@ export default function StudentProfile() {
       </div>
     );
   }
-
-  const handleQuickAssignMonth = async (month, year) => {
-    try {
-      const res = await api.post(`/students/${id}/generate-month-fee`, {
-        fee_month: Number(month),
-        fee_year: Number(year),
-      });
-      if (res.data.success) {
-        toast.success(res.data.message || 'Monthly fee assigned successfully.');
-        fetchProfile();
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to assign monthly fee.');
-    }
-  };
-
-  const handleUpdateMonthFee = async (feeId, newFeeAmount) => {
-    try {
-      const res = await api.patch(`/students/${id}/monthly-fees/${feeId}`, {
-        fee_amount: Number(newFeeAmount),
-      });
-      if (res.data.success) {
-        toast.success(res.data.message || 'Monthly fee record updated.');
-        fetchProfile();
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update monthly fee.');
-    }
-  };
-
-  const handleDeleteMonthFee = async (feeId) => {
-    try {
-      const res = await api.delete(`/students/${id}/monthly-fees/${feeId}`);
-      if (res.data.success) {
-        toast.success(res.data.message || 'Month fee entry deleted.');
-        fetchProfile();
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to delete month fee.');
-    }
-  };
 
   if (!student) {
     return (
@@ -847,98 +1030,142 @@ export default function StudentProfile() {
 
           {familyData?.has_family && familyData.siblings?.length > 1 ? (
             <div className="family-siblings-card">
+              {/* Family Summary KPI Banner */}
               <div className="family-summary-banner">
-                <div className="banner-col">
-                  <span className="banner-lbl">Total Linked Siblings</span>
+                <div className="banner-col card-blue">
+                  <div className="banner-col-header">
+                    <span className="banner-lbl">Combined Monthly Rate</span>
+                    <div className="banner-icon-chip blue"><IndianRupee size={14} /></div>
+                  </div>
+                  <span className="banner-val text-blue">
+                    {formatCurrency(familyLedgerData?.total_family_monthly_rate || familyData.siblings.reduce((s, sib) => s + Number(sib.monthly_fee_rate || 0), 0))}
+                    <small className="rate-sub"> / mo</small>
+                  </span>
+                </div>
+
+                <div className="banner-col card-purple">
+                  <div className="banner-col-header">
+                    <span className="banner-lbl">Linked Siblings</span>
+                    <div className="banner-icon-chip purple"><Users size={14} /></div>
+                  </div>
                   <span className="banner-val">{familyData.siblings.length} Students</span>
                 </div>
-                <div className="banner-col">
-                  <span className="banner-lbl">Combined Family Outstanding</span>
+
+                <div className="banner-col card-slate">
+                  <div className="banner-col-header">
+                    <span className="banner-lbl">Annual Family Total</span>
+                    <div className="banner-icon-chip slate"><Calendar size={14} /></div>
+                  </div>
+                  <span className="banner-val">
+                    {formatCurrency((familyLedgerData?.total_family_monthly_rate || familyData.siblings.reduce((s, sib) => s + Number(sib.monthly_fee_rate || 0), 0)) * 12)}
+                  </span>
+                </div>
+
+                <div className="banner-col card-red">
+                  <div className="banner-col-header">
+                    <span className="banner-lbl">Family Outstanding</span>
+                    <div className="banner-icon-chip red"><AlertCircle size={14} /></div>
+                  </div>
                   <span className="banner-val text-danger">{formatCurrency(familyData.total_family_dues)}</span>
                 </div>
               </div>
 
-              <div className="table-responsive">
-                <table className="family-ledger-table">
-                  <thead>
-                    <tr>
-                      <th>Sibling Name</th>
-                      <th>Class / Sec</th>
-                      <th>Category</th>
-                      <th>Custom Monthly Rate</th>
-                      <th>Monthly Dues</th>
-                      <th>Extra Dues</th>
-                      <th>Total Due</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {familyData.siblings.map((sib) => {
-                      const isCurrent = sib.id === Number(id);
-                      return (
-                        <tr key={sib.id} className={isCurrent ? 'current-sibling-row' : ''}>
-                          <td>
-                            <div className="sibling-name-cell">
-                              <strong>{sib.full_name}</strong>
-                              {isCurrent && <span className="current-std-tag">Current Profile</span>}
-                              <small className="text-muted">Adm: {sib.admission_no}</small>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="class-badge-pill">
-                              {sib.class_name || 'Class —'} {sib.section_name && `(${sib.section_name})`}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`cat-pill ${sib.category}`}>
-                              {sib.category === 'hosteller' ? 'Hosteller' : 'Day Scholar'}
-                            </span>
-                          </td>
-                          <td>
-                            <strong>{formatCurrency(sib.monthly_fee_rate)}</strong>
-                          </td>
-                          <td>
-                            <span className={sib.monthly_dues > 0 ? 'text-danger font-bold' : 'text-success'}>
-                              {formatCurrency(sib.monthly_dues)}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={sib.additional_dues > 0 ? 'text-danger font-bold' : 'text-success'}>
-                              {formatCurrency(sib.additional_dues)}
-                            </span>
-                          </td>
-                          <td>
-                            <strong className={sib.total_due > 0 ? 'text-danger' : 'text-success'}>
-                              {formatCurrency(sib.total_due)}
-                            </strong>
-                          </td>
-                          <td>
-                            <div className="sibling-row-actions">
-                              {!isCurrent && (
-                                <button
-                                  type="button"
-                                  className="btn-view-sib"
-                                  onClick={() => navigate(`/students/${sib.id}`)}
-                                  title="View Sibling Profile"
-                                >
-                                  <Eye size={14} /> Profile
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                className="btn-unlink-sib"
-                                onClick={() => handleUnlinkSibling(sib.id, sib.full_name)}
-                                title="Unlink from Family"
-                              >
-                                <Unlink size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              {/* Linked Siblings Overview Strip */}
+              <div className="siblings-overview-strip">
+                <div className="strip-title-row">
+                  <span className="strip-title">👨‍👩‍👧‍👦 Family Siblings Registry:</span>
+                  <span className="strip-count">{familyData.siblings.length} Enrolled</span>
+                </div>
+                <div className="siblings-chips-wrap">
+                  {familyData.siblings.map((sib) => {
+                    const isCurrent = sib.id === Number(id);
+                    return (
+                      <div key={sib.id} className={`sibling-chip-item ${isCurrent ? 'current' : ''}`}>
+                        <div className="sib-avatar-circle">
+                          {sib.full_name ? sib.full_name.charAt(0).toUpperCase() : 'S'}
+                        </div>
+                        <div className="sib-chip-info">
+                          <div className="sib-chip-name-row">
+                            <strong className="sib-chip-name">{sib.full_name}</strong>
+                            {isCurrent && <span className="current-badge-pill">Current</span>}
+                          </div>
+                          <span className="sib-chip-meta">
+                            {sib.class_name || 'Class —'} • {formatCurrency(sib.monthly_fee_rate)}/mo
+                          </span>
+                        </div>
+                        <div className="sib-chip-actions">
+                          {!isCurrent && (
+                            <button
+                              type="button"
+                              className="btn-sib-chip-view"
+                              onClick={() => navigate(`/students/${sib.id}`)}
+                              title="View Sibling Profile"
+                            >
+                              <Eye size={12} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-sib-chip-unlink"
+                            onClick={() => handleUnlinkSibling(sib.id, sib.full_name)}
+                            title="Unlink from Family"
+                          >
+                            <Unlink size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Consolidated Family Fee Ledger (Excel Style 11-Columns Running on Combined Sibling Rate) */}
+              <div className="family-ledger-schedule-section" style={{ marginTop: '1.25rem' }}>
+                {(() => {
+                  const totalFamilyRate = Number(
+                    familyLedgerData?.total_family_monthly_rate ||
+                    (familyData?.siblings || []).reduce((sum, sib) => sum + Number(sib.monthly_fee_rate || 0), 0) ||
+                    0
+                  );
+                  return (
+                    <>
+                      <div className="section-header-box" style={{ marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          <h3 className="dark-title" style={{ fontSize: '1.05rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <DollarSign size={18} /> Consolidated Family Fee Register
+                          </h3>
+                          <p className="subtitle" style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                            Combined monthly rate: <strong>₹{totalFamilyRate.toLocaleString('en-IN')}/mo</strong> across {familyData?.siblings?.length} siblings
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={handleOpenAssignMonthModal}
+                        >
+                          <CalendarPlus size={16} /> Assign Month Fee
+                        </button>
+                      </div>
+
+                      <FeeLedgerTable
+                        monthlyFees={familyLedgerData?.monthly_fees || []}
+                        studentMonthlyRate={totalFamilyRate}
+                        initialOpeningBalance={
+                          familyLedgerData?.total_family_opening_dues ||
+                          (familyData?.siblings || []).reduce((sum, sib) => sum + Number(sib.opening_dues || 0), 0) ||
+                          0
+                        }
+                        admissionDate={student.admission_date || student.created_at}
+                        loading={loading}
+                        onAssignMonth={handleAssignFamilyNextMonth}
+                        onUpdateMonthFee={handleUpdateMonthFee}
+                        onDeleteMonthFee={handleDeleteFamilyMonthFee}
+                        onViewReceipt={handleOpenReceipt}
+                        onRecordPayment={(row) => handleOpenFamilyPayment(row)}
+                      />
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ) : (
@@ -988,52 +1215,107 @@ export default function StudentProfile() {
               <table className="ledger-table">
                 <thead>
                   <tr>
-                    <th>Expense Title / Reason</th>
-                    <th>Expense Date</th>
-                    <th>Total Charge (₹)</th>
-                    <th>Remaining Due (₹)</th>
-                    <th>Action</th>
+                    <th>Charge / Expense Title</th>
+                    <th>Date</th>
+                    <th className="text-right">Total Charge</th>
+                    <th className="text-right">Paid Amount</th>
+                    <th className="text-right">Concession / Relief</th>
+                    <th className="text-right">Remaining Due</th>
+                    <th className="text-center">Status</th>
+                    <th className="text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {additionalFees.map((af) => (
-                    <tr key={af.id}>
-                      <td>
-                        <strong>{af.description || af.fee_type_name || 'Custom Expense'}</strong>
-                        {af.fee_month && (
-                          <span className="section-tag" style={{ marginLeft: '0.5rem' }}>
-                            {MONTH_NAMES[af.fee_month - 1]} {af.fee_year}
-                          </span>
-                        )}
-                        {af.notes && af.notes !== af.description && <small className="d-block text-muted">{af.notes}</small>}
-                      </td>
-                      <td>{af.due_date ? new Date(af.due_date).toLocaleDateString('en-IN') : (af.created_at ? new Date(af.created_at).toLocaleDateString('en-IN') : '—')}</td>
-                      <td>{formatCurrency(af.amount)}</td>
-                      <td className="amount-due">
-                        <strong>{formatCurrency(af.due_amount !== undefined ? af.due_amount : af.amount)}</strong>
-                      </td>
-                      <td>
-                        <div className="action-buttons-inline" style={{ display: 'flex', gap: '0.4rem' }}>
-                          <button
-                            className="btn btn-secondary btn-xs"
-                            onClick={() => handleStartEditExtraFee(af)}
-                            title="Edit Extra Charge"
-                          >
-                            <Edit2 size={13} /> Edit
-                          </button>
-                          {af.status === 'DUE' && (
-                            <button
-                              className="btn btn-secondary btn-xs text-danger"
-                              onClick={() => handleRemoveFee(af.id)}
-                              title="Remove Extra Charge"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                  {additionalFees.map((af) => {
+                    const total = Number(af.amount || 0);
+                    const paid = Number(af.paid_amount || 0);
+                    const discount = Number(af.discount_amount || 0);
+                    const due = af.due_amount !== undefined ? Number(af.due_amount) : Math.max(0, total - paid - discount);
+                    const isCleared = due === 0;
+
+                    return (
+                      <tr key={af.id}>
+                        <td>
+                          <strong>{af.description || af.fee_type_name || 'Custom Expense'}</strong>
+                          {af.fee_month && (
+                            <span className="section-tag" style={{ marginLeft: '0.5rem' }}>
+                              {MONTH_NAMES[af.fee_month - 1]} {af.fee_year}
+                            </span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          {af.discount_reason && (
+                            <div className="discount-reason-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#fef3c7', color: '#b45309', padding: '2px 6px', borderRadius: '4px', fontSize: '0.72rem', marginTop: '2px' }}>
+                              <Gift size={11} /> {af.discount_reason}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          {af.due_date
+                            ? new Date(af.due_date).toLocaleDateString('en-IN')
+                            : af.created_at
+                            ? new Date(af.created_at).toLocaleDateString('en-IN')
+                            : '—'}
+                        </td>
+                        <td className="text-right">₹{total.toLocaleString('en-IN')}</td>
+                        <td className="text-right font-semibold" style={{ color: '#16a34a' }}>₹{paid.toLocaleString('en-IN')}</td>
+                        <td className="text-right">
+                          {discount > 0 ? (
+                            <span style={{ background: '#fef3c7', color: '#b45309', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                              ₹{discount.toLocaleString('en-IN')} Relief
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className="text-right amount-due">
+                          <strong style={{ color: due > 0 ? '#dc2626' : '#16a34a' }}>
+                            ₹{due.toLocaleString('en-IN')}
+                          </strong>
+                        </td>
+                        <td className="text-center">
+                          {isCleared ? (
+                            <span className="badge badge-success" style={{ background: '#dcfce7', color: '#15803d', padding: '3px 7px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>PAID</span>
+                          ) : paid > 0 || discount > 0 ? (
+                            <span className="badge badge-warning" style={{ background: '#fef3c7', color: '#b45309', padding: '3px 7px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>PARTIAL</span>
+                          ) : (
+                            <span className="badge badge-danger" style={{ background: '#fee2e2', color: '#b91c1c', padding: '3px 7px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>DUE</span>
+                          )}
+                        </td>
+                        <td className="text-center">
+                          <div className="action-buttons-inline" style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                            {!isCleared && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-xs"
+                                style={{ background: '#fef3c7', color: '#b45309', borderColor: '#fde68a', display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 6px' }}
+                                onClick={() => handleOpenConcession(af)}
+                                title="Give Fee Concession / Relief"
+                              >
+                                <Gift size={12} /> Relief
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-xs"
+                              onClick={() => handleStartEditExtraFee(af)}
+                              title="Edit Extra Charge"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            {af.status === 'DUE' && paid === 0 && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-xs text-danger"
+                                onClick={() => handleRemoveFee(af.id)}
+                                title="Remove Extra Charge"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1045,11 +1327,13 @@ export default function StudentProfile() {
           <div className="pending-dues-actions-grid-row">
             <WhatsAppDirectButton
               onSend={() => api.post(`/receipts/send-dues-whatsapp/${student.id}`)}
+              onOpenJpg={() => setShowLedgerModal(true)}
               phone={student.whatsapp_number || student.phone}
               defaultLabel="WhatsApp Dues"
               successLabel="✓ Sent"
               size="sm"
               className="btn-action-dues btn-action-wa"
+              itemTitle="Dues Statement"
             />
             <button
               type="button"
@@ -1071,30 +1355,33 @@ export default function StudentProfile() {
           </div>
         </section>
 
-        {/* Monthly Fee Ledger */}
-        <section className="ledger-section">
-          <div className="section-header-box">
-            <div>
-              <h2 className="dark-title"><DollarSign size={20} /> Monthly Fee Ledger</h2>
-              <p className="subtitle">Month-wise fee records generated for this student</p>
+        {/* Monthly Fee Ledger (Only rendered for Single Students without linked siblings) */}
+        {(!familyData?.has_family || familyData.siblings?.length <= 1) && (
+          <section className="ledger-section">
+            <div className="section-header-box">
+              <div>
+                <h2 className="dark-title"><DollarSign size={20} /> Monthly Fee Ledger</h2>
+                <p className="subtitle">Month-wise fee records generated for this student</p>
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={handleOpenAssignMonthModal}>
+                <CalendarPlus size={16} /> Assign Month Fee
+              </button>
             </div>
-            <button className="btn btn-secondary btn-sm" onClick={handleOpenAssignMonthModal}>
-              <CalendarPlus size={16} /> Assign Month Fee
-            </button>
-          </div>
 
-          <FeeLedgerTable
-            monthlyFees={monthlyFees}
-            studentMonthlyRate={student.monthly_fee_rate}
-            admissionDate={student.admission_date || student.created_at}
-            loading={loading}
-            onAssignMonth={handleQuickAssignMonth}
-            onUpdateMonthFee={handleUpdateMonthFee}
-            onDeleteMonthFee={handleDeleteMonthFee}
-            onViewReceipt={handleOpenReceipt}
-            onRecordPayment={() => setShowRecordPaymentModal(true)}
-          />
-        </section>
+            <FeeLedgerTable
+              monthlyFees={monthlyFees}
+              studentMonthlyRate={student.monthly_fee_rate}
+              initialOpeningBalance={student.opening_dues || 0}
+              admissionDate={student.admission_date || student.created_at}
+              loading={loading}
+              onAssignMonth={handleQuickAssignMonth}
+              onUpdateMonthFee={handleUpdateMonthFee}
+              onDeleteMonthFee={handleDeleteMonthFee}
+              onViewReceipt={handleOpenReceipt}
+              onRecordPayment={() => setShowRecordPaymentModal(true)}
+            />
+          </section>
+        )}
 
         {/* Recent Payments */}
         {recentPayments.length > 0 && (
@@ -1112,6 +1399,7 @@ export default function StudentProfile() {
                     <th>Receipt</th>
                     <th>WhatsApp</th>
                     <th>Notes</th>
+                    <th className="text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1145,10 +1433,23 @@ export default function StudentProfile() {
                             compact
                             size="sm"
                             onSend={() => api.post(`/receipts/send-whatsapp/${p.id}`)}
+                            onOpenJpg={() => handleOpenReceipt(p)}
                             phone={student.whatsapp_number || student.phone}
+                            itemTitle="Receipt"
                           />
                         </td>
                         <td>{p.notes || '—'}</td>
+                        <td className="text-center">
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs text-danger"
+                            onClick={() => setDeletingPayment(p)}
+                            title="Delete Payment & Restore Dues"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '3px 8px' }}
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -1630,19 +1931,182 @@ export default function StudentProfile() {
         />
       )}
 
-      {/* Monthly Fee Ledger & Account Statement Modal (High-Res JPG + WhatsApp Share) */}
-      <StudentFeeLedgerModal
-        isOpen={showLedgerModal}
-        onClose={() => setShowLedgerModal(false)}
-        student={student}
-        monthlyLedger={monthlyFees}
-        paymentHistory={recentPayments}
-        totals={{
-          total_assessed: (monthlyFees || []).reduce((sum, f) => sum + Number(f.fee_amount || 0), 0) + (additionalFees || []).reduce((sum, f) => sum + Number(f.amount || 0), 0),
-          total_paid: (monthlyFees || []).reduce((sum, f) => sum + Number(f.paid_amount || 0), 0) + (additionalFees || []).reduce((sum, f) => sum + Number(f.paid_amount || 0), 0),
-          total_due: totalOverallDue,
-        }}
-      />
+      {/* Assign Month Fee Modal */}
+      {showAssignMonthModal && (
+        <div className="modal-overlay" onClick={() => setShowAssignMonthModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <CalendarPlus size={20} className="text-primary" />
+                <h3 style={{ margin: 0 }}>Assign Monthly Fee</h3>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setShowAssignMonthModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleAssignMonthFee}>
+              <div className="modal-body" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                  Assign the monthly fee rate for <strong>{student?.full_name}</strong> (₹{Number(student?.monthly_fee_rate || 0).toLocaleString('en-IN')}/mo).
+                </p>
+
+                <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div className="form-group">
+                    <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155' }}>Month</label>
+                    <select
+                      className="form-control"
+                      value={assignMonthForm.fee_month}
+                      onChange={(e) => setAssignMonthForm(prev => ({ ...prev, fee_month: Number(e.target.value) }))}
+                      style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1.5px solid #cbd5e1' }}
+                    >
+                      {MONTH_NAMES.map((mName, idx) => (
+                        <option key={idx + 1} value={idx + 1}>{mName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155' }}>Year</label>
+                    <input
+                      type="number"
+                      min="2020"
+                      max="2035"
+                      className="form-control"
+                      value={assignMonthForm.fee_year}
+                      onChange={(e) => setAssignMonthForm(prev => ({ ...prev, fee_year: Number(e.target.value) }))}
+                      style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1.5px solid #cbd5e1' }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', padding: '0.85rem 1.25rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAssignMonthModal(false)} disabled={generatingMonth}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={generatingMonth}>
+                  {generatingMonth ? <Loader2 size={16} className="spin" /> : <CalendarPlus size={16} />}
+                  <span>{generatingMonth ? 'Assigning…' : 'Assign Fee Record'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Payment Confirmation Modal */}
+      {deletingPayment && (
+        <div className="modal-overlay" onClick={() => setDeletingPayment(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid #fee2e2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#dc2626' }}>
+                <AlertTriangle size={20} />
+                <h3 style={{ margin: 0 }}>Delete Payment Record?</h3>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setDeletingPayment(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ padding: '1rem' }}>
+              <p style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', color: '#334155' }}>
+                Are you sure you want to delete payment of <strong>₹{Number(deletingPayment.amount).toLocaleString('en-IN')}</strong> (Receipt #{deletingPayment.receipt_number || deletingPayment.id})?
+              </p>
+              <div style={{ background: '#fef2f2', padding: '0.75rem', borderRadius: '8px', border: '1px solid #fecdd3', fontSize: '0.82rem', color: '#991b1b' }}>
+                ⚠️ This will reverse all fee allocations and restore the student's dues back to unpaid.
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', padding: '0.75rem 1rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setDeletingPayment(null)} disabled={isDeletingPayment}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-danger" onClick={handleDeletePayment} disabled={isDeletingPayment} style={{ background: '#dc2626', color: '#fff' }}>
+                {isDeletingPayment ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />}
+                <span>{isDeletingPayment ? 'Deleting…' : 'Yes, Delete Payment'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fee Concession / Discount Relief Modal */}
+      {concessionFee && (
+        <div className="modal-overlay" onClick={() => setConcessionFee(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid #fef3c7' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#b45309' }}>
+                <Gift size={20} />
+                <h3 style={{ margin: 0 }}>Apply Fee Relief / Concession</h3>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setConcessionFee(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleApplyConcession}>
+              <div className="modal-body" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '2px' }}>Fee Description</label>
+                  <strong style={{ color: '#0f172a', fontSize: '0.95rem' }}>{concessionFee.description || concessionFee.fee_type_name || 'Extra Fee'}</strong>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '8px' }}>
+                  <div>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Total Charge:</span>
+                    <div style={{ fontWeight: 700, color: '#0f172a' }}>₹{Number(concessionFee.amount).toLocaleString('en-IN')}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Already Paid:</span>
+                    <div style={{ fontWeight: 700, color: '#16a34a' }}>₹{Number(concessionFee.paid_amount || 0).toLocaleString('en-IN')}</div>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="concession_amt_input" style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
+                    Discount / Relief Amount (₹) <span style={{ color: '#dc2626' }}>*</span>
+                  </label>
+                  <input
+                    id="concession_amt_input"
+                    type="number"
+                    min="1"
+                    max={Number(concessionFee.amount) - Number(concessionFee.paid_amount || 0)}
+                    className="form-control"
+                    placeholder="Enter discount/concession in ₹"
+                    value={concessionAmount}
+                    onChange={(e) => setConcessionAmount(e.target.value)}
+                    required
+                    style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1.5px solid #cbd5e1' }}
+                  />
+                  <small style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '2px', display: 'block' }}>
+                    Maximum allowed relief: ₹{(Number(concessionFee.amount) - Number(concessionFee.paid_amount || 0)).toLocaleString('en-IN')}
+                  </small>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="concession_reason_input" style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
+                    Concession Reason / Management Note
+                  </label>
+                  <input
+                    id="concession_reason_input"
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Sibling Discount, Management Relief, Scholarship"
+                    value={concessionReason}
+                    onChange={(e) => setConcessionReason(e.target.value)}
+                    style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1.5px solid #cbd5e1' }}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', padding: '0.85rem 1.25rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setConcessionFee(null)} disabled={isSubmittingConcession}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={isSubmittingConcession} style={{ background: '#d97706', borderColor: '#b45309', color: '#fff' }}>
+                  {isSubmittingConcession ? <Loader2 size={16} className="spin" /> : <Gift size={16} />}
+                  <span>{isSubmittingConcession ? 'Applying…' : 'Apply Fee Relief'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Single Payment Receipt Modal */}
       <JpgReceiptModal
@@ -1653,6 +2117,39 @@ export default function StudentProfile() {
         }}
         data={selectedReceiptData}
         type="payment"
+      />
+
+      {/* Monthly Fee Ledger & Account Statement Modal (Both Family and Single Student Supported) */}
+      <StudentFeeLedgerModal
+        isOpen={showLedgerModal}
+        onClose={() => setShowLedgerModal(false)}
+        student={student}
+        familyData={familyData}
+        monthlyLedger={
+          familyData?.has_family && familyData.siblings?.length > 1
+            ? (familyLedgerData?.monthly_fees || familyLedgerData?.ledger || [])
+            : (monthlyFees || [])
+        }
+        paymentHistory={
+          familyData?.has_family && familyData.siblings?.length > 1
+            ? (recentPayments || [])
+            : (recentPayments || [])
+        }
+        totals={{
+          total_assessed:
+            familyData?.has_family && familyData.siblings?.length > 1
+              ? (familyLedgerData?.summary?.total_assessed || 0)
+              : (student?.total_fees_assessed || student?.total_fees || 0),
+          total_paid:
+            familyData?.has_family && familyData.siblings?.length > 1
+              ? (familyLedgerData?.summary?.total_paid || 0)
+              : (student?.total_paid || 0),
+          total_due:
+            familyData?.has_family && familyData.siblings?.length > 1
+              ? (familyLedgerData?.total_family_dues || familyLedgerData?.summary?.total_due || 0)
+              : (student?.current_dues || student?.total_due || 0),
+          combined_monthly_rate: familyLedgerData?.total_family_monthly_rate || 0,
+        }}
       />
     </div>
   );

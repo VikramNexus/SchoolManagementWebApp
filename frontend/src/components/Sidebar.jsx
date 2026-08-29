@@ -48,11 +48,12 @@ const DESKTOP_NAV_GROUPS = [
   },
 ];
 
-// Curated 6 essential options strictly for Phone / Mobile view
+// Curated essential options for Phone / Mobile view
 const MOBILE_NAV_ITEMS = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/admissions', label: 'New Admission', icon: UserPlus, badge: 'Desk' },
   { path: '/students', label: 'Manage Students', icon: Users },
+  { path: '/payments', label: 'Payments', icon: CreditCard },
   { path: '/pending-fees', label: 'Pending Dues', icon: AlertTriangle, badge: 'Dues' },
   { path: '/receipts', label: 'Receipts', icon: Receipt },
   { path: '/backup', label: 'Backup & Restore', icon: Database },

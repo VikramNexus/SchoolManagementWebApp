@@ -25,6 +25,8 @@ const poolConfig = process.env.DATABASE_URL
       dateStrings: true,
       supportBigNumbers: true,
       bigNumberStrings: true,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
       ssl: isCloudSSL ? { rejectUnauthorized: false } : undefined,
     }
   : {
@@ -41,6 +43,8 @@ const poolConfig = process.env.DATABASE_URL
       dateStrings: true,
       supportBigNumbers: true,
       bigNumberStrings: true,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
       ssl: isCloudSSL ? { rejectUnauthorized: false } : undefined,
     };
 
@@ -92,15 +96,25 @@ function getPool() {
 }
 
 /**
- * Execute a query with automatic connection management.
+ * Execute a query with automatic connection management and auto-retry on stale connections.
  * @param {string} sql - SQL query with ? or :named placeholders
  * @param {Array|Object} [params] - Query parameters
+ * @param {number} [retries=1]
  * @returns {Promise<Array>} Result rows
  */
-async function query(sql, params) {
-  const p = getPool();
-  const [rows] = await p.query(sql, params);
-  return rows;
+async function query(sql, params, retries = 1) {
+  try {
+    const p = getPool();
+    const [rows] = await p.query(sql, params);
+    return rows;
+  } catch (err) {
+    if (retries > 0 && (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.fatal)) {
+      console.warn('[DB] Re-trying query after connection reset:', err.message);
+      pool = null;
+      return query(sql, params, retries - 1);
+    }
+    throw err;
+  }
 }
 
 /**

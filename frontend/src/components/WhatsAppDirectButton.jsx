@@ -1,5 +1,14 @@
-import React, { useState } from 'react';
-import { Check, Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Check,
+  Loader2,
+  AlertCircle,
+  MessageSquare,
+  Image as ImageIcon,
+  ChevronDown,
+  Sparkles,
+  Share2,
+} from 'lucide-react';
 import { useToast } from './Toast';
 import './WhatsAppDirectButton.css';
 
@@ -24,10 +33,11 @@ export function WhatsAppIcon({ size = 16, className = '', color = 'currentColor'
 
 /**
  * WhatsAppDirectButton
- * Direct WhatsApp dispatch button with authentic logo and auto-fallback for Desktop & Mobile devices
+ * Direct WhatsApp dispatch button with Text vs High-Res JPEG Receipt format choice menu
  */
 export default function WhatsAppDirectButton({
   onSend,
+  onOpenJpg,
   phone = '',
   defaultLabel = 'Send WhatsApp',
   successLabel = '✓ WhatsApp Sent',
@@ -35,13 +45,48 @@ export default function WhatsAppDirectButton({
   compact = false,
   className = '',
   disabled = false,
+  itemTitle = 'Receipt',
 }) {
   const { toast } = useToast();
   const [status, setStatus] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
   const [errorMessage, setErrorMessage] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const containerRef = useRef(null);
 
-  const handleClick = async (e) => {
+  // Close menu on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [menuOpen]);
+
+  const handleMainClick = (e) => {
     e.stopPropagation();
+    if (status === 'sending' || disabled) return;
+
+    // If both options are available, toggle format picker menu
+    if (onOpenJpg) {
+      setMenuOpen(prev => !prev);
+      return;
+    }
+
+    // Direct text dispatch fallback
+    handleSendText(e);
+  };
+
+  const handleSendText = async (e) => {
+    if (e) e.stopPropagation();
+    setMenuOpen(false);
     if (status === 'sending' || disabled) return;
 
     setStatus('sending');
@@ -58,14 +103,20 @@ export default function WhatsAppDirectButton({
             window.open(res.data.direct_link, '_blank');
           }
         }
-        toast.success(res?.data?.message || 'WhatsApp dispatched successfully!');
+        toast.success(res?.data?.message || 'WhatsApp text message dispatched successfully!');
+      } else {
+        const cleanPhone = (phone || '').replace(/\D/g, '');
+        if (cleanPhone) {
+          const waNum = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+          window.open(`https://wa.me/${waNum}`, '_blank');
+          toast.info('Opened WhatsApp chat directly with parent');
+        }
       }
       setStatus('sent');
     } catch (err) {
-      console.error('[WhatsAppDirectButton]', err);
+      console.error('[WhatsAppDirectButton.handleSendText]', err);
       const cleanPhone = (phone || '').replace(/\D/g, '');
       if (cleanPhone) {
-        // Safe direct fallback
         const waNum = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
         window.open(`https://wa.me/${waNum}`, '_blank');
         toast.info('Opened WhatsApp chat directly with parent');
@@ -80,36 +131,97 @@ export default function WhatsAppDirectButton({
     }
   };
 
+  const handleSendJpg = (e) => {
+    if (e) e.stopPropagation();
+    setMenuOpen(false);
+    if (onOpenJpg) {
+      onOpenJpg();
+    } else {
+      toast.info('Opening JPEG format receipt...');
+    }
+  };
+
   const isSent = status === 'sent';
   const isSending = status === 'sending';
   const isError = status === 'error';
 
   return (
-    <button
-      type="button"
-      className={`btn-whatsapp-direct ${size} ${status} ${compact ? 'compact' : ''} ${className}`}
-      onClick={handleClick}
-      disabled={disabled || isSending}
-      title={
-        isSent
-          ? `Dispatched via WhatsApp to parent (${phone || 'Registered Phone'})`
-          : isError
-          ? `Error: ${errorMessage}`
-          : `Send directly via WhatsApp in background${phone ? ` (${phone})` : ''}`
-      }
-    >
-      {isSending && <Loader2 size={size === 'sm' ? 14 : 16} className="wa-spinner" />}
-      {isSent && <Check size={size === 'sm' ? 14 : 16} className="wa-check-icon" />}
-      {isError && <AlertCircle size={size === 'sm' ? 14 : 16} className="wa-error-icon" />}
-      {!isSending && !isSent && !isError && (
-        <WhatsAppIcon size={size === 'sm' ? 14 : 16} className="wa-icon" />
-      )}
+    <div className="wa-button-wrapper" ref={containerRef}>
+      <button
+        type="button"
+        className={`btn-whatsapp-direct ${size} ${status} ${compact ? 'compact' : ''} ${className}`}
+        onClick={handleMainClick}
+        disabled={disabled || isSending}
+        title={
+          isSent
+            ? `Dispatched via WhatsApp to parent (${phone || 'Registered Phone'})`
+            : isError
+            ? `Error: ${errorMessage}`
+            : onOpenJpg
+            ? `Send via WhatsApp (Choose Text or JPEG Receipt)`
+            : `Send directly via WhatsApp in background${phone ? ` (${phone})` : ''}`
+        }
+      >
+        {isSending && <Loader2 size={size === 'sm' ? 14 : 16} className="wa-spinner" />}
+        {isSent && <Check size={size === 'sm' ? 14 : 16} className="wa-check-icon" />}
+        {isError && <AlertCircle size={size === 'sm' ? 14 : 16} className="wa-error-icon" />}
+        {!isSending && !isSent && !isError && (
+          <WhatsAppIcon size={size === 'sm' ? 14 : 16} className="wa-icon" />
+        )}
 
-      {!compact && (
-        <span className="wa-btn-text">
-          {isSending ? 'Sending...' : isSent ? successLabel : isError ? 'Retry WhatsApp' : defaultLabel}
-        </span>
+        {!compact && (
+          <span className="wa-btn-text">
+            {isSending ? 'Sending...' : isSent ? successLabel : isError ? 'Retry WhatsApp' : defaultLabel}
+          </span>
+        )}
+
+        {onOpenJpg && !compact && !isSending && (
+          <ChevronDown size={14} className={`wa-chevron-indicator ${menuOpen ? 'open' : ''}`} />
+        )}
+      </button>
+
+      {/* Quick Format Picker Popup Menu */}
+      {menuOpen && (
+        <div className="wa-format-dropdown" onClick={(e) => e.stopPropagation()}>
+          <div className="wa-dropdown-header">
+            <WhatsAppIcon size={14} className="wa-header-icon" />
+            <span>Send via WhatsApp</span>
+          </div>
+
+          <div className="wa-dropdown-options">
+            <button
+              type="button"
+              className="wa-dropdown-item text-opt"
+              onClick={handleSendText}
+            >
+              <div className="wa-item-icon-box text-box">
+                <MessageSquare size={16} />
+              </div>
+              <div className="wa-item-details">
+                <span className="wa-item-title">Send Text Message</span>
+                <span className="wa-item-desc">Instant text notification with fee &amp; receipt details</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="wa-dropdown-item jpg-opt"
+              onClick={handleSendJpg}
+            >
+              <div className="wa-item-icon-box jpg-box">
+                <ImageIcon size={16} />
+              </div>
+              <div className="wa-item-details">
+                <span className="wa-item-title">
+                  Send / Share JPEG {itemTitle}
+                  <span className="wa-pill-tag">Official JPG</span>
+                </span>
+                <span className="wa-item-desc">High-resolution branded image receipt with seal &amp; letterhead</span>
+              </div>
+            </button>
+          </div>
+        </div>
       )}
-    </button>
+    </div>
   );
 }

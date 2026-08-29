@@ -373,13 +373,13 @@ async function sendPaymentConfirmation(req, res) {
       try {
         if (ch === 'sms') {
           await sendSMS(payment.phone, messageBody, {
-            student_id: payment.id,
+            student_id: payment.student_id,
             template_id: template.id,
             payment_id: payment.id,
           });
         } else {
           await sendWhatsApp(payment.phone, messageBody, {
-            student_id: payment.id,
+            student_id: payment.student_id,
             template_id: template.id,
             payment_id: payment.id,
           });

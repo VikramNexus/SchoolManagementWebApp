@@ -77,8 +77,8 @@ async function getPaymentDetailsForReceipt(paymentId) {
      LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
      LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
      LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
-     WHERE p.\`id\` = ?`,
-    [paymentId]
+     WHERE p.\`id\` = ? OR r.\`id\` = ? OR r.\`receipt_number\` = ? OR p.\`receipt_number\` = ?`,
+    [paymentId, paymentId, paymentId, paymentId]
   );
 }
 
@@ -514,10 +514,24 @@ async function generateAndSaveReceipt(paymentId) {
 
   // Update receipts table with file path
   const relativePath = path.relative(path.join(__dirname, '../../'), filePath);
-  await db.query(
-    `UPDATE \`receipts\` SET \`file_path\` = ? WHERE \`payment_id\` = ?`,
-    [relativePath, paymentId]
+  const existingReceipt = await db.queryOne(
+    `SELECT id FROM \`receipts\` WHERE \`payment_id\` = ?`,
+    [paymentId]
   );
+
+  if (existingReceipt) {
+    await db.query(
+      `UPDATE \`receipts\` SET \`file_path\` = ? WHERE \`payment_id\` = ?`,
+      [relativePath, paymentId]
+    );
+  } else {
+    const payment = await db.queryOne(`SELECT \`receipt_number\` FROM \`payments\` WHERE \`id\` = ?`, [paymentId]);
+    const rNum = payment?.receipt_number || `REC-${String(paymentId).padStart(6, '0')}`;
+    await db.query(
+      `INSERT INTO \`receipts\` (\`payment_id\`, \`receipt_number\`, \`file_path\`) VALUES (?, ?, ?)`,
+      [paymentId, rNum, relativePath]
+    );
+  }
 
   return { filePath, relativePath };
 }

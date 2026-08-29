@@ -105,6 +105,7 @@ async function createStudent(req, res) {
     address,
     admission_date,
     monthly_fee_rate,
+    opening_dues = 0,
     status = 'active',
     initial_fee_type_ids = [],
   } = req.body || {};
@@ -133,8 +134,18 @@ async function createStudent(req, res) {
   const effectiveMother = mother_name?.trim() || null;
   const effectiveParent = effectiveFather || effectiveMother || null;
   const effectiveGender = gender?.trim() || 'male';
+  const effectiveOpeningDues = Number(opening_dues) || 0;
 
   try {
+    // Check duplicate admission_no
+    const dupAdm = await db.queryOne('SELECT `id` FROM `students` WHERE `admission_no` = ?', [admission_no.trim()]);
+    if (dupAdm) {
+      return res.status(400).json({
+        success: false,
+        message: `Admission number "${admission_no.trim()}" is already assigned to another student.`,
+      });
+    }
+
     // Check section belongs to class if provided
     if (section_id) {
       const section = await db.queryOne('SELECT `id` FROM `sections` WHERE `id` = ? AND `class_id` = ?', [section_id, class_id]);
@@ -145,8 +156,8 @@ async function createStudent(req, res) {
 
     const result = await db.query(
       `INSERT INTO \`students\`
-       (\`admission_no\`, \`full_name\`, \`gender\`, \`class_id\`, \`section_id\`, \`category\`, \`father_name\`, \`mother_name\`, \`parent_name\`, \`phone\`, \`whatsapp_number\`, \`address\`, \`admission_date\`, \`monthly_fee_rate\`, \`status\`)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (\`admission_no\`, \`full_name\`, \`gender\`, \`class_id\`, \`section_id\`, \`category\`, \`father_name\`, \`mother_name\`, \`parent_name\`, \`phone\`, \`whatsapp_number\`, \`address\`, \`admission_date\`, \`monthly_fee_rate\`, \`opening_dues\`, \`status\`)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         admission_no.trim(),
         full_name.trim(),
@@ -162,24 +173,22 @@ async function createStudent(req, res) {
         address?.trim() || null,
         admission_date || null,
         rate,
+        effectiveOpeningDues,
         status,
       ]
     );
 
     const studentId = result.insertId;
 
-    // Note: Automatic fee generation on student creation disabled per workflow requirement.
-    // Monthly fees are generated when Admin runs fee generation for a target month.
-
     // Assign initial charges if selected
     if (Array.isArray(initial_fee_type_ids) && initial_fee_type_ids.length > 0) {
       for (const ftId of initial_fee_type_ids) {
-        const feeType = await db.queryOne('SELECT `id`, `name` FROM `fee_types` WHERE `id` = ? AND `is_active` = 1', [ftId]);
+        const feeType = await db.queryOne('SELECT `id`, `name`, `default_amount` FROM `fee_types` WHERE `id` = ? AND `is_active` = 1', [ftId]);
         if (feeType) {
           await db.query(
             `INSERT INTO \`student_additional_fees\` (\`student_id\`, \`fee_type_id\`, \`amount\`, \`status\`)
-             VALUES (?, ?, 1000.00, 'DUE')`,
-            [studentId, ftId]
+             VALUES (?, ?, ?, 'DUE')`,
+            [studentId, feeType.id, feeType.default_amount || 0]
           );
         }
       }
@@ -196,8 +205,8 @@ async function createStudent(req, res) {
 
     return res.status(201).json({
       success: true,
-      message: 'Student created with custom monthly fee rate.',
-      student: { ...student, monthly_fee_rate: Number(student.monthly_fee_rate || 0) },
+      message: 'Student created successfully.',
+      student: { ...student, monthly_fee_rate: Number(student.monthly_fee_rate || 0), opening_dues: Number(student.opening_dues || 0) },
     });
   } catch (err) {
     console.error('[studentController.createStudent]', err);
@@ -233,7 +242,7 @@ async function getStudent(req, res) {
 
     return res.json({
       success: true,
-      student: { ...student, monthly_fee_rate: Number(student.monthly_fee_rate || 0) },
+      student: { ...student, monthly_fee_rate: Number(student.monthly_fee_rate || 0), opening_dues: Number(student.opening_dues || 0) },
     });
   } catch (err) {
     console.error('[studentController.getStudent]', err);
@@ -246,7 +255,7 @@ async function updateStudent(req, res) {
   const { id } = req.params;
   const allowed = [
     'admission_no', 'full_name', 'gender', 'class_id', 'section_id', 'category',
-    'father_name', 'mother_name', 'parent_name', 'phone', 'whatsapp_number', 'address', 'admission_date', 'monthly_fee_rate', 'status'
+    'father_name', 'mother_name', 'parent_name', 'phone', 'whatsapp_number', 'address', 'admission_date', 'monthly_fee_rate', 'opening_dues', 'status'
   ];
 
   const fields = [];
@@ -457,6 +466,56 @@ _${school.school_name}_`;
   }
 }
 
+/**
+ * POST /api/students/:id/send-ledger-whatsapp-jpg
+ * Send high-resolution Full Fee Ledger / Statement JPG image via WhatsApp in background
+ */
+async function sendStudentLedgerWhatsAppImage(req, res) {
+  const { id } = req.params;
+  const { imageBase64, phone } = req.body || {};
+
+  try {
+    const student = await db.queryOne(
+      `SELECT s.*, c.\`name\` as class_name, sec.\`name\` as section_name
+       FROM \`students\` s
+       LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+       LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
+       WHERE s.\`id\` = ?`,
+      [id]
+    );
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found.' });
+    }
+
+    const recipientPhone = phone || student.whatsapp_number || student.phone || student.father_phone || student.contact_no;
+    if (!recipientPhone) {
+      return res.status(400).json({ success: false, message: 'No registered phone/WhatsApp number for this student.' });
+    }
+
+    const school = await db.queryOne('SELECT `school_name` FROM `school_settings` WHERE `id` = 1') || {
+      school_name: 'Aryavart Shikshan Sansthan',
+    };
+
+    const caption = `📊 *Official Student Fee Statement & Ledger*\nStudent: *${student.full_name}* (${student.admission_no || '—'})\nClass: *${student.class_name || '—'}*\n_${school.school_name}_`;
+
+    const { sendWhatsAppImage } = require('../services/whatsappService');
+    const result = await sendWhatsAppImage(recipientPhone, imageBase64, caption, {
+      student_id: student.id,
+    });
+
+    return res.json({
+      success: true,
+      message: `Fee Statement JPEG image dispatched to ${recipientPhone} via WhatsApp in background.`,
+      recipient: recipientPhone,
+      mode: result.mode,
+    });
+  } catch (err) {
+    console.error('[sendStudentLedgerWhatsAppImage]', err);
+    return res.status(500).json({ success: false, message: 'Failed to send WhatsApp JPEG fee statement: ' + err.message });
+  }
+}
+
 module.exports = {
   listStudents,
   createStudent,
@@ -466,4 +525,5 @@ module.exports = {
   deleteStudent,
   downloadStudentLedgerPDF,
   sendStudentLedgerWhatsApp,
+  sendStudentLedgerWhatsAppImage,
 };

@@ -41,4 +41,15 @@ async function migrate() {
   }
 }
 
+module.exports = { migrate };
+
+// Allow running directly
+if (require.main === module) {
+  migrate()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
+}ss.exit(1);
+  }
+}
+
 migrate();

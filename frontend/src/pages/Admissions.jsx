@@ -1,7 +1,8 @@
 /**
  * Admissions Page — School Management System (Frontend)
- * Comprehensive Admission Desk with Itemized Charges, Security Deposit,
- * 1-Month Advance Fee Allocation, Sibling Family Linking & Instant Receipt PDF
+ *
+ * Distinct "Single Student Admission" vs "Family / Sibling Bulk Admission" modes.
+ * Form layout: Student(s) Details ON TOP -> Parent & Contact Details BELOW -> Billing & Receipt Dispatch.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -32,6 +33,8 @@ import {
   Check,
   MessageSquare,
   MapPin,
+  Receipt,
+  UserCheck,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../context/AuthContext';
@@ -62,6 +65,9 @@ export default function Admissions() {
   // Active view tab: 'desk' or 'register'
   const [activeTab, setActiveTab] = useState('desk');
 
+  // Admission Mode: 'single' (1 student) or 'family' (multiple siblings)
+  const [admissionMode, setAdmissionMode] = useState('single');
+
   // Stats & Dropdowns
   const [stats, setStats] = useState({
     total_admissions: 0,
@@ -78,43 +84,42 @@ export default function Admissions() {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
 
-  const initialFormState = {
-    // Demographics
+  const createChildTemplate = (classId = '') => ({
+    id: Date.now() + Math.floor(Math.random() * 10000),
     full_name: '',
     admission_no: '',
     auto_generate_adm: true,
     gender: 'male',
-    class_id: '',
+    class_id: classId,
     section_id: '',
     category: 'day_scholar',
     monthly_fee_rate: '',
-    admission_date: now.toISOString().slice(0, 10),
+    has_admission_fee: false,
+    admission_fee_amount: '',
+    has_security_deposit: false,
+    security_deposit_amount: '',
+    include_advance_month: false,
+    advance_fee_month: currentMonth,
+    advance_fee_year: currentYear,
+    advance_fee_amount: '',
+    has_opening_dues: false,
+    opening_dues_amount: '',
+    custom_expenses: [],
+  });
 
-    // Parent
+  // Shared Parent & Payment State
+  const initialParentState = {
     father_name: '',
     mother_name: '',
     phone: '',
     whatsapp_number: '',
     address: '',
+    admission_date: now.toISOString().slice(0, 10),
 
-    // Sibling Linking
+    // Sibling Linking to existing student
     is_sibling: false,
     sibling_search: '',
     selected_sibling: null,
-
-    // Charges (Manual Entry by Admin)
-    has_admission_fee: false,
-    admission_fee_amount: '',
-
-    has_security_deposit: false,
-    security_deposit_amount: '',
-
-    include_advance_month: false,
-    advance_fee_month: currentMonth,
-    advance_fee_year: currentYear,
-    advance_fee_amount: '',
-
-    custom_expenses: [],
 
     // Payment Collection
     collect_payment: true,
@@ -123,11 +128,16 @@ export default function Admissions() {
     payment_notes: 'Initial admission fee and advance tuition payment',
   };
 
-  const [formData, setFormData] = useState(initialFormState);
+  const [parentData, setParentData] = useState(initialParentState);
+  const [children, setChildren] = useState([createChildTemplate()]);
   const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Success and Receipt Modals
   const [enrollmentSuccess, setEnrollmentSuccess] = useState(null);
   const [showJpgReceiptModal, setShowJpgReceiptModal] = useState(false);
+  const [tableJpgData, setTableJpgData] = useState(null);
+  const [showTableJpgModal, setShowTableJpgModal] = useState(false);
 
   // Sibling live search results
   const [siblingSearchResults, setSiblingSearchResults] = useState([]);
@@ -158,9 +168,12 @@ export default function Admissions() {
       if (classesRes.data.success) {
         const clsList = classesRes.data.classes || [];
         setClasses(clsList);
-        if (clsList.length > 0 && !formData.class_id) {
-          setFormData((prev) => ({ ...prev, class_id: String(clsList[0].id) }));
-        }
+        setChildren((prev) => {
+          if (prev.length > 0 && !prev[0].class_id && clsList.length > 0) {
+            return prev.map((c, idx) => (idx === 0 ? { ...c, class_id: String(clsList[0].id) } : c));
+          }
+          return prev;
+        });
       }
       if (sectionsRes.data.success) {
         setSections(sectionsRes.data.sections || []);
@@ -206,160 +219,195 @@ export default function Admissions() {
     }
   }, [activeTab, fetchAdmissionsList]);
 
-  // Update category without forcing hardcoded default rates
-  const handleCategoryChange = (newCat) => {
-    setFormData((prev) => ({
-      ...prev,
-      category: newCat,
-    }));
-  };
-
-  // Recalculate total payable whenever fee components change
-  useEffect(() => {
-    let total = 0;
-    if (formData.has_admission_fee && formData.admission_fee_amount !== '') {
-      total += Number(formData.admission_fee_amount || 0);
+  // Calculate subtotal for a single child
+  const getChildSubtotal = (child) => {
+    let sub = 0;
+    if (child.has_admission_fee && child.admission_fee_amount !== '') {
+      sub += Number(child.admission_fee_amount || 0);
     }
-    if (formData.has_security_deposit && formData.security_deposit_amount !== '') {
-      total += Number(formData.security_deposit_amount || 0);
+    if (child.has_security_deposit && child.security_deposit_amount !== '') {
+      sub += Number(child.security_deposit_amount || 0);
     }
-    if (formData.include_advance_month && formData.advance_fee_amount !== '') {
-      total += Number(formData.advance_fee_amount || 0);
+    if (child.include_advance_month && child.advance_fee_amount !== '') {
+      sub += Number(child.advance_fee_amount || 0);
     }
-
-    formData.custom_expenses.forEach((item) => {
+    if (child.has_opening_dues && child.opening_dues_amount !== '') {
+      sub += Number(child.opening_dues_amount || 0);
+    }
+    (child.custom_expenses || []).forEach((item) => {
       if (item.amount !== '') {
-        total += Number(item.amount || 0);
+        sub += Number(item.amount || 0);
       }
     });
+    return sub;
+  };
 
-    setFormData((prev) => ({
+  // Recalculate consolidated total family payable
+  const totalFamilyAssessed = children.reduce((sum, c) => sum + getChildSubtotal(c), 0);
+
+  useEffect(() => {
+    setParentData((prev) => ({
       ...prev,
-      paid_amount: total > 0 ? total : '',
+      paid_amount: totalFamilyAssessed > 0 ? totalFamilyAssessed : '',
     }));
-  }, [
-    formData.has_admission_fee,
-    formData.admission_fee_amount,
-    formData.has_security_deposit,
-    formData.security_deposit_amount,
-    formData.include_advance_month,
-    formData.advance_fee_amount,
-    formData.custom_expenses,
-  ]);
+  }, [totalFamilyAssessed]);
+
+  // Child management handlers
+  const handleAddChild = () => {
+    const defaultCls = classes.length > 0 ? String(classes[0].id) : '';
+    setChildren((prev) => [...prev, createChildTemplate(defaultCls)]);
+  };
+
+  const handleRemoveChild = (id) => {
+    if (children.length <= 1) {
+      toast.warning('At least one child record is required for admission.');
+      return;
+    }
+    setChildren((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleUpdateChild = (id, field, value) => {
+    setChildren((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const updated = { ...c, [field]: value };
+
+        // Auto-fill monthly rate suggestion based on class or category if empty
+        if (field === 'class_id' || field === 'category') {
+          const selectedCls = classes.find((cl) => cl.id === Number(updated.class_id));
+          if (!updated.monthly_fee_rate || updated.monthly_fee_rate === '') {
+            const baseRate = selectedCls
+              ? updated.category === 'hosteller'
+                ? selectedCls.hostel_fee || 5000
+                : selectedCls.base_tuition_fee || 3000
+              : updated.category === 'hosteller' ? 5000 : 3000;
+            updated.monthly_fee_rate = baseRate;
+            if (updated.include_advance_month && (!updated.advance_fee_amount || updated.advance_fee_amount === '')) {
+              updated.advance_fee_amount = baseRate;
+            }
+          }
+        }
+
+        // When advance month is toggled on, auto prefill amount
+        if (field === 'include_advance_month' && value === true) {
+          if (!updated.advance_fee_amount || updated.advance_fee_amount === '') {
+            updated.advance_fee_amount = updated.monthly_fee_rate || 3000;
+          }
+        }
+
+        return updated;
+      })
+    );
+  };
+
+  // Custom Expenses handlers
+  const handleAddCustomExpense = (childId) => {
+    setChildren((prev) =>
+      prev.map((c) => {
+        if (c.id !== childId) return c;
+        return {
+          ...c,
+          custom_expenses: [
+            ...c.custom_expenses,
+            { id: Date.now() + Math.random(), description: '', amount: '' },
+          ],
+        };
+      })
+    );
+  };
+
+  const handleRemoveCustomExpense = (childId, expenseId) => {
+    setChildren((prev) =>
+      prev.map((c) => {
+        if (c.id !== childId) return c;
+        return {
+          ...c,
+          custom_expenses: c.custom_expenses.filter((e) => e.id !== expenseId),
+        };
+      })
+    );
+  };
+
+  const handleUpdateCustomExpense = (childId, expenseId, field, val) => {
+    setChildren((prev) =>
+      prev.map((c) => {
+        if (c.id !== childId) return c;
+        return {
+          ...c,
+          custom_expenses: c.custom_expenses.map((e) =>
+            e.id === expenseId ? { ...e, [field]: val } : e
+          ),
+        };
+      })
+    );
+  };
 
   // Sibling Live Search
-  const handleSearchSibling = async (text) => {
-    setFormData((prev) => ({ ...prev, sibling_search: text }));
-    if (!text || text.trim().length < 2) {
+  const handleSearchSibling = async (val) => {
+    setParentData((prev) => ({ ...prev, sibling_search: val }));
+    if (!val || val.trim().length < 2) {
       setSiblingSearchResults([]);
       return;
     }
     try {
       setSearchingSibling(true);
-      const res = await api.get(`/family/search?q=${encodeURIComponent(text.trim())}`);
+      const res = await api.get(`/family/search?q=${encodeURIComponent(val.trim())}`);
       if (res.data.success) {
         setSiblingSearchResults(res.data.students || []);
       }
     } catch (err) {
-      console.error(err);
+      console.error('[handleSearchSibling]', err);
     } finally {
       setSearchingSibling(false);
     }
   };
 
   const selectSibling = (std) => {
-    const sPhone = std.phone || '';
-    const sWhatsapp = std.whatsapp_number || sPhone;
-    setFormData((prev) => ({
+    setParentData((prev) => ({
       ...prev,
       selected_sibling: std,
       father_name: std.father_name || std.parent_name || prev.father_name,
       mother_name: std.mother_name || prev.mother_name,
-      phone: sPhone || prev.phone,
-      whatsapp_number: sWhatsapp || prev.whatsapp_number,
+      phone: std.phone || prev.phone,
+      whatsapp_number: std.phone || prev.whatsapp_number,
       address: std.address || prev.address,
+      sibling_search: '',
     }));
-    if (sPhone) {
-      setWhatsappSameAsPhone(sWhatsapp === sPhone);
-    }
     setSiblingSearchResults([]);
   };
 
-  const handlePhoneChange = (value) => {
-    setFormData((prev) => ({
-      ...prev,
-      phone: value,
-      whatsapp_number: whatsappSameAsPhone ? value : prev.whatsapp_number,
-    }));
-  };
-
-  const handleToggleSameAsPhone = (checked) => {
-    setWhatsappSameAsPhone(checked);
-    if (checked) {
-      setFormData((prev) => ({
-        ...prev,
-        whatsapp_number: prev.phone,
-      }));
-    }
-  };
-
-  const handleWhatsAppNumberChange = (value) => {
-    setFormData((prev) => ({ ...prev, whatsapp_number: value }));
-    if (value !== formData.phone) {
-      setWhatsappSameAsPhone(false);
-    } else {
-      setWhatsappSameAsPhone(true);
-    }
-  };
-
   const removeSibling = () => {
-    setFormData((prev) => ({
+    setParentData((prev) => ({
       ...prev,
       selected_sibling: null,
       sibling_search: '',
     }));
   };
 
-  // Custom Expenses helpers
-  const addExpenseRow = () => {
-    setFormData((prev) => ({
-      ...prev,
-      custom_expenses: [
-        ...prev.custom_expenses,
-        { id: Date.now(), description: '', amount: '' },
-      ],
-    }));
-  };
-
-  const updateExpenseRow = (id, field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      custom_expenses: prev.custom_expenses.map((row) =>
-        row.id === id ? { ...row, [field]: value } : row
-      ),
-    }));
-  };
-
-  const removeExpenseRow = (id) => {
-    setFormData((prev) => ({
-      ...prev,
-      custom_expenses: prev.custom_expenses.filter((row) => row.id !== id),
-    }));
-  };
-
   // Submit Admission
   const handleSubmitAdmission = async (e) => {
     e.preventDefault();
-    if (!formData.full_name.trim()) {
-      toast.error('Student full name is required.');
+
+    // Validation
+    for (let i = 0; i < children.length; i++) {
+      const c = children[i];
+      if (!c.full_name.trim()) {
+        toast.error(`Please provide student full name for Child #${i + 1}.`);
+        return;
+      }
+      if (!c.class_id) {
+        toast.error(`Please select class for ${c.full_name || `Child #${i + 1}`}.`);
+        return;
+      }
+    }
+
+    if (!parentData.father_name.trim() && !parentData.mother_name.trim()) {
+      toast.error("Please provide at least Father's or Mother's name.");
       return;
     }
-    if (!formData.class_id) {
-      toast.error('Please select a class.');
-      return;
-    }
-    if (formData.monthly_fee_rate === '' || isNaN(Number(formData.monthly_fee_rate))) {
-      toast.error('Please enter the custom monthly fee rate.');
+
+    if (!parentData.phone.trim()) {
+      toast.error('Please provide a valid primary phone number.');
       return;
     }
 
@@ -367,54 +415,59 @@ export default function Admissions() {
       setSubmitting(true);
 
       const payload = {
-        admission_no: formData.auto_generate_adm ? null : formData.admission_no,
-        full_name: formData.full_name,
-        gender: formData.gender,
-        class_id: Number(formData.class_id),
-        section_id: formData.section_id ? Number(formData.section_id) : null,
-        category: formData.category,
-        father_name: formData.father_name,
-        mother_name: formData.mother_name,
-        parent_name: formData.father_name || formData.mother_name || null,
-        phone: formData.phone,
-        whatsapp_number: formData.whatsapp_number,
-        address: formData.address,
-        admission_date: formData.admission_date,
-        monthly_fee_rate: Number(formData.monthly_fee_rate),
-
-        // Sibling linking
-        sibling_student_id: formData.selected_sibling?.id || null,
-
-        // Charges
-        admission_fee_amount: formData.has_admission_fee ? Number(formData.admission_fee_amount) : 0,
-        security_deposit_amount: formData.has_security_deposit ? Number(formData.security_deposit_amount) : 0,
-        custom_expenses: formData.custom_expenses.filter((exp) => exp.description.trim() && Number(exp.amount) > 0),
-
-        // Advance Month
-        include_advance_month: formData.include_advance_month,
-        advance_fee_month: formData.advance_fee_month,
-        advance_fee_year: formData.advance_fee_year,
-
-        // Payment
-        collect_payment: formData.collect_payment,
-        paid_amount: formData.collect_payment ? Number(formData.paid_amount) : 0,
-        payment_mode: formData.payment_mode,
-        payment_notes: formData.payment_notes,
+        parent: {
+          father_name: parentData.father_name.trim(),
+          mother_name: parentData.mother_name.trim(),
+          phone: parentData.phone.trim(),
+          whatsapp_number: whatsappSameAsPhone
+            ? parentData.phone.trim()
+            : (parentData.whatsapp_number || parentData.phone).trim(),
+          address: parentData.address.trim(),
+          admission_date: parentData.admission_date,
+          linked_family_id: parentData.selected_sibling?.family_id || null,
+        },
+        children: children.map((c) => ({
+          full_name: c.full_name.trim(),
+          admission_no: c.auto_generate_adm ? undefined : c.admission_no.trim(),
+          gender: c.gender,
+          class_id: Number(c.class_id),
+          section_id: c.section_id ? Number(c.section_id) : undefined,
+          category: c.category,
+          monthly_fee_rate: c.monthly_fee_rate ? Number(c.monthly_fee_rate) : undefined,
+          opening_dues: c.has_opening_dues ? Number(c.opening_dues_amount || 0) : 0,
+          opening_dues_amount: c.has_opening_dues ? Number(c.opening_dues_amount || 0) : 0,
+          has_admission_fee: c.has_admission_fee,
+          admission_fee_amount: c.has_admission_fee ? Number(c.admission_fee_amount || 0) : 0,
+          has_security_deposit: c.has_security_deposit,
+          security_deposit_amount: c.has_security_deposit ? Number(c.security_deposit_amount || 0) : 0,
+          include_advance_month: c.include_advance_month,
+          advance_fee_month: c.include_advance_month ? Number(c.advance_fee_month) : undefined,
+          advance_fee_year: c.include_advance_month ? Number(c.advance_fee_year) : undefined,
+          advance_fee_amount: c.include_advance_month ? Number(c.advance_fee_amount || 0) : 0,
+          custom_expenses: (c.custom_expenses || [])
+            .filter((e) => e.description.trim() && Number(e.amount) > 0)
+            .map((e) => ({
+              description: e.description.trim(),
+              amount: Number(e.amount),
+            })),
+        })),
+        payment: {
+          collect_payment: parentData.collect_payment,
+          paid_amount: parentData.collect_payment ? Number(parentData.paid_amount || 0) : 0,
+          payment_mode: parentData.payment_mode,
+          notes: parentData.payment_notes,
+        },
       };
 
-      const res = await api.post('/admissions/enroll', payload);
+      const res = await api.post('/admissions/enroll-family', payload);
 
       if (res.data.success) {
-        toast.success(res.data.message || 'Student enrolled successfully!');
-        setEnrollmentSuccess({
-          student_id: res.data.student_id,
-          admission_no: res.data.admission_no,
-          full_name: formData.full_name,
-          payment: res.data.payment,
-        });
+        toast.success(res.data.message || 'Admission completed successfully!');
+        setEnrollmentSuccess(res.data);
         fetchData();
       }
     } catch (err) {
+      console.error('[handleSubmitAdmission]', err);
       toast.error(err.response?.data?.message || 'Failed to complete admission.');
     } finally {
       setSubmitting(false);
@@ -422,8 +475,9 @@ export default function Admissions() {
   };
 
   const handleResetForm = () => {
-    setFormData(initialFormState);
-    setWhatsappSameAsPhone(true);
+    const defaultCls = classes.length > 0 ? String(classes[0].id) : '';
+    setParentData(initialParentState);
+    setChildren([createChildTemplate(defaultCls)]);
     setEnrollmentSuccess(null);
   };
 
@@ -437,16 +491,16 @@ export default function Admissions() {
 
   return (
     <div className="admissions-container">
-      {/* Header Card (Eye-Comfort Theme) */}
+      {/* Top Header Card */}
       <div className="admissions-header-card">
         <div className="header-left-wrap">
           <div className="admissions-icon-badge">
-            <UserPlus size={26} />
+            <UserPlus size={24} />
           </div>
           <div>
-            <h1 className="admissions-heading">Student Admissions &amp; Enrollment Desk</h1>
+            <h1 className="admissions-heading">Admissions Desk &amp; Sibling Enrollment</h1>
             <p className="admissions-subheading">
-              Register new student admissions with itemized charges, security deposit, advance monthly fee assignment, and sibling family account linking.
+              Simultaneous single or multi-sibling admissions, itemized billing, 1-month advance fee, and instant receipts.
             </p>
           </div>
         </div>
@@ -458,7 +512,7 @@ export default function Admissions() {
             onClick={() => setActiveTab('desk')}
           >
             <UserPlus size={16} />
-            <span>+ New Admission Desk</span>
+            <span>Admission Desk</span>
           </button>
           <button
             type="button"
@@ -471,7 +525,7 @@ export default function Admissions() {
         </div>
       </div>
 
-      {/* View 1: New Admission Desk Form */}
+      {/* View 1: Admission Desk Form */}
       {activeTab === 'desk' && (
         <>
           {enrollmentSuccess ? (
@@ -481,17 +535,37 @@ export default function Admissions() {
               </div>
               <h2 className="success-title">Admission Completed Successfully!</h2>
               <p className="success-subtitle">
-                Student <strong>{enrollmentSuccess.full_name}</strong> has been enrolled with Admission No. <code>{enrollmentSuccess.admission_no}</code>.
+                Enrolled <strong>{enrollmentSuccess.students.length} Student{enrollmentSuccess.students.length > 1 ? 's' : ''}</strong> under Family Account <code>{enrollmentSuccess.family_id}</code>.
               </p>
 
-              {enrollmentSuccess.payment && (
+              {/* Sibling Enrolled Badges Grid */}
+              <div className="sibling-success-grid">
+                {enrollmentSuccess.students.map((std, idx) => (
+                  <div key={idx} className="sibling-success-item">
+                    <div className="std-avatar-box">
+                      <GraduationCap size={20} />
+                    </div>
+                    <div className="std-info-box">
+                      <h4 className="std-name">{std.full_name}</h4>
+                      <p className="std-meta">
+                        Admission No: <code>{std.admission_no}</code> • Class:{' '}
+                        <strong>{classes.find((c) => c.id === Number(std.class_id))?.name || 'Class'}</strong>
+                      </p>
+                      <span className="std-due-tag">Assessed Fee: {formatCurrency(std.initial_due)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Receipt / Payment Preview */}
+              {enrollmentSuccess.total_paid > 0 && (
                 <div className="receipt-success-preview">
                   <div className="rcpt-preview-header">
-                    <span>Receipt No: <strong>{enrollmentSuccess.payment.receipt_number}</strong></span>
-                    <span>Amount Paid: <strong>{formatCurrency(enrollmentSuccess.payment.amount)}</strong></span>
+                    <span>Receipt No: <strong>{enrollmentSuccess.payments?.[0]?.receipt_number || 'ADM-PAID'}</strong></span>
+                    <span>Total Amount Collected: <strong>{formatCurrency(enrollmentSuccess.total_paid)}</strong></span>
                   </div>
                   <p className="rcpt-notes">
-                    1-Month advance tuition and admission charges have been allocated to the student ledger.
+                    Initial advance tuition and admission charges have been allocated to the fee ledgers via FIFO.
                   </p>
                 </div>
               )}
@@ -507,22 +581,17 @@ export default function Admissions() {
                   <span>View &amp; Share JPG Receipt</span>
                 </button>
 
-                <WhatsAppDirectButton
-                  onSend={() => api.post(`/admissions/send-whatsapp/${enrollmentSuccess.student_id}`)}
-                  phone={formData.whatsapp_number || formData.phone}
-                  defaultLabel="Send Admission Receipt via WhatsApp"
-                  successLabel="✓ WhatsApp Sent to Parent"
-                  size="md"
-                />
-
-                <button
-                  type="button"
-                  className="btn-success-profile"
-                  onClick={() => navigate(`/students/${enrollmentSuccess.student_id}`)}
-                >
-                  <Eye size={17} />
-                  <span>View Student Profile &amp; Ledger</span>
-                </button>
+                {enrollmentSuccess.students.length > 0 && (
+                  <WhatsAppDirectButton
+                    onSend={() => api.post(`/admissions/send-whatsapp/${enrollmentSuccess.students[0].student_id}`)}
+                    onOpenJpg={() => setShowJpgReceiptModal(true)}
+                    phone={parentData.whatsapp_number || parentData.phone}
+                    defaultLabel="Send Admission Receipt via WhatsApp"
+                    successLabel="✓ WhatsApp Sent to Parent"
+                    size="md"
+                    itemTitle="Admission Receipt"
+                  />
+                )}
 
                 <button
                   type="button"
@@ -530,178 +599,449 @@ export default function Admissions() {
                   onClick={handleResetForm}
                 >
                   <Plus size={17} />
-                  <span>Admit Another Student</span>
+                  <span>Admit Another Student / Family</span>
                 </button>
               </div>
             </div>
           ) : (
             <form className="admission-form" onSubmit={handleSubmitAdmission}>
-              {/* Section 1: Demographics & Academic Structure */}
-              <div className="admission-section-card">
-                <div className="section-card-header">
-                  <div className="header-icon-box primary">
-                    <User size={18} />
-                  </div>
-                  <div>
-                    <h3 className="section-title">1. Student Academic &amp; Personal Demographics</h3>
-                    <p className="section-subtitle">Basic student identity, class assignment, and custom monthly tuition rate.</p>
-                  </div>
-                </div>
-
-                <div className="form-grid-3">
-                  <div className="form-field">
-                    <label>Student Full Name *</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Rahul Kumar"
-                      value={formData.full_name}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, full_name: e.target.value }))}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-field">
-                    <label>Gender *</label>
-                    <select
-                      value={formData.gender}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, gender: e.target.value }))}
-                    >
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  <div className="form-field">
-                    <label>Admission Date</label>
-                    <input
-                      type="date"
-                      value={formData.admission_date}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, admission_date: e.target.value }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-grid-3">
-                  <div className="form-field">
-                    <label>Assign Class *</label>
-                    <select
-                      value={formData.class_id}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, class_id: e.target.value, section_id: '' }))}
-                      required
-                    >
-                      <option value="">Select Class...</option>
-                      {classes.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-field">
-                    <label>Assign Section</label>
-                    <select
-                      value={formData.section_id}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, section_id: e.target.value }))}
-                    >
-                      <option value="">No Section</option>
-                      {sections
-                        .filter((s) => !formData.class_id || s.class_id === Number(formData.class_id))
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.class_name ? `${s.class_name} - ${s.name}` : s.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-
-                  <div className="form-field">
-                    <label>Student Category *</label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => handleCategoryChange(e.target.value)}
-                    >
-                      <option value="day_scholar">Day Scholar (Day Boarder)</option>
-                      <option value="hosteller">Hosteller (Hostel Accommodation)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-grid-2">
-                  <div className="form-field">
-                    <label>Monthly Fee Rate (₹) — Custom Tuition/Hostel Rate *</label>
-                    <div className="input-prefix-box">
-                      <span className="prefix-currency">₹</span>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="Enter monthly fee rate (e.g. 3000)"
-                        value={formData.monthly_fee_rate}
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? '' : Number(e.target.value);
-                          setFormData((prev) => ({
-                            ...prev,
-                            monthly_fee_rate: val,
-                            advance_fee_amount: prev.advance_fee_amount === '' || prev.advance_fee_amount === prev.monthly_fee_rate ? val : prev.advance_fee_amount,
-                          }));
-                        }}
-                        required
-                      />
+              {/* TOP SELECTOR: Single Student Admission vs Family / Sibling Admission */}
+              <div className="admission-mode-selector-container">
+                <div className="mode-selector-pill-wrap">
+                  <button
+                    type="button"
+                    className={`mode-selector-pill ${admissionMode === 'single' ? 'active' : ''}`}
+                    onClick={() => {
+                      setAdmissionMode('single');
+                      if (children.length > 1) {
+                        setChildren([children[0]]);
+                      }
+                    }}
+                  >
+                    <div className="mode-pill-icon">
+                      <User size={18} />
                     </div>
-                    <span className="field-hint">
-                      Enter the monthly tuition / boarding fee rate manually for this student.
-                    </span>
-                  </div>
-
-                  <div className="form-field">
-                    <div className="label-with-toggle">
-                      <label>Admission Number</label>
-                      <label className="toggle-checkbox-label">
-                        <input
-                          type="checkbox"
-                          checked={formData.auto_generate_adm}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, auto_generate_adm: e.target.checked }))
-                          }
-                        />
-                        <span>Auto-Generate</span>
-                      </label>
+                    <div className="mode-pill-text">
+                      <strong className="mode-title">Single Student Admission</strong>
+                      <span className="mode-desc">Individual student enrollment</span>
                     </div>
-                    <input
-                      type="text"
-                      placeholder={formData.auto_generate_adm ? 'Auto-assigned on save' : 'e.g. ADM-2026-0050'}
-                      value={formData.admission_no}
-                      disabled={formData.auto_generate_adm}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, admission_no: e.target.value }))}
-                    />
-                  </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`mode-selector-pill ${admissionMode === 'family' ? 'active' : ''}`}
+                    onClick={() => {
+                      setAdmissionMode('family');
+                      if (children.length < 2) {
+                        const defaultCls = classes.length > 0 ? String(classes[0].id) : '';
+                        setChildren((prev) => [...prev, createChildTemplate(defaultCls)]);
+                      }
+                    }}
+                  >
+                    <div className="mode-pill-icon">
+                      <Users size={18} />
+                    </div>
+                    <div className="mode-pill-text">
+                      <strong className="mode-title">Family / Sibling Admission</strong>
+                      <span className="mode-desc">Multi-child sibling enrollment ({children.length} Students)</span>
+                    </div>
+                  </button>
                 </div>
               </div>
 
-              {/* Section 2: Parent / Guardian & Sibling Account Linking */}
+              {/* SECTION 1 (ON TOP): STUDENT(S) DETAILS */}
+              <div className="admission-section-card">
+                <div className="section-card-header">
+                  <div className="header-icon-box purple">
+                    <GraduationCap size={20} />
+                  </div>
+                  <div className="header-title-split">
+                    <div>
+                      <div className="step-tag-row">
+                        <span className="step-pill purple">STEP 1</span>
+                        <h3 className="section-title">
+                          {admissionMode === 'single'
+                            ? 'Student Academic & Fee Details'
+                            : `Sibling Children Enrollment Cards (${children.length} Students)`}
+                        </h3>
+                      </div>
+                      <p className="section-subtitle">
+                        {admissionMode === 'single'
+                          ? 'Student identity, class assignment, monthly rate, and itemized admission charges.'
+                          : 'Configure separate classes, categories, and itemized fees for each sibling.'}
+                      </p>
+                    </div>
+
+                    {admissionMode === 'family' && (
+                      <button
+                        type="button"
+                        className="btn-add-child-card"
+                        onClick={handleAddChild}
+                      >
+                        <Plus size={15} />
+                        <span>Add Another Sibling Child</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Children List */}
+                <div className="children-cards-list">
+                  {children.map((child, index) => {
+                    const subtotal = getChildSubtotal(child);
+
+                    return (
+                      <div key={child.id} className="child-form-card">
+                        <div className="child-card-header">
+                          <div className="child-title-wrap">
+                            <div className="child-num-badge">{index + 1}</div>
+                            <h4>
+                              {child.full_name ? child.full_name : `Student #${index + 1}`}
+                            </h4>
+                            {child.category && (
+                              <span className={`child-cat-chip ${child.category}`}>
+                                {child.category === 'hosteller' ? 'Hosteller' : 'Day Scholar'}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="child-header-right">
+                            <span className="child-subtotal-tag">
+                              Initial Fees: <strong>{formatCurrency(subtotal)}</strong>
+                            </span>
+                            {admissionMode === 'family' && children.length > 1 && (
+                              <button
+                                type="button"
+                                className="btn-remove-child"
+                                onClick={() => handleRemoveChild(child.id)}
+                                title="Remove this child"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Basic Info Grid */}
+                        <div className="form-grid-3">
+                          <div className="form-field">
+                            <label>Student Full Name *</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Rahul Sharma"
+                              value={child.full_name}
+                              onChange={(e) => handleUpdateChild(child.id, 'full_name', e.target.value)}
+                              required
+                            />
+                          </div>
+
+                          <div className="form-field">
+                            <label>Admission Number</label>
+                            <div className="input-with-checkbox">
+                              <input
+                                type="text"
+                                placeholder="Auto-generated"
+                                value={child.admission_no}
+                                disabled={child.auto_generate_adm}
+                                onChange={(e) => handleUpdateChild(child.id, 'admission_no', e.target.value)}
+                              />
+                              <label className="inline-check">
+                                <input
+                                  type="checkbox"
+                                  checked={child.auto_generate_adm}
+                                  onChange={(e) => handleUpdateChild(child.id, 'auto_generate_adm', e.target.checked)}
+                                />
+                                <span>Auto</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="form-field">
+                            <label>Gender</label>
+                            <select
+                              value={child.gender}
+                              onChange={(e) => handleUpdateChild(child.id, 'gender', e.target.value)}
+                            >
+                              <option value="male">Male</option>
+                              <option value="female">Female</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="form-grid-3">
+                          <div className="form-field">
+                            <label>Class Assignment *</label>
+                            <select
+                              value={child.class_id}
+                              onChange={(e) => handleUpdateChild(child.id, 'class_id', e.target.value)}
+                              required
+                            >
+                              <option value="">Select Class</option>
+                              {classes.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="form-field">
+                            <label>Section (Optional)</label>
+                            <select
+                              value={child.section_id}
+                              onChange={(e) => handleUpdateChild(child.id, 'section_id', e.target.value)}
+                            >
+                              <option value="">Select Section</option>
+                              {sections
+                                .filter((s) => !child.class_id || s.class_id === Number(child.class_id))
+                                .map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+
+                          <div className="form-field">
+                            <label>Student Category</label>
+                            <select
+                              value={child.category}
+                              onChange={(e) => handleUpdateChild(child.id, 'category', e.target.value)}
+                            >
+                              <option value="day_scholar">Day Scholar</option>
+                              <option value="hosteller">Hosteller</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Custom Monthly Fee Rate */}
+                        <div className="fee-config-box">
+                          <div className="fee-config-header">
+                            <span className="fee-config-title">
+                              <IndianRupee size={15} /> Monthly Tuition Fee Rate (Ongoing Monthly Rate)
+                            </span>
+                          </div>
+                          <div className="form-grid-2">
+                            <div className="form-field">
+                              <label>Per-Month Fee Rate (₹) *</label>
+                              <input
+                                type="number"
+                                placeholder="e.g. 3000"
+                                value={child.monthly_fee_rate}
+                                onChange={(e) => handleUpdateChild(child.id, 'monthly_fee_rate', e.target.value)}
+                                required
+                              />
+                            </div>
+                            <div className="field-hint-box">
+                              <p>
+                                Ongoing monthly fee assessed each month in the fee ledger for this student.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Itemized Initial Admission Charges */}
+                        <div className="itemized-charges-box">
+                          <span className="itemized-charges-title">
+                            <ShieldCheck size={16} /> Initial Assessment &amp; Admission Charges (One-Time / Advance)
+                          </span>
+
+                          <div className="charges-items-grid">
+                            {/* 1. Admission Fee */}
+                            <div className={`charge-item-card ${child.has_admission_fee ? 'checked' : ''}`}>
+                              <div className="charge-item-top">
+                                <label className="custom-checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={child.has_admission_fee}
+                                    onChange={(e) => handleUpdateChild(child.id, 'has_admission_fee', e.target.checked)}
+                                  />
+                                  <span className="checkbox-text">One-Time Admission Fee</span>
+                                </label>
+                              </div>
+                              {child.has_admission_fee && (
+                                <div className="charge-input-wrap">
+                                  <span className="currency-prefix">₹</span>
+                                  <input
+                                    type="number"
+                                    placeholder="e.g. 5000"
+                                    value={child.admission_fee_amount}
+                                    onChange={(e) => handleUpdateChild(child.id, 'admission_fee_amount', e.target.value)}
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 2. Security Deposit / Caution Money */}
+                            <div className={`charge-item-card ${child.has_security_deposit ? 'checked' : ''}`}>
+                              <div className="charge-item-top">
+                                <label className="custom-checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={child.has_security_deposit}
+                                    onChange={(e) => handleUpdateChild(child.id, 'has_security_deposit', e.target.checked)}
+                                  />
+                                  <span className="checkbox-text">Security Deposit / Caution Money</span>
+                                </label>
+                              </div>
+                              {child.has_security_deposit && (
+                                <div className="charge-input-wrap">
+                                  <span className="currency-prefix">₹</span>
+                                  <input
+                                    type="number"
+                                    placeholder="e.g. 2000"
+                                    value={child.security_deposit_amount}
+                                    onChange={(e) => handleUpdateChild(child.id, 'security_deposit_amount', e.target.value)}
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 3. 1-Month Advance Fee */}
+                            <div className={`charge-item-card ${child.include_advance_month ? 'checked' : ''}`}>
+                              <div className="charge-item-top">
+                                <label className="custom-checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={child.include_advance_month}
+                                    onChange={(e) => handleUpdateChild(child.id, 'include_advance_month', e.target.checked)}
+                                  />
+                                  <span className="checkbox-text">1-Month Advance Tuition Fee</span>
+                                </label>
+                              </div>
+                              {child.include_advance_month && (
+                                <div className="advance-fee-inputs">
+                                  <div className="month-year-selects">
+                                    <select
+                                      value={child.advance_fee_month}
+                                      onChange={(e) => handleUpdateChild(child.id, 'advance_fee_month', Number(e.target.value))}
+                                    >
+                                      {MONTH_OPTIONS.map((m) => (
+                                        <option key={m.value} value={m.value}>
+                                          {m.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      type="number"
+                                      value={child.advance_fee_year}
+                                      onChange={(e) => handleUpdateChild(child.id, 'advance_fee_year', Number(e.target.value))}
+                                      className="year-input"
+                                    />
+                                  </div>
+                                  <div className="charge-input-wrap">
+                                    <span className="currency-prefix">₹</span>
+                                    <input
+                                      type="number"
+                                      placeholder="Amount"
+                                      value={child.advance_fee_amount}
+                                      onChange={(e) => handleUpdateChild(child.id, 'advance_fee_amount', e.target.value)}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 4. Previous Session Dues / Initial Opening Balance */}
+                            <div className={`charge-item-card ${child.has_opening_dues ? 'checked' : ''}`}>
+                              <div className="charge-item-top">
+                                <label className="custom-checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={child.has_opening_dues}
+                                    onChange={(e) => handleUpdateChild(child.id, 'has_opening_dues', e.target.checked)}
+                                  />
+                                  <span className="checkbox-text">Previous Dues / Starting Opening Balance</span>
+                                </label>
+                              </div>
+                              {child.has_opening_dues && (
+                                <div className="charge-input-wrap">
+                                  <span className="currency-prefix">₹</span>
+                                  <input
+                                    type="number"
+                                    placeholder="e.g. 2500"
+                                    value={child.opening_dues_amount}
+                                    onChange={(e) => handleUpdateChild(child.id, 'opening_dues_amount', e.target.value)}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Custom Expenses */}
+                          <div className="custom-expenses-section">
+                            <div className="custom-expenses-header">
+                              <span>Custom Additional Charges (ID Card, Books, Uniform, etc.)</span>
+                              <button
+                                type="button"
+                                className="btn-add-custom-charge"
+                                onClick={() => handleAddCustomExpense(child.id)}
+                              >
+                                <Plus size={13} /> Add Charge
+                              </button>
+                            </div>
+
+                            {child.custom_expenses.map((expense) => (
+                              <div key={expense.id} className="custom-expense-row">
+                                <input
+                                  type="text"
+                                  placeholder="Expense Title (e.g. ID Card & Books)"
+                                  value={expense.description}
+                                  onChange={(e) => handleUpdateCustomExpense(child.id, expense.id, 'description', e.target.value)}
+                                />
+                                <div className="charge-input-wrap small">
+                                  <span className="currency-prefix">₹</span>
+                                  <input
+                                    type="number"
+                                    placeholder="Amount"
+                                    value={expense.amount}
+                                    onChange={(e) => handleUpdateCustomExpense(child.id, expense.id, 'amount', e.target.value)}
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn-remove-expense"
+                                  onClick={() => handleRemoveCustomExpense(child.id, expense.id)}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION 2 (BELOW): PARENT & FAMILY CONTACT DETAILS */}
               <div className="admission-section-card">
                 <div className="section-card-header">
                   <div className="header-icon-box blue">
-                    <Users size={18} />
+                    <Users size={20} />
                   </div>
                   <div>
-                    <h3 className="section-title">2. Parent Details &amp; Family / Sibling Account Linking</h3>
+                    <div className="step-tag-row">
+                      <span className="step-pill blue">STEP 2</span>
+                      <h3 className="section-title">Parent &amp; Family Contact Details (Shared)</h3>
+                    </div>
                     <p className="section-subtitle">
-                      Link brothers &amp; sisters into a unified Family Account for consolidated fee billing.
+                      Parent contact and residential info is entered once and inherited by the student(s).
                     </p>
                   </div>
                 </div>
 
-                {/* Sibling Linker Box */}
+                {/* Sibling Linker Box for linking with existing student */}
                 <div className="sibling-link-box">
                   <div className="sibling-toggle-row">
                     <label className="custom-checkbox">
                       <input
                         type="checkbox"
-                        checked={formData.is_sibling}
+                        checked={parentData.is_sibling}
                         onChange={(e) =>
-                          setFormData((prev) => ({
+                          setParentData((prev) => ({
                             ...prev,
                             is_sibling: e.target.checked,
                             selected_sibling: e.target.checked ? prev.selected_sibling : null,
@@ -709,56 +1049,64 @@ export default function Admissions() {
                         }
                       />
                       <span className="checkbox-text">
-                        <strong>Is this student a sibling of an existing student?</strong> (Link to Family Account)
+                        <strong>Is this student a sibling of an already enrolled student?</strong> (Link to Existing Family Account)
                       </span>
                     </label>
                   </div>
 
-                  {formData.is_sibling && (
-                    <div className="sibling-search-container">
-                      {formData.selected_sibling ? (
-                        <div className="selected-sibling-pill">
-                          <div className="sibling-info">
-                            <LinkIcon size={16} className="text-primary" />
-                            <span>
-                              Linked Sibling: <strong>{formData.selected_sibling.full_name}</strong> (Adm: {formData.selected_sibling.admission_no}, {formData.selected_sibling.class_name})
+                  {parentData.is_sibling && (
+                    <div className="sibling-search-panel">
+                      {parentData.selected_sibling ? (
+                        <div className="linked-sibling-badge">
+                          <div className="badge-info">
+                            <span className="badge-title">✓ Linked to Sibling Family Account:</span>
+                            <strong>
+                              {parentData.selected_sibling.full_name} ({parentData.selected_sibling.admission_no}) — Class{' '}
+                              {parentData.selected_sibling.class_name}
+                            </strong>
+                            <span className="family-id-chip">
+                              Family ID: {parentData.selected_sibling.family_id || 'Shared Account'}
                             </span>
                           </div>
                           <button
                             type="button"
-                            className="btn-remove-sibling"
+                            className="btn-unlink-sibling"
                             onClick={removeSibling}
-                            title="Unlink Sibling"
+                            title="Unlink and create new family"
                           >
-                            Change Sibling
+                            <RotateCcw size={14} /> Unlink
                           </button>
                         </div>
                       ) : (
-                        <div className="sibling-search-input-wrap">
-                          <Search size={16} className="search-icon-inside" />
-                          <input
-                            type="text"
-                            placeholder="Search existing brother/sister by name, admission no, or phone..."
-                            value={formData.sibling_search}
-                            onChange={(e) => handleSearchSibling(e.target.value)}
-                          />
-                          {searchingSibling && <Loader2 size={16} className="spin search-spinner" />}
+                        <div className="sibling-live-search-box">
+                          <div className="search-input-wrapper">
+                            <Search size={16} className="search-icon" />
+                            <input
+                              type="text"
+                              placeholder="Type existing student's name, admission no, or parent's phone..."
+                              value={parentData.sibling_search}
+                              onChange={(e) => handleSearchSibling(e.target.value)}
+                            />
+                            {searchingSibling && <Loader2 size={16} className="search-spinner spin" />}
+                          </div>
 
                           {siblingSearchResults.length > 0 && (
-                            <div className="sibling-dropdown-results">
+                            <div className="sibling-results-dropdown">
                               {siblingSearchResults.map((std) => (
                                 <div
                                   key={std.id}
-                                  className="sibling-result-item"
+                                  className="sibling-result-row"
                                   onClick={() => selectSibling(std)}
                                 >
-                                  <div className="std-result-name">
+                                  <div className="result-main">
                                     <strong>{std.full_name}</strong>
-                                    <span>Adm: {std.admission_no} • {std.class_name} {std.section_name && `(${std.section_name})`}</span>
+                                    <span className="result-adm">({std.admission_no})</span>
+                                    <span className="result-class">Class: {std.class_name}</span>
                                   </div>
-                                  <span className="std-parent-hint">
-                                    Father: {std.father_name || std.parent_name || '—'}
-                                  </span>
+                                  <div className="result-parent">
+                                    <span>Father: {std.father_name || std.parent_name || '—'}</span>
+                                    <span>Phone: {std.phone || '—'}</span>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -775,8 +1123,8 @@ export default function Admissions() {
                     <input
                       type="text"
                       placeholder="e.g. Ramesh Kumar"
-                      value={formData.father_name}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, father_name: e.target.value }))}
+                      value={parentData.father_name}
+                      onChange={(e) => setParentData((prev) => ({ ...prev, father_name: e.target.value }))}
                     />
                   </div>
 
@@ -785,329 +1133,213 @@ export default function Admissions() {
                     <input
                       type="text"
                       placeholder="e.g. Sunita Devi"
-                      value={formData.mother_name}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, mother_name: e.target.value }))}
+                      value={parentData.mother_name}
+                      onChange={(e) => setParentData((prev) => ({ ...prev, mother_name: e.target.value }))}
                     />
-                  </div>
-                </div>
-
-                <div className="form-grid-2">
-                  <div className="form-field">
-                    <label>Primary Phone Number</label>
-                    <div className="input-prefix-box">
-                      <Phone size={15} className="prefix-icon" />
-                      <input
-                        type="tel"
-                        placeholder="e.g. 9876543210"
-                        value={formData.phone}
-                        onChange={(e) => handlePhoneChange(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-field">
-                    <div className="label-with-toggle">
-                      <label>WhatsApp Number (Fee Alerts &amp; Receipts)</label>
-                      <label className="toggle-checkbox-label" title="Copy from Primary Phone Number">
-                        <input
-                          type="checkbox"
-                          checked={whatsappSameAsPhone}
-                          onChange={(e) => handleToggleSameAsPhone(e.target.checked)}
-                        />
-                        <span>Same as Phone</span>
-                      </label>
-                    </div>
-                    <div className="input-prefix-box">
-                      <MessageSquare size={15} className="prefix-icon text-emerald" />
-                      <input
-                        type="tel"
-                        placeholder="e.g. 9876543210"
-                        value={formData.whatsapp_number}
-                        onChange={(e) => handleWhatsAppNumberChange(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="form-field full-width-field" style={{ marginTop: '0.25rem' }}>
-                  <label>Residential Address</label>
-                  <div className="input-prefix-box">
-                    <MapPin size={15} className="prefix-icon" />
-                    <input
-                      type="text"
-                      placeholder="Village / Town, Post, District, PIN Code"
-                      value={formData.address}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 3: Itemized Admission Charges, Security Deposit & 1-Month Advance Fee */}
-              <div className="admission-section-card">
-                <div className="section-card-header">
-                  <div className="header-icon-box orange">
-                    <IndianRupee size={18} />
-                  </div>
-                  <div>
-                    <h3 className="section-title">3. Itemized Admission Billing &amp; 1-Month Advance Fee</h3>
-                    <p className="section-subtitle">
-                      Configure admission charges, refundable security money, first-month advance tuition allocation, and school kits.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Admission Fee & Security Deposit rows */}
-                <div className="fee-breakdown-grid">
-                  {/* Admission Fee */}
-                  <div className={`fee-item-card ${formData.has_admission_fee ? 'active' : ''}`}>
-                    <div className="fee-card-toggle">
-                      <input
-                        type="checkbox"
-                        checked={formData.has_admission_fee}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, has_admission_fee: e.target.checked }))
-                        }
-                      />
-                      <span className="fee-title">🎟️ Admission Fee / Charge</span>
-                    </div>
-                    {formData.has_admission_fee && (
-                      <div className="fee-amount-input-wrap">
-                        <span className="input-rupee">₹</span>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="Enter admission fee amount"
-                          value={formData.admission_fee_amount}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, admission_fee_amount: e.target.value === '' ? '' : Number(e.target.value) }))
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Security Deposit */}
-                  <div className={`fee-item-card ${formData.has_security_deposit ? 'active' : ''}`}>
-                    <div className="fee-card-toggle">
-                      <input
-                        type="checkbox"
-                        checked={formData.has_security_deposit}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, has_security_deposit: e.target.checked }))
-                        }
-                      />
-                      <span className="fee-title">🛡️ Security Deposit / Caution Money</span>
-                    </div>
-                    {formData.has_security_deposit && (
-                      <div className="fee-amount-input-wrap">
-                        <span className="input-rupee">₹</span>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="Enter security deposit amount"
-                          value={formData.security_deposit_amount}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, security_deposit_amount: e.target.value === '' ? '' : Number(e.target.value) }))
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 1-Month Advance Fee Box */}
-                <div className="advance-fee-box">
-                  <div className="advance-header">
-                    <label className="custom-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={formData.include_advance_month}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, include_advance_month: e.target.checked }))
-                        }
-                      />
-                      <span className="checkbox-text">
-                        <strong>📅 Bill 1-Month Advance Tuition Fee at Admission</strong>
-                      </span>
-                    </label>
-                    <span className="advance-badge">Assigns directly to student's monthly fee ledger</span>
-                  </div>
-
-                  {formData.include_advance_month && (
-                    <div className="advance-inputs-row">
-                      <div className="advance-field">
-                        <label>Advance Month *</label>
-                        <select
-                          value={formData.advance_fee_month}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, advance_fee_month: Number(e.target.value) }))
-                          }
-                        >
-                          {MONTH_OPTIONS.map((m) => (
-                            <option key={m.value} value={m.value}>
-                              {m.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="advance-field">
-                        <label>Academic Year</label>
-                        <input
-                          type="number"
-                          value={formData.advance_fee_year}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, advance_fee_year: Number(e.target.value) }))
-                          }
-                        />
-                      </div>
-
-                      <div className="advance-field">
-                        <label>Advance Fee Amount (₹)</label>
-                        <div className="input-prefix-box">
-                          <span className="prefix-currency">₹</span>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="Enter advance fee amount"
-                            value={formData.advance_fee_amount}
-                            onChange={(e) =>
-                              setFormData((prev) => ({ ...prev, advance_fee_amount: e.target.value === '' ? '' : Number(e.target.value) }))
-                            }
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Extra Custom Expenses */}
-                <div className="custom-expenses-box">
-                  <div className="expenses-header">
-                    <span className="expenses-title">➕ Extra School Expenses &amp; Kits (Uniform, Books, Registration, etc.)</span>
-                    <button
-                      type="button"
-                      className="btn-add-expense-row"
-                      onClick={addExpenseRow}
-                    >
-                      <Plus size={14} /> Add Extra Expense
-                    </button>
-                  </div>
-
-                  {formData.custom_expenses.map((row) => (
-                    <div key={row.id} className="expense-row-item">
-                      <input
-                        type="text"
-                        className="expense-desc-input"
-                        placeholder="Expense Description (e.g., Books Kit, School Uniform, Prospectus)"
-                        value={row.description}
-                        onChange={(e) => updateExpenseRow(row.id, 'description', e.target.value)}
-                      />
-                      <div className="expense-amount-wrap">
-                        <span className="input-rupee">₹</span>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="Amount"
-                          value={row.amount}
-                          onChange={(e) => updateExpenseRow(row.id, 'amount', e.target.value === '' ? '' : Number(e.target.value))}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-remove-expense"
-                        onClick={() => removeExpenseRow(row.id)}
-                        title="Remove Charge"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Total Billing Summary Bar */}
-                <div className="admission-total-banner">
-                  <div className="total-label-col">
-                    <span className="total-heading">Total Admission Billing Summary</span>
-                    <span className="total-sub">
-                      Admission Fee + Security Deposit + 1-Month Advance Fee + Extra Expenses
-                    </span>
-                  </div>
-                  <div className="total-amount-col">
-                    <span className="total-rupee-txt">{formatCurrency(formData.paid_amount)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 4: Immediate Payment Collection & Official Receipt */}
-              <div className="admission-section-card">
-                <div className="section-card-header">
-                  <div className="header-icon-box green">
-                    <CreditCard size={18} />
-                  </div>
-                  <div>
-                    <h3 className="section-title">4. Fee Collection Desk &amp; Instant Receipt</h3>
-                    <p className="section-subtitle">
-                      Record upfront cash or bank payment and immediately issue the official itemized Admission &amp; Advance Receipt.
-                    </p>
                   </div>
                 </div>
 
                 <div className="form-grid-3">
                   <div className="form-field">
-                    <label>Amount Paid Now (₹) *</label>
-                    <div className="input-prefix-box">
-                      <span className="prefix-currency">₹</span>
+                    <label>Primary Contact Phone *</label>
+                    <div className="input-icon-wrap">
+                      <Phone size={16} />
                       <input
-                        type="number"
-                        min="0"
-                        placeholder="Enter amount paid"
-                        value={formData.paid_amount}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, paid_amount: e.target.value === '' ? '' : Number(e.target.value) }))}
-                        required={formData.collect_payment}
+                        type="tel"
+                        placeholder="10-digit mobile number"
+                        value={parentData.phone}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setParentData((prev) => ({
+                            ...prev,
+                            phone: val,
+                            whatsapp_number: whatsappSameAsPhone ? val : prev.whatsapp_number,
+                          }));
+                        }}
+                        required
                       />
                     </div>
                   </div>
 
                   <div className="form-field">
-                    <label>Payment Channel *</label>
-                    <select
-                      value={formData.payment_mode}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, payment_mode: e.target.value }))}
-                    >
-                      <option value="CASH">Cash Desk</option>
-                      <option value="IN_ACCOUNT">In-Account (Bank / UPI / Online Transfer)</option>
-                    </select>
+                    <label>WhatsApp Number</label>
+                    <div className="input-icon-wrap">
+                      <MessageSquare size={16} />
+                      <input
+                        type="tel"
+                        placeholder="WhatsApp number"
+                        value={whatsappSameAsPhone ? parentData.phone : parentData.whatsapp_number}
+                        disabled={whatsappSameAsPhone}
+                        onChange={(e) =>
+                          setParentData((prev) => ({ ...prev, whatsapp_number: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <label className="same-phone-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={whatsappSameAsPhone}
+                        onChange={(e) => {
+                          setWhatsappSameAsPhone(e.target.checked);
+                          if (e.target.checked) {
+                            setParentData((prev) => ({ ...prev, whatsapp_number: prev.phone }));
+                          }
+                        }}
+                      />
+                      <span>Same as Phone</span>
+                    </label>
                   </div>
 
                   <div className="form-field">
-                    <label>Payment Remarks / Notes</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Full admission & advance fee cleared"
-                      value={formData.payment_notes}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, payment_notes: e.target.value }))}
-                    />
+                    <label>Admission Date</label>
+                    <div className="input-icon-wrap">
+                      <Calendar size={16} />
+                      <input
+                        type="date"
+                        value={parentData.admission_date}
+                        onChange={(e) => setParentData((prev) => ({ ...prev, admission_date: e.target.value }))}
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div className="admission-submit-footer">
+                <div className="form-field full-width">
+                  <label>Residential Address</label>
+                  <input
+                    type="text"
+                    placeholder="Full residential address, locality, city, pincode..."
+                    value={parentData.address}
+                    onChange={(e) => setParentData((prev) => ({ ...prev, address: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* SECTION 3 (BOTTOM): CONSOLIDATED BILLING & PAYMENT COLLECTION */}
+              <div className="admission-section-card">
+                <div className="section-card-header">
+                  <div className="header-icon-box green">
+                    <CreditCard size={20} />
+                  </div>
+                  <div>
+                    <div className="step-tag-row">
+                      <span className="step-pill green">STEP 3</span>
+                      <h3 className="section-title">Initial Fee Billing &amp; Payment Collection</h3>
+                    </div>
+                    <p className="section-subtitle">
+                      Review total assessed admission charges, record initial collection, and generate official receipt.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="billing-breakdown-card">
+                  <div className="billing-summary-grid">
+                    <div className="billing-col">
+                      <span className="billing-label">Total Assessed Initial Charges</span>
+                      <span className="billing-value text-blue">{formatCurrency(totalFamilyAssessed)}</span>
+                    </div>
+
+                    <div className="billing-col">
+                      <span className="billing-label">Total Sibling Students</span>
+                      <span className="billing-value">{children.length} Enrolled</span>
+                    </div>
+
+                    <div className="billing-col">
+                      <span className="billing-label">Remaining Dues After Collection</span>
+                      <span className="billing-value text-red">
+                        {formatCurrency(
+                          Math.max(0, totalFamilyAssessed - Number(parentData.paid_amount || 0))
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Payment Collection Inputs */}
+                  <div className="payment-collection-panel">
+                    <div className="payment-toggle-row">
+                      <label className="custom-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={parentData.collect_payment}
+                          onChange={(e) => setParentData((prev) => ({ ...prev, collect_payment: e.target.checked }))}
+                        />
+                        <span className="checkbox-text">
+                          <strong>Collect Initial Payment Now at Admission Desk</strong> (Generates Official Receipt)
+                        </span>
+                      </label>
+                    </div>
+
+                    {parentData.collect_payment && (
+                      <div className="form-grid-3 payment-inputs-grid">
+                        <div className="form-field">
+                          <label>Collected Amount (₹) *</label>
+                          <div className="charge-input-wrap">
+                            <span className="currency-prefix">₹</span>
+                            <input
+                              type="number"
+                              placeholder="e.g. 5000"
+                              value={parentData.paid_amount}
+                              onChange={(e) => setParentData((prev) => ({ ...prev, paid_amount: e.target.value }))}
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div className="form-field">
+                          <label>Payment Mode *</label>
+                          <select
+                            value={parentData.payment_mode}
+                            onChange={(e) => setParentData((prev) => ({ ...prev, payment_mode: e.target.value }))}
+                          >
+                            <option value="CASH">Cash Payment</option>
+                            <option value="IN_ACCOUNT">In Account (Bank / UPI / QR)</option>
+                          </select>
+                        </div>
+
+                        <div className="form-field">
+                          <label>Payment Notes / Transaction Ref</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Initial admission & advance fee"
+                            value={parentData.payment_notes}
+                            onChange={(e) => setParentData((prev) => ({ ...prev, payment_notes: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Form Actions */}
+                <div className="admission-form-footer">
                   <button
                     type="button"
-                    className="btn-cancel-adm"
+                    className="btn-reset-form"
                     onClick={handleResetForm}
+                    disabled={submitting}
                   >
-                    <RotateCcw size={14} /> Clear Form
+                    <RotateCcw size={16} />
+                    <span>Reset Form</span>
                   </button>
 
                   <button
                     type="submit"
-                    className="btn-complete-admission"
+                    className="btn-submit-admission"
                     disabled={submitting}
                   >
-                    {submitting ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
-                    <span>{submitting ? 'Enrolling...' : 'Complete Admission'}</span>
+                    {submitting ? (
+                      <>
+                        <Loader2 size={18} className="spin" />
+                        <span>Processing Admission…</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={18} />
+                        <span>
+                          Complete {admissionMode === 'single' ? 'Student' : 'Family'} Admission (
+                          {formatCurrency(parentData.collect_payment ? parentData.paid_amount || 0 : 0)})
+                        </span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1116,125 +1348,95 @@ export default function Admissions() {
         </>
       )}
 
-      {/* View 2: Admissions Register & History */}
+      {/* View 2: Admissions Register */}
       {activeTab === 'register' && (
         <div className="admissions-register-card">
-          <div className="register-filter-bar">
+          <div className="register-header-bar">
+            <div>
+              <h2 className="register-title">Official Admissions Register</h2>
+              <span className="register-count">{totalCount} Total Students Enrolled</span>
+            </div>
+
             <div className="register-search-wrap">
-              <Search size={16} className="search-icon-reg" />
+              <Search size={16} className="search-icon" />
               <input
-                type="search"
-                placeholder="Search admission by student name, adm no, or phone..."
+                type="text"
+                placeholder="Search by student name, admission no, or phone..."
                 value={searchList}
                 onChange={(e) => setSearchList(e.target.value)}
               />
             </div>
-
-            <select
-              value={classListFilter}
-              onChange={(e) => setClassListFilter(e.target.value)}
-              className="register-select"
-            >
-              <option value="">All Classes</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              className="btn-refresh-reg"
-              onClick={fetchAdmissionsList}
-            >
-              <RotateCcw size={14} /> Refresh
-            </button>
           </div>
 
           {loadingList ? (
-            <div className="register-loading-box">
-              <Loader2 size={32} className="spin text-primary" />
-              <span>Loading admissions register...</span>
+            <div className="register-loading-state">
+              <Loader2 size={32} className="spin" />
+              <p>Loading Admissions Register…</p>
             </div>
           ) : admissionsList.length === 0 ? (
-            <div className="register-empty-box">
-              <GraduationCap size={44} className="text-muted" />
-              <p>No student admissions found in the register.</p>
+            <div className="register-empty-state">
+              <GraduationCap size={48} />
+              <h3>No Admission Records Found</h3>
+              <p>No students match your search criteria.</p>
             </div>
           ) : (
-            <div className="table-responsive-wrapper">
-              <table className="admissions-ledger-table">
+            <div className="table-responsive register-table-wrap">
+              <table className="register-table">
                 <thead>
                   <tr>
-                    <th>Adm No</th>
+                    <th>Admission No</th>
                     <th>Student Name</th>
-                    <th>Class / Sec</th>
-                    <th>Category</th>
-                    <th>Monthly Rate</th>
-                    <th>Adm Date</th>
-                    <th>Amount Paid</th>
-                    <th>Family Link</th>
-                    <th className="th-actions">Actions</th>
+                    <th>Class</th>
+                    <th>Father's Name</th>
+                    <th>Phone</th>
+                    <th>Admission Date</th>
+                    <th>Family ID</th>
+                    <th className="text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {admissionsList.map((adm) => (
-                    <tr key={adm.id}>
+                  {admissionsList.map((std) => (
+                    <tr key={std.id}>
                       <td>
-                        <span className="adm-code-pill">{adm.admission_no}</span>
+                        <span className="adm-no-chip">{std.admission_no}</span>
                       </td>
                       <td>
-                        <div className="std-cell-info">
-                          <strong>{adm.full_name}</strong>
-                          {adm.father_name && <small>Father: {adm.father_name}</small>}
-                        </div>
+                        <strong>{std.full_name}</strong>
                       </td>
                       <td>
-                        <span className="class-pill">{adm.class_name || 'Class —'} {adm.section_name && `(${adm.section_name})`}</span>
-                      </td>
-                      <td>
-                        <span className={`cat-pill ${adm.category}`}>
-                          {adm.category === 'hosteller' ? 'Hosteller' : 'Day Scholar'}
+                        <span className="class-badge-pill">
+                          {std.class_name} {std.section_name && `(${std.section_name})`}
                         </span>
                       </td>
+                      <td>{std.father_name || std.parent_name || '—'}</td>
+                      <td>{std.phone || '—'}</td>
                       <td>
-                        <strong>{formatCurrency(adm.monthly_fee_rate)}</strong>
+                        {std.admission_date
+                          ? new Date(std.admission_date).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '—'}
                       </td>
                       <td>
-                        <span className="adm-date-txt">
-                          {adm.admission_date ? new Date(adm.admission_date).toLocaleDateString('en-IN') : '—'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="adm-paid-txt">
-                          {formatCurrency(adm.admission_paid_amount)}
-                        </span>
-                      </td>
-                      <td>
-                        {adm.family_id ? (
-                          <span className="family-badge">
-                            <LinkIcon size={12} /> {adm.family_id}
-                          </span>
+                        {std.family_id ? (
+                          <span className="family-id-chip">{std.family_id}</span>
                         ) : (
                           <span className="text-muted">—</span>
                         )}
                       </td>
-                      <td className="td-actions">
-                        <WhatsAppDirectButton
-                          compact
-                          size="sm"
-                          onSend={() => api.post(`/admissions/send-whatsapp/${adm.id}`)}
-                          phone={adm.whatsapp_number || adm.phone}
-                        />
-                        <button
-                          type="button"
-                          className="btn-view-profile-sm"
-                          onClick={() => navigate(`/students/${adm.id}`)}
-                          title="View Student Profile"
-                        >
-                          <Eye size={15} />
-                        </button>
+                      <td className="text-center">
+                        <div className="register-actions">
+                          <button
+                            type="button"
+                            className="btn-action-view"
+                            onClick={() => navigate(`/students/${std.id}`)}
+                            title="View Student Profile"
+                          >
+                            <Eye size={14} /> Profile
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1245,30 +1447,32 @@ export default function Admissions() {
         </div>
       )}
 
-      {/* Official Admission JPG Receipt Modal */}
-      {enrollmentSuccess && (
+      {/* Universal JPG Receipt Modal */}
+      {showJpgReceiptModal && enrollmentSuccess && (
         <JpgReceiptModal
           isOpen={showJpgReceiptModal}
           onClose={() => setShowJpgReceiptModal(false)}
           data={{
-            student: {
-              full_name: enrollmentSuccess.full_name,
-              admission_no: enrollmentSuccess.admission_no,
-              class_name: classes.find(c => c.id === Number(formData.class_id))?.class_name || 'Assigned Class',
-              category: formData.student_category,
-              father_name: formData.father_name,
-              phone: formData.whatsapp_number || formData.phone,
+            student: enrollmentSuccess.students?.[0] || {
+              full_name: children[0]?.full_name,
+              admission_no: 'ADM-PENDING',
+              class_name: classes.find((c) => c.id === Number(children[0]?.class_id))?.name || 'Class',
             },
-            payment: enrollmentSuccess.payment || {
-              amount: formData.paid_amount,
-              payment_mode: formData.payment_mode,
-              receipt_number: enrollmentSuccess.payment?.receipt_number || `ADM-${Date.now().toString().slice(-6)}`,
+            students: enrollmentSuccess.students,
+            payment: enrollmentSuccess.payments?.[0] || {
+              amount: enrollmentSuccess.total_paid,
+              payment_date: parentData.admission_date,
+              payment_mode: parentData.payment_mode,
             },
+            receipt: {
+              receipt_number: enrollmentSuccess.payments?.[0]?.receipt_number || 'ADM-REC',
+            },
+            allocations: [],
             summary: {
-              total_amount: formData.paid_amount,
+              total_amount: enrollmentSuccess.total_paid,
             },
           }}
-          type="admission"
+          type={enrollmentSuccess.students.length > 1 ? 'family' : 'payment'}
         />
       )}
     </div>

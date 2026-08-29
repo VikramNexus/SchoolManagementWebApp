@@ -1288,3 +1288,608 @@
     min-width: 450px !important;
   }
 }
+
+/* Family Account & Consolidated Monthly Ledger Styles */
+.family-account-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  margin-bottom: 1.5rem;
+}
+
+.family-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.25);
+  flex-shrink: 0;
+}
+
+.family-id-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0284c7;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  padding: 0.25rem 0.65rem;
+  border-radius: 8px;
+  margin-left: 0.75rem;
+}
+
+.family-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.family-siblings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.family-summary-banner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.15rem;
+}
+
+.banner-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.15rem 1.35rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.banner-col:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+}
+
+.banner-col.card-blue {
+  border-left: 4px solid #0284c7;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
+}
+
+.banner-col.card-purple {
+  border-left: 4px solid #7c3aed;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%);
+}
+
+.banner-col.card-slate {
+  border-left: 4px solid #475569;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.banner-col.card-red {
+  border-left: 4px solid #dc2626;
+  background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%);
+}
+
+.banner-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.banner-icon-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.banner-icon-chip.blue { background: #e0f2fe; color: #0284c7; }
+.banner-icon-chip.purple { background: #ede9fe; color: #7c3aed; }
+.banner-icon-chip.slate { background: #e2e8f0; color: #475569; }
+.banner-icon-chip.red { background: #fee2e2; color: #dc2626; }
+
+.banner-lbl {
+  font-size: 0.725rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.banner-val {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.banner-val.text-blue {
+  color: #0284c7;
+}
+
+.rate-sub {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* Sibling Overview Strip */
+.siblings-overview-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+}
+
+.strip-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.strip-title {
+  font-size: 0.825rem;
+  font-weight: 800;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.strip-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0284c7;
+  background: #e0f2fe;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+}
+
+.siblings-chips-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.85rem;
+}
+
+.sibling-chip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.65rem 0.95rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease;
+}
+
+.sibling-chip-item:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+}
+
+.sibling-chip-item.current {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.12);
+}
+
+.sib-avatar-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.sibling-chip-item.current .sib-avatar-circle {
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+}
+
+.sib-chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+
+.sib-chip-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sib-chip-name {
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.current-badge-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #7c3aed;
+  background: #ede9fe;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.sib-chip-meta {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.sib-chip-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-sib-chip-view,
+.btn-sib-chip-unlink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-sib-chip-view:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.btn-sib-chip-unlink:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+/* Schedule Section & Table */
+.family-ledger-schedule-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  margin-top: 0.5rem;
+}
+
+.schedule-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.5rem;
+}
+
+.schedule-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.schedule-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.schedule-sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.825rem;
+  color: #64748b;
+}
+
+.family-schedule-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  overflow-x: auto;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.family-ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.family-ledger-table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.95rem 1.15rem;
+  border-bottom: 1.5px solid #e2e8f0;
+}
+
+.family-ledger-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.15s ease;
+}
+
+.family-ledger-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.family-ledger-table tbody tr.paid {
+  background: #fbfdfc;
+}
+
+.family-ledger-table tbody tr.due {
+  background: #fffdfd;
+}
+
+.family-ledger-table tbody td {
+  padding: 0.95rem 1.15rem;
+  vertical-align: middle;
+}
+
+.month-name-cell {
+  font-weight: 800;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.family-rate-badge {
+  font-weight: 800;
+  color: #0284c7;
+  background: #e0f2fe;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.sibling-contrib-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.sib-contrib-chip {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  line-height: 1.3;
+}
+
+.sib-contrib-chip.paid {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.sib-contrib-chip.partial {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.sib-contrib-chip.due {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.paid-amount-txt {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-weight: 600;
+  color: #059669;
+}
+
+.btn-pay-month-family {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.775rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+  white-space: nowrap;
+}
+
+.btn-pay-month-family:hover {
+  background: #0369a1;
+  transform: translateY(-1px);
+}
+
+.all-paid-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.775rem;
+  font-weight: 800;
+  color: #059669;
+  background: #ecfdf5;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #a7f3d0;
+}
+
+/* ==========================================================================
+   Comprehensive Mobile Responsiveness for Family Section & Modals
+   ========================================================================== */
+@media (max-width: 768px) {
+  .family-account-section {
+    padding: 1rem 0.85rem !important;
+    border-radius: 14px !important;
+    gap: 1rem !important;
+  }
+
+  .family-header-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .family-header-actions .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    height: 40px !important;
+  }
+
+  .family-summary-banner {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .banner-col {
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+  }
+
+  .banner-val {
+    font-size: 1.15rem;
+  }
+
+  .siblings-overview-strip {
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+  }
+
+  .siblings-chips-wrap {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .sibling-chip-item {
+    padding: 0.65rem 0.85rem;
+  }
+
+  .schedule-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .schedule-header-row .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    height: 42px !important;
+  }
+
+  .family-schedule-table-wrap {
+    border-radius: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .family-schedule-table-wrap::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .family-schedule-table-wrap::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  .family-ledger-table {
+    min-width: 680px !important;
+  }
+
+  .family-ledger-table thead th,
+  .family-ledger-table tbody td {
+    padding: 0.75rem 0.85rem;
+  }
+
+  /* Modals on Mobile */
+  .modal-overlay {
+    padding: 0.5rem;
+  }
+
+  .modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto;
+    border-radius: 16px;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 1rem;
+  }
+
+  .modal-header,
+  .modal-footer {
+    padding: 0.85rem 1rem;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .modal-footer .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    height: 44px !important;
+  }
+
+  .family-payment-allocations-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .family-payment-allocations-table table {
+    min-width: 480px;
+  }
+}
+
+@media (max-width: 480px) {
+  .family-summary-banner {
+    grid-template-columns: 1fr;
+  }
+
+  .family-id-pill {
+    margin-left: 0;
+    margin-top: 0.35rem;
+    display: inline-flex;
+  }
+}

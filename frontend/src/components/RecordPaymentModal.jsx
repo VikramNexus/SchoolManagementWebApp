@@ -28,6 +28,7 @@ import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import WhatsAppDirectButton from './WhatsAppDirectButton';
 import JpgReceiptModal from './JpgReceiptModal';
+import { saveFileToDeviceStorage } from '../utils/fileDownloader';
 import './RecordPaymentModal.css';
 
 const MONTH_NAMES = [
@@ -35,7 +36,7 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export default function RecordPaymentModal({ initialStudent = null, onClose, onSaved }) {
+export default function RecordPaymentModal({ initialStudent = null, defaultCategory = 'MONTHLY_TUITION', defaultAmount = '', defaultNotes = '', onClose, onSaved }) {
   const { toast } = useToast();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -54,10 +55,11 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
   const [pendingAdditionalFees, setPendingAdditionalFees] = useState([]);
 
   const [formData, setFormData] = useState({
-    amount: '',
+    amount: defaultAmount ? String(defaultAmount) : '',
     payment_mode: 'CASH',
+    payment_category: defaultCategory || 'MONTHLY_TUITION',
     payment_date: new Date().toISOString().slice(0, 10),
-    notes: '',
+    notes: defaultNotes || (defaultCategory === 'ADMISSION_CHARGE' ? '[Admission Collection] Admission dues payment' : ''),
   });
 
   const [recordedPaymentSuccess, setRecordedPaymentSuccess] = useState(null);
@@ -201,6 +203,7 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
         student_id: selectedStudent.id,
         amount: Number(formData.amount),
         payment_mode: formData.payment_mode || 'CASH',
+        payment_category: formData.payment_category || defaultCategory || 'MONTHLY_TUITION',
         payment_date: formData.payment_date,
         notes: formData.notes || undefined,
         recorded_by: 1,
@@ -227,17 +230,18 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
         responseType: 'blob',
       });
 
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Receipt_${recordedPaymentSuccess.receipt_number || recordedPaymentSuccess.id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
+      const filename = `Receipt_${recordedPaymentSuccess.receipt_number || recordedPaymentSuccess.id}.pdf`;
+      const saveRes = await saveFileToDeviceStorage({
+        data: res.data,
+        filename,
+        mimeType: 'application/pdf',
+      });
 
-      toast.success('Payment receipt downloaded.');
+      if (saveRes?.platform === 'native') {
+        toast.success(`✓ Receipt Saved to Phone Storage (Documents/${filename})`);
+      } else {
+        toast.success('Payment receipt downloaded.');
+      }
     } catch (err) {
       toast.error('Failed to download receipt PDF.');
     } finally {
@@ -338,10 +342,12 @@ export default function RecordPaymentModal({ initialStudent = null, onClose, onS
               </button>
               <WhatsAppDirectButton
                 onSend={() => api.post(`/receipts/send-whatsapp/${recordedPaymentSuccess.id}`)}
-                phone={selectedStudent?.phone}
+                onOpenJpg={() => setShowJpgModal(true)}
+                phone={selectedStudent?.whatsapp_number || selectedStudent?.phone || selectedStudent?.father_phone}
                 defaultLabel="Send WhatsApp Receipt"
                 successLabel="✓ WhatsApp Sent to Parent"
                 size="lg"
+                itemTitle="Receipt"
               />
               <button
                 type="button"

@@ -226,6 +226,45 @@ async function sendTextMessage(toPhone, messageBody) {
 }
 
 /**
+ * Send a direct WhatsApp image (JPEG / PNG) with optional caption in background
+ */
+async function sendImageMessage(toPhone, imageBufferOrDataUrl, caption = '') {
+  if (!sock || connectionStatus !== 'connected') {
+    throw new Error('WhatsApp is not linked on your laptop. Please visit Settings -> Messaging to link your phone.');
+  }
+
+  const jid = formatToJID(toPhone);
+  if (!jid) {
+    throw new Error(`Invalid recipient phone number: ${toPhone}`);
+  }
+
+  let buffer;
+  if (Buffer.isBuffer(imageBufferOrDataUrl)) {
+    buffer = imageBufferOrDataUrl;
+  } else if (typeof imageBufferOrDataUrl === 'string' && imageBufferOrDataUrl.startsWith('data:image/')) {
+    const base64Data = imageBufferOrDataUrl.split(';base64,').pop();
+    buffer = Buffer.from(base64Data, 'base64');
+  } else if (typeof imageBufferOrDataUrl === 'string' && fs.existsSync(imageBufferOrDataUrl)) {
+    buffer = fs.readFileSync(imageBufferOrDataUrl);
+  } else {
+    throw new Error('Invalid image payload provided for WhatsApp');
+  }
+
+  const result = await sock.sendMessage(jid, {
+    image: buffer,
+    caption: caption || '',
+    mimetype: 'image/jpeg',
+  });
+
+  return {
+    success: true,
+    messageId: result?.key?.id || `WA-IMG-${Date.now()}`,
+    recipient: toPhone,
+    timestamp: new Date(),
+  };
+}
+
+/**
  * Disconnect / Log out session
  */
 async function disconnectGateway() {
@@ -264,6 +303,7 @@ module.exports = {
   initWhatsAppGateway,
   getStatus,
   sendTextMessage,
+  sendImageMessage,
   disconnectGateway,
   restartGateway,
 };

@@ -34,11 +34,11 @@ async function getKpis(req, res) {
       // Day Scholars
       db.queryOne('SELECT COUNT(*) as cnt FROM `students` WHERE `status` = "active" AND `category` = "day_scholar"'),
 
-      // Expected fees (sum of due_amount from monthly_fees & student_additional_fees for active students)
+      // Expected fees (total sum of assessed monthly fee rates & additional fees for active students)
       db.queryOne(`
         SELECT (
-          COALESCE((SELECT SUM(mf.\`due_amount\`) FROM \`monthly_fees\` mf JOIN \`students\` s ON s.\`id\` = mf.\`student_id\` WHERE s.\`status\` = 'active' AND mf.\`status\` IN ('DUE', 'PARTIAL')), 0) +
-          COALESCE((SELECT SUM(saf.\`amount\`) FROM \`student_additional_fees\` saf JOIN \`students\` s ON s.\`id\` = saf.\`student_id\` WHERE s.\`status\` = 'active' AND saf.\`status\` IN ('DUE', 'PARTIAL')), 0)
+          COALESCE((SELECT SUM(mf.\`fee_amount\`) FROM \`monthly_fees\` mf JOIN \`students\` s ON s.\`id\` = mf.\`student_id\` WHERE s.\`status\` = 'active'), 0) +
+          COALESCE((SELECT SUM(saf.\`amount\`) FROM \`student_additional_fees\` saf JOIN \`students\` s ON s.\`id\` = saf.\`student_id\` WHERE s.\`status\` = 'active'), 0)
         ) as total
       `),
 

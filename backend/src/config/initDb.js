@@ -23,6 +23,7 @@ const { query, transaction, closePool, healthCheck, ensureDatabase } = require('
 const DB_DIR = path.resolve(__dirname, '../../../database');
 const SCHEMA_FILE = path.join(DB_DIR, 'schema.sql');
 const SEEDERS_FILE = path.join(DB_DIR, 'seeders.sql');
+const MIGRATIONS_DIR = path.resolve(__dirname, '../migrations');
 
 // ---------------------------------------------------------------------------
 // Helper: Split SQL file into individual statements
@@ -169,11 +170,55 @@ async function initializeDatabase(options = {}) {
     console.warn('  (user init check):', err.message);
   }
 
+  // Execute migration scripts
+  await executeMigrations();
+
   console.log('\n✅ Database initialization complete!');
   console.log('═══════════════════════════════════════════════════════════════════\n');
 
   // Close pool if we created it
   await closePool();
+}
+
+// ---------------------------------------------------------------------------
+// Migration execution
+// ---------------------------------------------------------------------------
+async function executeMigrations() {
+  if (!fs.existsSync(MIGRATIONS_DIR)) {
+    console.log('\n📦 No migrations directory found, skipping migrations.');
+    return;
+  }
+
+  const migrationFiles = fs.readdirSync(MIGRATIONS_DIR)
+    .filter(f => f.endsWith('.js'))
+    .sort();
+
+  if (migrationFiles.length === 0) {
+    console.log('\n📦 No migration scripts found, skipping migrations.');
+    return;
+  }
+
+  console.log(`\n🔄 Running ${migrationFiles.length} migration script(s)...`);
+
+  for (const file of migrationFiles) {
+    const migrationPath = path.join(MIGRATIONS_DIR, file);
+    try {
+      console.log(`  ⚙️  Executing ${file}...`);
+      // Dynamically import and run the migration
+      const migration = require(migrationPath);
+      if (typeof migration.migrate === 'function') {
+        await migration.migrate();
+      } else if (typeof migration.default === 'function') {
+        await migration.default();
+      } else {
+        console.warn(`  ⚠️  Migration ${file} does not export a migrate() function, skipping.`);
+      }
+      console.log(`  ✅ ${file} completed`);
+    } catch (err) {
+      console.error(`  ❌ ${file} failed: ${err.message}`);
+      throw err;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

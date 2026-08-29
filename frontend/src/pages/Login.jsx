@@ -261,9 +261,25 @@ export default function Login() {
         </div>
 
         {error && (
-          <div className="genz-alert">
-            <AlertCircle size={18} />
-            <span>{error}</span>
+          <div className="genz-alert" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.4rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <span>{error}</span>
+            </div>
+            {(error.includes('server') || error.includes('connect') || error.includes('reach') || error.includes('Network')) && (
+              <button
+                type="button"
+                className="btn-server-config"
+                style={{ marginTop: '0.25rem', padding: '0.35rem 0.65rem', fontSize: '0.75rem', background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)' }}
+                onClick={() => {
+                  setServerTestStatus(null);
+                  setShowServerModal(true);
+                }}
+              >
+                <Server size={12} />
+                <span>Change Server IP / Connect to Cloud</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -388,7 +404,22 @@ export default function Login() {
             {/* Quick Preset Selector */}
             <div className="server-presets-section">
               <label className="preset-label">Choose Server Preset</label>
-              <div className="preset-grid">
+              <div className="preset-grid" style={{ gridTemplateColumns: '1fr', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className={`preset-card ${serverUrl.includes('172.25.8.130') ? 'active' : ''}`}
+                  onClick={() => handleSelectPreset('http://172.25.8.130:5000/api')}
+                >
+                  <div className="preset-card-icon local-icon">
+                    <Wifi size={18} />
+                  </div>
+                  <div className="preset-card-info">
+                    <div className="preset-name">Local Wi-Fi PC Server (Fast)</div>
+                    <div className="preset-url">http://172.25.8.130:5000/api</div>
+                  </div>
+                  {serverUrl.includes('172.25.8.130') && <span className="preset-check">✓</span>}
+                </button>
+
                 <button
                   type="button"
                   className={`preset-card ${serverUrl.includes('onrender.com') ? 'active' : ''}`}
@@ -398,7 +429,7 @@ export default function Login() {
                     <Cloud size={18} />
                   </div>
                   <div className="preset-card-info">
-                    <div className="preset-name">Render Cloud 24/7</div>
+                    <div className="preset-name">Render Cloud 24/7 (Anywhere)</div>
                     <div className="preset-url">schoolmanagementwebapp-pf7m.onrender.com</div>
                   </div>
                   {serverUrl.includes('onrender.com') && <span className="preset-check">✓</span>}
@@ -413,7 +444,7 @@ export default function Login() {
                     <Laptop size={18} />
                   </div>
                   <div className="preset-card-info">
-                    <div className="preset-name">Local Machine</div>
+                    <div className="preset-name">Localhost (PC Browser)</div>
                     <div className="preset-url">http://localhost:5000/api</div>
                   </div>
                   {serverUrl.includes('localhost') && <span className="preset-check">✓</span>}

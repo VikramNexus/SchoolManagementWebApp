@@ -47,7 +47,7 @@ function parseToValidDate(dateStr) {
  * Body: { student_id, amount, payment_date, notes, recorded_by }
  */
 async function recordPayment(req, res) {
-  const { student_id, amount, payment_mode, payment_date, notes, recorded_by } = req.body || {};
+  const { student_id, amount, payment_mode, payment_category, payment_date, notes, recorded_by } = req.body || {};
 
   // Validation
   if (!student_id) {
@@ -59,6 +59,8 @@ async function recordPayment(req, res) {
 
   const paymentAmount = Number(amount);
   const paymentChannel = (payment_mode === 'IN_ACCOUNT' || payment_mode === 'in acc.') ? 'IN_ACCOUNT' : 'CASH';
+  const category = payment_category || (notes && notes.toLowerCase().includes('admission') ? 'ADMISSION_CHARGE' : 'MONTHLY_TUITION');
+  const prefix = category === 'ADMISSION_CHARGE' ? 'ADM' : 'RCP';
 
   try {
     // Verify student exists and is active
@@ -89,13 +91,13 @@ async function recordPayment(req, res) {
     // Record payment and allocate in a single transaction
     const result = await withTransaction(async (tx) => {
       // 1. Create payment record
-      const paymentReceiptNumber = `RCPT-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
+      const paymentReceiptNumber = `${prefix}-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 90 + 10)}`;
       const validDate = parseToValidDate(payment_date);
 
       const [paymentResult] = await tx.execute(
-        `INSERT INTO \`payments\` (\`student_id\`, \`amount\`, \`payment_mode\`, \`payment_date\`, \`notes\`, \`recorded_by\`, \`receipt_number\`)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [student_id, paymentAmount, paymentChannel, validDate, notes || null, recorded_by || 1, paymentReceiptNumber]
+        `INSERT INTO \`payments\` (\`student_id\`, \`amount\`, \`payment_mode\`, \`payment_category\`, \`payment_date\`, \`notes\`, \`recorded_by\`, \`receipt_number\`)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [student_id, paymentAmount, paymentChannel, category, validDate, notes || null, recorded_by || 1, paymentReceiptNumber]
       );
 
       const paymentId = paymentResult.insertId;
@@ -108,10 +110,10 @@ async function recordPayment(req, res) {
       }, tx);
 
       // 3. Create receipt entry in DB
-      const receiptNumber = `RCP-${String(paymentId).padStart(6, '0')}`;
+      const receiptNumber = `${prefix}-${String(paymentId).padStart(6, '0')}`;
       await tx.execute(
-        `INSERT INTO \`receipts\` (\`payment_id\`, \`receipt_number\`, \`file_path\`)
-         VALUES (?, ?, ?)`,
+        `INSERT INTO \`receipts\` (\`payment_id\`, \`receipt_number\`, \`file_path\`, \`generated_at\`)
+         VALUES (?, ?, ?, NOW())`,
         [paymentId, receiptNumber, null]
       );
 
@@ -159,7 +161,7 @@ async function recordPayment(req, res) {
  * Query: student_id, start_date, end_date, class_id, category, page, limit
  */
 async function listPayments(req, res) {
-  const { student_id, start_date, end_date, class_id, category, page = 1, limit = 25 } = req.query;
+  const { student_id, search, start_date, end_date, class_id, category, page = 1, limit = 20, sort_by = 'payment_date', sort_order = 'desc' } = req.query;
 
   try {
     const conditions = [];
@@ -169,6 +171,11 @@ async function listPayments(req, res) {
       conditions.push('p.`student_id` = ?');
       values.push(student_id);
     }
+    if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
+      conditions.push('(s.`full_name` LIKE ? OR s.`admission_no` LIKE ? OR r.`receipt_number` LIKE ? OR p.`receipt_number` LIKE ? OR p.`notes` LIKE ?)');
+      values.push(term, term, term, term, term);
+    }
     if (start_date) {
       conditions.push('DATE(p.`payment_date`) >= ?');
       values.push(start_date);
@@ -177,37 +184,51 @@ async function listPayments(req, res) {
       conditions.push('DATE(p.`payment_date`) <= ?');
       values.push(end_date);
     }
-
-    // Class and category filters require joining students
-    let joinClause = '';
-    if (class_id || category) {
-      joinClause = 'LEFT JOIN `students` s ON s.`id` = p.`student_id`';
-      if (class_id) {
-        conditions.push('s.`class_id` = ?');
-        values.push(class_id);
-      }
-      if (category) {
-        conditions.push('s.`category` = ?');
-        values.push(category);
-      }
+    if (class_id) {
+      conditions.push('s.`class_id` = ?');
+      values.push(class_id);
+    }
+    if (category) {
+      conditions.push('s.`category` = ?');
+      values.push(category);
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const offset = (Number(page) - 1) * Number(limit);
-    const limitNum = Number(limit);
-    const offsetNum = Number(offset);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 20);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offsetNum = (pageNum - 1) * limitNum;
 
-    const countSql = `SELECT COUNT(*) as total FROM \`payments\` p ${joinClause} ${whereClause}`;
-    const dataSql = `
-      SELECT p.*, r.\`receipt_number\`, s.\`full_name\`, s.\`admission_no\`, s.\`category\`,
-             c.\`name\` as class_name
+    const allowedSorts = {
+      payment_date: 'p.`payment_date`',
+      amount: 'p.`amount`',
+      full_name: 's.`full_name`',
+      created_at: 'p.`created_at`',
+      receipt_number: 'COALESCE(r.`receipt_number`, p.`receipt_number`)',
+    };
+    const sortCol = allowedSorts[sort_by] || 'p.`payment_date`';
+    const sortDir = sort_order?.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+    const countSql = `
+      SELECT COUNT(*) as total
       FROM \`payments\` p
-      ${joinClause}
       LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
       LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
       LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
       ${whereClause}
-      ORDER BY p.\`created_at\` DESC
+    `;
+
+    const dataSql = `
+      SELECT p.*,
+             COALESCE(r.\`receipt_number\`, p.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_number,
+             s.\`full_name\`, s.\`admission_no\`, s.\`phone\`, s.\`whatsapp_number\`, s.\`category\`,
+             c.\`name\` as class_name, sec.\`name\` as section_name
+      FROM \`payments\` p
+      LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
+      LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+      LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+      LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
+      ${whereClause}
+      ORDER BY ${sortCol} ${sortDir}, p.\`id\` DESC
       LIMIT ${limitNum} OFFSET ${offsetNum}
     `;
 
@@ -218,12 +239,18 @@ async function listPayments(req, res) {
 
     return res.json({
       success: true,
-      payments,
+      payments: payments.map(p => ({
+        ...p,
+        amount: Number(p.amount || 0),
+        full_name: p.full_name || '—',
+        student_name: p.full_name || '—',
+        admission_no: p.admission_no || '—',
+      })),
       pagination: {
-        page: Number(page),
-        limit: Number(limit),
+        page: pageNum,
+        limit: limitNum,
         total: countResult.total,
-        totalPages: Math.ceil(countResult.total / Number(limit)),
+        totalPages: Math.ceil(countResult.total / limitNum),
       },
     });
   } catch (err) {
@@ -309,10 +336,15 @@ async function getPayment(req, res) {
 
   try {
     const payment = await db.queryOne(
-      `SELECT p.*, r.\`receipt_number\`, s.\`full_name\`, s.\`admission_no\`
+      `SELECT p.*,
+              COALESCE(r.\`receipt_number\`, p.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_number,
+              s.\`full_name\`, s.\`admission_no\`, s.\`phone\`, s.\`whatsapp_number\`, s.\`category\`,
+              c.\`name\` as class_name, sec.\`name\` as section_name
        FROM \`payments\` p
        LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
        LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+       LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+       LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
        WHERE p.\`id\` = ?`,
       [id]
     );
@@ -321,11 +353,13 @@ async function getPayment(req, res) {
       return res.status(404).json({ success: false, message: 'Payment not found.' });
     }
 
-    // Get allocations
+    // Get allocations with both monthly fees and extra fees details
     const allocations = await db.query(
-      `SELECT pa.*, mf.\`fee_month\`, mf.\`fee_year\`, mf.\`fee_amount\`
+      `SELECT pa.*, mf.\`fee_month\`, mf.\`fee_year\`, mf.\`fee_amount\`,
+              saf.\`description\` as additional_fee_description, saf.\`amount\` as additional_fee_amount
        FROM \`payment_allocations\` pa
        LEFT JOIN \`monthly_fees\` mf ON mf.\`id\` = pa.\`monthly_fee_id\`
+       LEFT JOIN \`student_additional_fees\` saf ON saf.\`id\` = pa.\`additional_fee_id\`
        WHERE pa.\`payment_id\` = ?
        ORDER BY pa.\`id\` ASC`,
       [id]
@@ -333,8 +367,19 @@ async function getPayment(req, res) {
 
     return res.json({
       success: true,
-      payment,
-      allocations,
+      payment: {
+        ...payment,
+        amount: Number(payment.amount || 0),
+        full_name: payment.full_name || '—',
+        student_name: payment.full_name || '—',
+        admission_no: payment.admission_no || '—',
+      },
+      allocations: allocations.map(a => ({
+        ...a,
+        allocated_amount: Number(a.allocated_amount || 0),
+        fee_amount: Number(a.fee_amount || a.additional_fee_amount || a.allocated_amount || 0),
+        description: a.additional_fee_description || null,
+      })),
     });
   } catch (err) {
     console.error('[paymentController.getPayment]', err);
@@ -462,11 +507,94 @@ async function deletePayment(req, res) {
   }
 }
 
+/**
+ * GET /api/payments/admissions
+ * List all payments collected during student / family admissions
+ */
+async function listAdmissionPayments(req, res) {
+  const { page = 1, limit = 20, search, class_id, start_date, end_date } = req.query;
+
+  try {
+    const conditions = ["(p.`payment_category` = 'ADMISSION_CHARGE' OR p.`notes` LIKE '%Admission%' OR p.`notes` LIKE '%Enrollment%')"];
+    const values = [];
+
+    if (search) {
+      conditions.push('(s.`full_name` LIKE ? OR s.`admission_no` LIKE ? OR r.`receipt_number` LIKE ? OR s.`phone` LIKE ?)');
+      const term = `%${search}%`;
+      values.push(term, term, term, term);
+    }
+
+    if (class_id) {
+      conditions.push('s.`class_id` = ?');
+      values.push(class_id);
+    }
+
+    if (start_date) {
+      conditions.push('DATE(p.`payment_date`) >= ?');
+      values.push(start_date);
+    }
+
+    if (end_date) {
+      conditions.push('DATE(p.`payment_date`) <= ?');
+      values.push(end_date);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+    const limitNum = Math.max(1, parseInt(limit, 10) || 20);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offsetNum = (pageNum - 1) * limitNum;
+
+    const countSql = `SELECT COUNT(*) as total FROM \`payments\` p LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\` LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\` ${whereClause}`;
+    const dataSql = `
+      SELECT p.*, r.\`receipt_number\`, s.\`full_name\`, s.\`admission_no\`, s.\`phone\`, s.\`whatsapp_number\`, s.\`category\`,
+             c.\`name\` as class_name, sec.\`name\` as section_name,
+             COALESCE((
+               SELECT SUM(saf.amount) FROM student_additional_fees saf WHERE saf.student_id = s.id
+             ), 0) + COALESCE((
+               SELECT SUM(mf.fee_amount) FROM monthly_fees mf WHERE mf.student_id = s.id AND mf.created_at <= p.created_at
+             ), 0) as total_assessed,
+             COALESCE((
+               SELECT SUM(GREATEST(0, saf.amount - saf.paid_amount - saf.discount_amount)) FROM student_additional_fees saf WHERE saf.student_id = s.id AND saf.status IN ('DUE', 'PARTIAL')
+             ), 0) + COALESCE((
+               SELECT SUM(mf.due_amount) FROM monthly_fees mf WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')
+             ), 0) as remaining_dues
+      FROM \`payments\` p
+      LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
+      LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+      LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+      LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
+      ${whereClause}
+      ORDER BY p.\`id\` DESC
+      LIMIT ${limitNum} OFFSET ${offsetNum}
+    `;
+
+    const [countResult, payments] = await Promise.all([
+      db.queryOne(countSql, values),
+      db.query(dataSql, values),
+    ]);
+
+    return res.json({
+      success: true,
+      payments,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: countResult.total,
+        totalPages: Math.ceil(countResult.total / limitNum),
+      },
+    });
+  } catch (err) {
+    console.error('[paymentController.listAdmissionPayments]', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch admission payments.' });
+  }
+}
+
 module.exports = {
   recordPayment,
   updatePayment,
   deletePayment,
   listPayments,
+  listAdmissionPayments,
   getPaymentSummary,
   getPayment,
 };

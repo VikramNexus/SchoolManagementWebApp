@@ -13,6 +13,8 @@ const {
   generateDuesNotice,
   sendReceiptWhatsApp,
   sendDuesNoticeWhatsApp,
+  sendReceiptWhatsAppImage,
+  sendDuesWhatsAppImage,
 } = require('../controllers/receiptController');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -30,5 +32,7 @@ router.get('/download/:paymentId', downloadReceipt);
 // Direct WhatsApp dispatch endpoints (Background)
 router.post('/send-whatsapp/:paymentId', sendReceiptWhatsApp);
 router.post('/send-dues-whatsapp/:studentId', sendDuesNoticeWhatsApp);
+router.post('/send-whatsapp-jpg/:paymentId', sendReceiptWhatsAppImage);
+router.post('/send-dues-whatsapp-jpg/:studentId', sendDuesWhatsAppImage);
 
 module.exports = router;

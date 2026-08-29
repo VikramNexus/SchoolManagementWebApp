@@ -1,51 +1,83 @@
 /**
  * Receipt Generator Utility — School Management System
- * High-Resolution JPG Receipt Exporter & Native WhatsApp Share Engine
+ * High-Resolution Full-Page JPG Receipt Exporter & Background WhatsApp Image Engine
  */
 
 import html2canvas from 'html2canvas';
 
 /**
- * Capture a DOM element and export it as a high-resolution JPEG image.
+ * Capture a DOM element and export it as a high-resolution full-page JPEG image.
+ * Solves half-page clipping by strictly calculating full scrollHeight and disabling container overflow in clone.
  * @param {HTMLElement} element - The DOM element to capture
- * @param {string} filename - Base filename without extension
+ * @param {number} quality - JPEG compression quality (0.1 to 1.0)
  * @returns {Promise<string>} Base64 data URL
  */
 export async function captureElementAsJpg(element, quality = 0.95) {
   if (!element) throw new Error('Receipt element not found');
 
-  // Clone or render with clean background and 2x scale for crisp printing
+  // Measure exact full dimensions of receipt sheet
+  const fullWidth = Math.max(element.scrollWidth, element.offsetWidth, 600);
+  const fullHeight = Math.max(element.scrollHeight, element.offsetHeight, 700);
+
+  // Render with html2canvas ensuring full scroll height & zero viewport clipping
   const canvas = await html2canvas(element, {
-    scale: 2, // 2x Retina resolution
+    scale: 2, // 2x Crisp resolution
     useCORS: true,
     allowTaint: true,
     backgroundColor: '#ffffff',
     logging: false,
-    windowWidth: element.scrollWidth,
-    windowHeight: element.scrollHeight,
+    scrollX: 0,
+    scrollY: 0,
+    x: 0,
+    y: 0,
+    width: fullWidth,
+    height: fullHeight,
+    windowWidth: fullWidth + 100,
+    windowHeight: fullHeight + 100,
+    onclone: (clonedDoc, clonedElement) => {
+      // Force element and all parent hierarchy to be visible, fully expanded, and zero scroll offset
+      clonedElement.style.overflow = 'visible';
+      clonedElement.style.height = `${fullHeight}px`;
+      clonedElement.style.maxHeight = 'none';
+      clonedElement.style.position = 'static';
+      clonedElement.style.transform = 'none';
+      clonedElement.style.margin = '0';
+      clonedElement.style.boxSizing = 'border-box';
+
+      let parent = clonedElement.parentElement;
+      while (parent) {
+        parent.style.overflow = 'visible';
+        parent.style.height = 'auto';
+        parent.style.maxHeight = 'none';
+        parent.scrollTop = 0;
+        parent = parent.parentElement;
+      }
+    },
   });
 
   return canvas.toDataURL('image/jpeg', quality);
 }
 
+import { saveFileToDeviceStorage } from './fileDownloader';
+
 /**
- * Download a DOM element directly as a .jpg file
+ * Download a DOM element directly as a full-page .jpg file, saving to native Phone Storage on APK or browser downloads.
  */
 export async function downloadElementAsJpg(element, filename = 'Fee_Receipt') {
   const cleanName = `${filename.replace(/[^a-zA-Z0-9_-]/g, '_')}.jpg`;
   const dataUrl = await captureElementAsJpg(element);
 
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = cleanName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  return cleanName;
+  const saveRes = await saveFileToDeviceStorage({
+    data: dataUrl,
+    filename: cleanName,
+    mimeType: 'image/jpeg',
+  });
+
+  return saveRes;
 }
 
 /**
- * Share receipt directly via WhatsApp (Supports native image file share on mobile & wa.me fallback)
+ * Share receipt directly via WhatsApp fallback
  */
 export async function shareReceiptViaWhatsApp({ element, phone = '', studentName = '', receiptNo = '', amount = '', customText = '' }) {
   let cleanPhone = (phone || '').replace(/\D/g, '');
@@ -62,7 +94,6 @@ export async function shareReceiptViaWhatsApp({ element, phone = '', studentName
 
   const filename = `Receipt_${receiptNo || studentName || 'Payment'}.jpg`;
 
-  // 1. Try Native Web Share API with JPEG File (Works on Mobile Android & iOS)
   if (element && navigator.share && navigator.canShare) {
     try {
       const dataUrl = await captureElementAsJpg(element);
@@ -87,20 +118,5 @@ export async function shareReceiptViaWhatsApp({ element, phone = '', studentName
     }
   }
 
-  // 2. Direct WhatsApp Web / App Link Fallback
-  if (element) {
-    // Also trigger instant JPG download so user has the image ready
-    try {
-      await downloadElementAsJpg(element, filename.replace('.jpg', ''));
-    } catch {
-      // Ignore download errors on direct link
-    }
-  }
-
-  const waUrl = cleanPhone
-    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(defaultText)}`
-    : `https://wa.me/?text=${encodeURIComponent(defaultText)}`;
-
-  window.open(waUrl, '_blank');
-  return { success: true, mode: 'direct_link' };
+  return { success: true, mode: 'completed' };
 }

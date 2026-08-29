@@ -41,7 +41,13 @@ async function getStudentProfile(req, res) {
           FROM \`student_additional_fees\` saf
           WHERE saf.\`student_id\` = mf.\`student_id\`
             AND MONTH(saf.\`due_date\`) = mf.\`fee_month\`
-            AND YEAR(saf.\`due_date\`) = mf.\`fee_year\`) as other_charges,
+            AND YEAR(saf.\`due_date\`) = mf.\`fee_year\`
+            AND saf.\`description\` NOT LIKE '%Admission%'
+            AND saf.\`description\` NOT LIKE '%Security%'
+            AND saf.\`description\` NOT LIKE '%Tie%'
+            AND saf.\`description\` NOT LIKE '%Belt%'
+            AND saf.\`description\` NOT LIKE '%Caution%'
+            AND saf.\`description\` NOT LIKE '%Uniform%') as other_charges,
          (SELECT p.\`payment_date\`
           FROM \`payment_allocations\` pa
           JOIN \`payments\` p ON p.\`id\` = pa.\`payment_id\`
@@ -108,7 +114,11 @@ async function getStudentProfile(req, res) {
 
     return res.json({
       success: true,
-      student: { ...student, monthly_fee_rate: Number(student.monthly_fee_rate || 0) },
+      student: {
+        ...student,
+        monthly_fee_rate: Number(student.monthly_fee_rate || 0),
+        opening_dues: Number(student.opening_dues || 0),
+      },
       monthly_fees: monthlyFeesWithInstallments,
       additional_fees: additionalFees,
       recent_payments: payments,
@@ -470,12 +480,70 @@ async function deleteMonthlyFeeRecord(req, res) {
   }
 }
 
+/**
+ * POST /api/students/:id/additional-fees/:feeId/discount
+ * Apply fee relief / concession / discount to an admission fee or custom additional fee
+ */
+async function giveFeeDiscount(req, res) {
+  const { id, feeId } = req.params;
+  const { discount_amount, discount_reason } = req.body || {};
+
+  const discAmt = Number(discount_amount);
+  if (isNaN(discAmt) || discAmt <= 0) {
+    return res.status(400).json({ success: false, message: 'Valid discount / relief amount is required.' });
+  }
+
+  try {
+    const fee = await db.queryOne('SELECT * FROM `student_additional_fees` WHERE `id` = ? AND `student_id` = ?', [feeId, id]);
+    if (!fee) {
+      return res.status(404).json({ success: false, message: 'Additional fee item not found.' });
+    }
+
+    const totalAmt = Number(fee.amount || 0);
+    const paidAmt = Number(fee.paid_amount || 0);
+    const maxAllowedDiscount = Math.max(0, totalAmt - paidAmt);
+
+    if (discAmt > maxAllowedDiscount) {
+      return res.status(400).json({
+        success: false,
+        message: `Discount amount (₹${discAmt}) cannot exceed pending fee balance (₹${maxAllowedDiscount}).`,
+      });
+    }
+
+    const newDiscount = Number(fee.discount_amount || 0) + discAmt;
+    const newStatus = (paidAmt + newDiscount) >= totalAmt ? 'PAID' : 'PARTIAL';
+
+    await db.query(
+      `UPDATE \`student_additional_fees\`
+       SET \`discount_amount\` = ?, \`discount_reason\` = ?, \`status\` = ?
+       WHERE \`id\` = ? AND \`student_id\` = ?`,
+      [newDiscount, discount_reason?.trim() || 'Management Concession / Fee Relief', newStatus, feeId, id]
+    );
+
+    return res.json({
+      success: true,
+      message: `Discount / relief of ₹${discAmt.toLocaleString('en-IN')} applied successfully.`,
+      fee: {
+        ...fee,
+        discount_amount: newDiscount,
+        discount_reason: discount_reason?.trim() || 'Management Concession / Fee Relief',
+        status: newStatus,
+        due_amount: Math.max(0, totalAmt - paidAmt - newDiscount),
+      },
+    });
+  } catch (err) {
+    console.error('[studentProfileController.giveFeeDiscount]', err);
+    return res.status(500).json({ success: false, message: 'Failed to apply fee discount: ' + err.message });
+  }
+}
+
 module.exports = {
   getStudentProfile,
   updateMonthlyRate,
   addStudentFee,
   updateStudentFee,
   removeStudentFee,
+  giveFeeDiscount,
   generateMonthFee,
   updateMonthlyFeeRecord,
   deleteMonthlyFeeRecord,

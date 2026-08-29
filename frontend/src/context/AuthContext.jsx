@@ -12,21 +12,46 @@ import axios from 'axios';
 
 const TOKEN_KEY = 'sms_token';
 const USER_KEY = 'sms_user';
+
+const isNativeApp = typeof window !== 'undefined' && (
+  (typeof window.Capacitor !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.())) ||
+  window.location.protocol === 'capacitor:' ||
+  (typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && window.location.hostname === 'localhost')
+);
+
+const isLocalBrowser = typeof window !== 'undefined' && !isNativeApp && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname.endsWith('.local')
+);
+
 export const SERVER_URL_KEY = 'sms_server_url';
-export const DEFAULT_SERVER_URL = import.meta.env.VITE_API_URL || 'https://schoolmanagementwebapp-pf7m.onrender.com';
+export const LOCAL_WIFI_SERVER_URL = 'http://172.25.8.130:5000';
+export const CLOUD_SERVER_URL = 'https://schoolmanagementwebapp-pf7m.onrender.com';
+
+export const DEFAULT_SERVER_URL = isLocalBrowser
+  ? ''
+  : (import.meta.env.VITE_API_URL || LOCAL_WIFI_SERVER_URL || CLOUD_SERVER_URL);
 
 export function normalizeApiUrl(rawUrl) {
-  if (!rawUrl) return `${DEFAULT_SERVER_URL.replace(/\/+$/, '')}/api`;
+  if (!rawUrl) return isLocalBrowser ? '/api' : `${DEFAULT_SERVER_URL.replace(/\/+$/, '')}/api`;
   let url = rawUrl.trim().replace(/\/+$/, '');
   // Strip any trailing /api (even multiple times) so we have a clean base
   while (url.endsWith('/api')) {
     url = url.slice(0, -4).replace(/\/+$/, '');
   }
-  return `${url}/api`;
+  return url ? `${url}/api` : '/api';
 }
 
 export function getBaseURL() {
   const saved = localStorage.getItem(SERVER_URL_KEY);
+  if (isLocalBrowser && saved && (saved.includes('onrender.com') || saved.includes(':5000'))) {
+    // In local browser, use relative /api proxy by default
+    return '/api';
+  }
+  if (!saved && isLocalBrowser) {
+    return '/api';
+  }
   return normalizeApiUrl(saved || DEFAULT_SERVER_URL);
 }
 
@@ -127,8 +152,14 @@ export function AuthProvider({ children }) {
       setUser(newUser);
       return newUser;
     } catch (err) {
-      const message =
-        err.response?.data?.message || 'Login failed. Please try again.';
+      let message = err.response?.data?.message;
+      if (!message) {
+        if (err.message === 'Network Error' || err.code === 'ERR_NETWORK' || !err.response) {
+          message = `Cannot reach backend server at ${api.defaults.baseURL || 'configured URL'}. Check Wi-Fi or tap Server Endpoint Settings below.`;
+        } else {
+          message = 'Login failed. Please try again.';
+        }
+      }
       setError(message);
       throw new Error(message);
     } finally {
