@@ -182,14 +182,17 @@ CREATE TABLE `monthly_fees` (
 -- ----------------------------------------------------------------------------
 DROP TABLE IF EXISTS `student_additional_fees`;
 CREATE TABLE `student_additional_fees` (
-  `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `student_id`    INT UNSIGNED NOT NULL,
-  `fee_type_id`   INT UNSIGNED NOT NULL,
-  `description`   VARCHAR(255) DEFAULT NULL,
-  `amount`        DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  `due_date`      DATE         DEFAULT NULL,
-  `status`        ENUM('DUE', 'PARTIAL', 'PAID') NOT NULL DEFAULT 'DUE',
-  `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `student_id`      INT UNSIGNED NOT NULL,
+  `fee_type_id`     INT UNSIGNED DEFAULT NULL,
+  `description`     VARCHAR(255) DEFAULT NULL,
+  `amount`          DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `paid_amount`     DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `discount_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `discount_reason` VARCHAR(255) DEFAULT NULL,
+  `due_date`        DATE         DEFAULT NULL,
+  `status`          ENUM('DUE', 'PARTIAL', 'PAID') NOT NULL DEFAULT 'DUE',
+  `created_at`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_saf_student` (`student_id`),
   CONSTRAINT `fk_saf_student`
@@ -197,7 +200,7 @@ CREATE TABLE `student_additional_fees` (
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_saf_fee_type`
     FOREIGN KEY (`fee_type_id`) REFERENCES `fee_types` (`id`)
-    ON DELETE RESTRICT ON UPDATE CASCADE
+    ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
@@ -210,8 +213,8 @@ CREATE TABLE `payments` (
   `student_id`        INT UNSIGNED NOT NULL,
   `family_id`         VARCHAR(64) DEFAULT NULL,
   `amount`            DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  `payment_mode`      ENUM('CASH', 'ONLINE', 'CHEQUE', 'UPI') NOT NULL DEFAULT 'CASH',
-  `payment_category`  ENUM('MONTHLY_FEE', 'ADMISSION_CHARGE', 'FAMILY_FEE', 'CUSTOM_FEE') NOT NULL DEFAULT 'MONTHLY_FEE',
+  `payment_mode`      VARCHAR(40) NOT NULL DEFAULT 'CASH',
+  `payment_category`  VARCHAR(50) NOT NULL DEFAULT 'MONTHLY_FEE',
   `payment_date`      DATE         NOT NULL,
   `notes`             VARCHAR(255) DEFAULT NULL,
   `recorded_by`       INT UNSIGNED DEFAULT NULL,
@@ -230,24 +233,29 @@ CREATE TABLE `payments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
--- 11. payment_allocations — FIFO link between a payment and monthly fees
+-- 11. payment_allocations — FIFO link between a payment and monthly/additional fees
 -- ----------------------------------------------------------------------------
 DROP TABLE IF EXISTS `payment_allocations`;
 CREATE TABLE `payment_allocations` (
-  `id`               INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `payment_id`       INT UNSIGNED NOT NULL,
-  `monthly_fee_id`   INT UNSIGNED NOT NULL,
-  `allocated_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  `created_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id`                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `payment_id`        INT UNSIGNED NOT NULL,
+  `monthly_fee_id`    INT UNSIGNED DEFAULT NULL,
+  `additional_fee_id` INT UNSIGNED DEFAULT NULL,
+  `allocated_amount`  DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `created_at`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_pa_payment` (`payment_id`),
   KEY `idx_pa_monthly_fee` (`monthly_fee_id`),
+  KEY `idx_pa_additional_fee` (`additional_fee_id`),
   CONSTRAINT `fk_pa_payment`
     FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`)
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_pa_monthly_fee`
     FOREIGN KEY (`monthly_fee_id`) REFERENCES `monthly_fees` (`id`)
-    ON DELETE CASCADE ON UPDATE CASCADE
+    ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_pa_additional_fee`
+    FOREIGN KEY (`additional_fee_id`) REFERENCES `student_additional_fees` (`id`)
+    ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------

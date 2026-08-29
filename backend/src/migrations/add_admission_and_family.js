@@ -32,14 +32,16 @@ async function migrate() {
     if (!hasPaymentCat) {
       await db.query(`
         ALTER TABLE \`payments\`
-        ADD COLUMN \`payment_category\` ENUM('MONTHLY_FEE', 'ADMISSION_CHARGE', 'FAMILY_FEE', 'CUSTOM_FEE') NOT NULL DEFAULT 'MONTHLY_FEE' AFTER \`payment_mode\`,
+        ADD COLUMN \`payment_category\` VARCHAR(50) NOT NULL DEFAULT 'MONTHLY_FEE' AFTER \`payment_mode\`,
         ADD COLUMN \`family_id\` VARCHAR(64) NULL AFTER \`student_id\`,
         ADD INDEX \`idx_payments_family_id\` (\`family_id\`)
       `);
       console.log('✅ Added payment_category and family_id to payments table');
     } else {
-      console.log('ℹ️ payment_category already exists in payments table');
+      await db.query('ALTER TABLE `payments` MODIFY `payment_category` VARCHAR(50) NOT NULL DEFAULT \'MONTHLY_FEE\'');
+      console.log('ℹ️ payment_category updated to VARCHAR(50)');
     }
+    await db.query('ALTER TABLE `payments` MODIFY `payment_mode` VARCHAR(40) NOT NULL DEFAULT \'CASH\'');
 
     // 2b. Make users.email nullable
     try {
@@ -47,6 +49,38 @@ async function migrate() {
       console.log('✅ Updated users.email to allow NULL');
     } catch (e) {
       console.log('ℹ️ users.email already modified or error:', e.message);
+    }
+
+    // 2c. Update student_additional_fees columns
+    try {
+      const safCols = await db.query('SHOW COLUMNS FROM student_additional_fees');
+      const safColNames = safCols.map(c => c.Field);
+      if (!safColNames.includes('paid_amount')) {
+        await db.query('ALTER TABLE student_additional_fees ADD COLUMN paid_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER amount');
+      }
+      if (!safColNames.includes('discount_amount')) {
+        await db.query('ALTER TABLE student_additional_fees ADD COLUMN discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER paid_amount');
+      }
+      if (!safColNames.includes('discount_reason')) {
+        await db.query('ALTER TABLE student_additional_fees ADD COLUMN discount_reason VARCHAR(255) DEFAULT NULL AFTER discount_amount');
+      }
+      await db.query('ALTER TABLE student_additional_fees MODIFY COLUMN fee_type_id INT UNSIGNED DEFAULT NULL');
+      console.log('✅ student_additional_fees columns verified');
+    } catch (e) {
+      console.log('ℹ️ student_additional_fees update info:', e.message);
+    }
+
+    // 2d. Update payment_allocations columns
+    try {
+      const paCols = await db.query('SHOW COLUMNS FROM payment_allocations');
+      const paColNames = paCols.map(c => c.Field);
+      if (!paColNames.includes('additional_fee_id')) {
+        await db.query('ALTER TABLE payment_allocations ADD COLUMN additional_fee_id INT UNSIGNED DEFAULT NULL AFTER monthly_fee_id');
+      }
+      await db.query('ALTER TABLE payment_allocations MODIFY COLUMN monthly_fee_id INT UNSIGNED DEFAULT NULL');
+      console.log('✅ payment_allocations columns verified');
+    } catch (e) {
+      console.log('ℹ️ payment_allocations update info:', e.message);
     }
 
     // 3. Ensure standard fee types exist

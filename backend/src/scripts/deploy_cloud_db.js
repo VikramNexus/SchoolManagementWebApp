@@ -120,12 +120,49 @@ async function deployDatabase() {
     const pColNames = pCols.map(c => c.Field);
 
     if (!pColNames.includes('payment_category')) {
-      await conn.query("ALTER TABLE payments ADD COLUMN payment_category ENUM('MONTHLY_FEE', 'ADMISSION_CHARGE', 'FAMILY_FEE', 'CUSTOM_FEE') NOT NULL DEFAULT 'MONTHLY_FEE'");
+      await conn.query("ALTER TABLE payments ADD COLUMN payment_category VARCHAR(50) NOT NULL DEFAULT 'MONTHLY_FEE'");
+    } else {
+      await conn.query("ALTER TABLE payments MODIFY COLUMN payment_category VARCHAR(50) NOT NULL DEFAULT 'MONTHLY_FEE'");
     }
+    await conn.query("ALTER TABLE payments MODIFY COLUMN payment_mode VARCHAR(40) NOT NULL DEFAULT 'CASH'");
     if (!pColNames.includes('family_id')) {
       await conn.query("ALTER TABLE payments ADD COLUMN family_id VARCHAR(50) DEFAULT NULL");
     }
     console.log('✅ Payments columns verified!');
+
+    // Ensure student_additional_fees has paid_amount, discount_amount, discount_reason
+    console.log('🔄 Verifying student_additional_fees columns...');
+    const [safCols] = await conn.query("SHOW COLUMNS FROM student_additional_fees");
+    const safColNames = safCols.map(c => c.Field);
+    if (!safColNames.includes('paid_amount')) {
+      await conn.query("ALTER TABLE student_additional_fees ADD COLUMN paid_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER amount");
+    }
+    if (!safColNames.includes('discount_amount')) {
+      await conn.query("ALTER TABLE student_additional_fees ADD COLUMN discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER paid_amount");
+    }
+    if (!safColNames.includes('discount_reason')) {
+      await conn.query("ALTER TABLE student_additional_fees ADD COLUMN discount_reason VARCHAR(255) DEFAULT NULL AFTER discount_amount");
+    }
+    try {
+      await conn.query("ALTER TABLE student_additional_fees MODIFY COLUMN fee_type_id INT UNSIGNED DEFAULT NULL");
+    } catch (e) {
+      console.log('ℹ️ fee_type_id already modified or error:', e.message);
+    }
+    console.log('✅ student_additional_fees columns verified!');
+
+    // Ensure payment_allocations has additional_fee_id & nullable monthly_fee_id
+    console.log('🔄 Verifying payment_allocations columns...');
+    const [paCols] = await conn.query("SHOW COLUMNS FROM payment_allocations");
+    const paColNames = paCols.map(c => c.Field);
+    if (!paColNames.includes('additional_fee_id')) {
+      await conn.query("ALTER TABLE payment_allocations ADD COLUMN additional_fee_id INT UNSIGNED DEFAULT NULL AFTER monthly_fee_id");
+    }
+    try {
+      await conn.query("ALTER TABLE payment_allocations MODIFY COLUMN monthly_fee_id INT UNSIGNED DEFAULT NULL");
+    } catch (e) {
+      console.log('ℹ️ monthly_fee_id already modified or error:', e.message);
+    }
+    console.log('✅ payment_allocations columns verified!');
 
     // Ensure seeders.sql runs if classes are empty
     const [classes] = await conn.query("SELECT COUNT(*) as cnt FROM classes");
