@@ -127,9 +127,14 @@ export default function JpgReceiptModal({
     cleanText(data?.mother_name) ||
     '';
 
-  const parentName = fatherName
-    ? (motherName ? `${fatherName} (M: ${motherName})` : fatherName)
-    : (motherName || '—');
+  // Display strictly Father's Name as requested
+  const parentName =
+    fatherName ||
+    cleanText(student?.parent_name) ||
+    cleanText(payment?.parent_name) ||
+    cleanText(data?.parent_name) ||
+    motherName ||
+    '—';
 
   const parentPhone =
     cleanText(student?.phone) ||
@@ -249,13 +254,13 @@ export default function JpgReceiptModal({
               {/* Decorative Top Border */}
               <div className="receipt-sheet-top-stripe" />
 
-              {/* School Letterhead Header */}
+              {/* Centered School Letterhead Header */}
               <div className="receipt-letterhead">
                 <div className="letterhead-logo">
                   {schoolLogoUrl ? (
                     <img src={schoolLogoUrl} alt="School Logo" className="school-logo-img" />
                   ) : (
-                    <GraduationCap size={36} className="school-cap-icon" />
+                    <GraduationCap size={32} className="school-cap-icon" />
                   )}
                 </div>
                 <div className="letterhead-content">
@@ -312,7 +317,7 @@ export default function JpgReceiptModal({
 
                 <div className="detail-col">
                   <div className="detail-row">
-                    <span className="lbl">Father / Guardian:</span>
+                    <span className="lbl">Father's Name:</span>
                     <span className="val font-bold">{parentName}</span>
                   </div>
                   <div className="detail-row">

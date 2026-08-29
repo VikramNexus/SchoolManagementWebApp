@@ -112,26 +112,30 @@
   border-radius: 12px 12px 0 0;
 }
 
-/* School Letterhead */
+/* School Letterhead - Centered & Premium */
 .receipt-letterhead {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  text-align: center;
+  gap: 6px;
   border-bottom: 2px solid #e2e8f0;
-  padding-bottom: 14px;
+  padding-bottom: 12px;
   margin-bottom: 12px;
   width: 100%;
 }
 
 .letterhead-logo {
-  width: 50px;
-  height: 50px;
+  width: 46px;
+  height: 46px;
   border-radius: 12px;
-  background: #0284c7;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 10px rgba(2, 132, 199, 0.25);
+  margin-bottom: 2px;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -149,8 +153,10 @@
 .letterhead-content {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
   gap: 2px;
-  flex: 1;
+  width: 100%;
 }
 
 .school-title {
@@ -158,8 +164,9 @@
   font-weight: 900;
   color: #0f172a;
   margin: 0;
-  letter-spacing: -0.5px;
-  line-height: 1.2;
+  letter-spacing: -0.3px;
+  line-height: 1.25;
+  text-align: center;
   word-break: normal;
   overflow-wrap: break-word;
 }
@@ -167,14 +174,17 @@
 .school-tagline {
   font-size: 0.76rem;
   color: #64748b;
-  margin: 2px 0;
+  margin: 1px 0 3px 0;
   font-weight: 600;
+  text-align: center;
 }
 
 .school-contact-line {
   font-size: 0.72rem;
   color: #475569;
   margin: 0;
+  line-height: 1.4;
+  text-align: center;
 }
 
 /* Receipt Banner */
@@ -226,37 +236,41 @@
 .receipt-student-details {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  column-gap: 20px;
+  row-gap: 8px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 12px 16px;
   margin-bottom: 14px;
 }
 
 .detail-col {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .detail-row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
   font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .detail-row .lbl {
   color: #64748b;
   font-weight: 600;
-  min-width: 105px;
+  min-width: 110px;
+  width: 110px;
   flex-shrink: 0;
 }
 
 .detail-row .val {
   color: #0f172a;
   font-weight: 600;
+  flex: 1;
+  word-break: break-word;
 }
 
 .detail-row .val.font-bold {
