@@ -83,6 +83,71 @@ function escapeSqlValue(val) {
 }
 
 /**
+ * Helper to split SQL statements respecting strings and comments
+ */
+function splitSqlStatements(sql) {
+  const statements = [];
+  let current = '';
+  let inString = false;
+  let quoteChar = '';
+  let isEscaped = false;
+
+  const lines = sql.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!inString && (trimmed.startsWith('--') || trimmed.startsWith('#'))) {
+      continue;
+    }
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (isEscaped) {
+        current += char;
+        isEscaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        current += char;
+        isEscaped = true;
+        continue;
+      }
+
+      if (inString) {
+        current += char;
+        if (char === quoteChar) {
+          inString = false;
+          quoteChar = '';
+        }
+      } else {
+        if (char === "'" || char === '"' || char === '`') {
+          inString = true;
+          quoteChar = char;
+          current += char;
+        } else if (char === ';') {
+          const stmt = current.trim();
+          if (stmt.length > 0) {
+            statements.push(stmt);
+          }
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+    }
+    current += '\n';
+  }
+
+  const finalStmt = current.trim();
+  if (finalStmt.length > 0) {
+    statements.push(finalStmt);
+  }
+
+  return statements;
+}
+
+/**
  * Generate native SQL dump text of all database tables
  */
 async function generateNativeSqlDump() {
@@ -111,8 +176,8 @@ async function generateNativeSqlDump() {
       sql += `-- --------------------------------------------------------\n`;
       sql += `-- Table structure for table \`${table}\`\n`;
       sql += `-- --------------------------------------------------------\n`;
-      sql += `DROP TABLE IF EXISTS \`${table}\`;\n`;
-      sql += `${createSql};\n\n`;
+      sql += `${createSql.replace(/^CREATE TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ')};\n`;
+      sql += `DELETE FROM \`${table}\`;\n\n`;
     }
 
     // 2. Get Table Rows
@@ -258,11 +323,10 @@ async function downloadBackup(req, res) {
     return res.status(404).json({ success: false, message: 'Backup file not found' });
   }
 
-  res.setHeader('Content-Type', 'application/sql');
-  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
-  res.download(filepath, safeFilename, (err) => {
-    if (err) {
+  return res.download(filepath, safeFilename, (err) => {
+    if (err && !res.headersSent) {
       console.error('[backupController.downloadBackup] Error:', err);
+      return res.status(500).json({ success: false, message: 'Failed to download file' });
     }
   });
 }
@@ -284,6 +348,7 @@ async function restoreBackup(req, res) {
     return res.status(404).json({ success: false, message: 'Backup file not found on server' });
   }
 
+  let conn = null;
   try {
     const sqlContent = fs.readFileSync(filepath, 'utf8');
     if (!sqlContent.trim()) {
@@ -292,30 +357,25 @@ async function restoreBackup(req, res) {
 
     console.log(`[backupController] Restoring database from ${safeFilename}...`);
 
-    // Clean comment lines and split statements cleanly
-    const cleanSql = sqlContent
-      .split('\n')
-      .filter((line) => !line.trim().startsWith('--'))
-      .join('\n');
+    // Parse and split SQL statements with full quote and comment safety
+    const statements = splitSqlStatements(sqlContent);
 
-    const statements = cleanSql
-      .split(/;\s*(?:\r?\n|$)/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    // Execute statements sequentially with foreign key checks disabled
-    await db.query('SET FOREIGN_KEY_CHECKS = 0');
+    // Acquire single dedicated connection for full restore sequence
+    conn = await db.getConnection();
+    await conn.query('SET FOREIGN_KEY_CHECKS = 0');
 
     for (const stmt of statements) {
       if (!stmt) continue;
       try {
-        await db.query(stmt);
+        await conn.query(stmt);
       } catch (stmtErr) {
         console.warn('[backupController.restoreBackup] Stmt warn:', stmtErr.message.slice(0, 100));
       }
     }
 
-    await db.query('SET FOREIGN_KEY_CHECKS = 1');
+    await conn.query('SET FOREIGN_KEY_CHECKS = 1');
+    conn.release();
+    conn = null;
 
     // Audit log
     await db.query(
@@ -330,9 +390,12 @@ async function restoreBackup(req, res) {
     });
   } catch (err) {
     console.error('[backupController.restoreBackup] Error:', err);
-    try {
-      await db.query('SET FOREIGN_KEY_CHECKS = 1');
-    } catch {}
+    if (conn) {
+      try {
+        await conn.query('SET FOREIGN_KEY_CHECKS = 1');
+      } catch {}
+      conn.release();
+    }
     return res.status(500).json({ success: false, message: `Restore failed: ${err.message}` });
   }
 }

@@ -40,13 +40,11 @@ import {
   EyeOff,
   ChevronDown,
   ChevronUp,
-  HardDrive,
 } from 'lucide-react';
 import { api, useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import FeeTypesSettings from '../components/FeeTypesSettings';
 import MessagingSettings from '../components/MessagingSettings';
-import BackupSettings from '../components/BackupSettings';
 import './Settings.css';
 
 const TABS = [
@@ -55,7 +53,6 @@ const TABS = [
   { id: 'classes', label: 'Classes & Sections', icon: GraduationCap },
   { id: 'fee-types', label: 'Custom Fee Types', icon: SettingsIcon },
   { id: 'messaging', label: 'Messaging', icon: MessageSquare },
-  { id: 'backup', label: 'Backup & Data Vault', icon: HardDrive },
 ];
 
 export default function Settings() {
@@ -1186,17 +1183,6 @@ export default function Settings() {
           className="tab-panel"
         >
           <MessagingSettings />
-        </div>
-
-        {/* Backup & Data Vault */}
-        <div
-          role="tabpanel"
-          id="backup-panel"
-          aria-labelledby="backup-tab"
-          hidden={activeTab !== 'backup'}
-          className="tab-panel"
-        >
-          <BackupSettings />
         </div>
       </div>
     </div>

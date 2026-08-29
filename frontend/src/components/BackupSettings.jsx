@@ -126,14 +126,12 @@ export default function BackupSettings() {
         responseType: 'blob',
       });
       const blob = new Blob([res.data], { type: 'application/sql' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      await saveFileToDeviceStorage({
+        data: blob,
+        filename,
+        mimeType: 'application/sql',
+      });
+      toast.success(`✓ Downloaded: ${filename}`);
     } catch (err) {
       console.error('[handleDownloadBackup]', err);
       toast.error('Failed to download backup file.');
@@ -151,38 +149,46 @@ export default function BackupSettings() {
       const filename = res.data.backup.filename;
       const fileRes = await api.get(`/backup/download/${filename}`, { responseType: 'blob' });
       const fileBlob = new Blob([fileRes.data], { type: 'application/sql' });
-      const file = new File([fileBlob], filename, { type: 'application/sql' });
+
+      // Save locally first
+      await saveFileToDeviceStorage({
+        data: fileBlob,
+        filename,
+        mimeType: 'application/sql',
+      });
 
       // If native Web Share API with files is supported (Mobile / Chrome Desktop)
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'School Database Backup',
-          text: `School System Snapshot: ${filename}`,
-        });
-        toast.success('✓ Shared to Google Drive / Cloud successfully!');
-      } else {
-        // Fallback: Download file and open Google Drive in new tab
-        const url = window.URL.createObjectURL(fileBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+      let shared = false;
+      if (typeof navigator !== 'undefined' && typeof File !== 'undefined' && navigator.canShare) {
+        try {
+          const file = new File([fileBlob], filename, { type: 'application/sql' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: 'School Database Backup',
+              text: `School System Snapshot: ${filename}`,
+            });
+            shared = true;
+            toast.success('✓ Shared to Google Drive / Cloud successfully!');
+          }
+        } catch (shareErr) {
+          if (shareErr.name !== 'AbortError') {
+            console.warn('[WebShare]', shareErr);
+          }
+        }
+      }
 
-        toast.info('Backup file downloaded! Opening Google Drive in new tab to upload...');
+      if (!shared) {
+        toast.info('Backup file saved! Opening Google Drive in new tab to upload...');
         setTimeout(() => {
           window.open('https://drive.google.com/drive/my-drive', '_blank');
-        }, 1200);
+        }, 800);
       }
+
       fetchData();
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('[handleSaveToCloudDrive]', err);
-        toast.error('Failed to upload to cloud drive.');
-      }
+      console.error('[handleSaveToCloudDrive]', err);
+      toast.error('Failed to save to cloud storage.');
     } finally {
       setCreatingBackup(false);
     }
@@ -199,14 +205,11 @@ export default function BackupSettings() {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
       const filename = `School_Master_Archive_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      await saveFileToDeviceStorage({
+        data: blob,
+        filename,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
       toast.success('✓ Master Excel Archive exported successfully!');
     } catch (err) {
       console.error('[handleExportMasterExcel]', err);
