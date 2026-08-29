@@ -92,6 +92,10 @@ async function deployDatabase() {
     if (!sColNames.includes('whatsapp_number')) {
       await conn.query("ALTER TABLE students ADD COLUMN whatsapp_number VARCHAR(20) DEFAULT NULL");
     }
+    if (!sColNames.includes('opening_dues')) {
+      await conn.query("ALTER TABLE students ADD COLUMN opening_dues DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER monthly_fee_rate");
+      console.log('  ✅ Added opening_dues to students table');
+    }
     if (!sColNames.includes('father_name')) {
       await conn.query("ALTER TABLE students ADD COLUMN father_name VARCHAR(160) DEFAULT NULL");
     }

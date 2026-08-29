@@ -134,6 +134,7 @@ CREATE TABLE `students` (
   `admission_date`        DATE         DEFAULT NULL,
   `admission_receipt_no`  VARCHAR(50)  DEFAULT NULL,
   `monthly_fee_rate`      DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `opening_dues`          DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `family_id`             VARCHAR(64)  DEFAULT NULL,
   `status`                ENUM('active', 'inactive', 'deleted') NOT NULL DEFAULT 'active',
   `created_at`            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,

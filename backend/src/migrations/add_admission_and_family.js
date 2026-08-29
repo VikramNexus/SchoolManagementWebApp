@@ -8,7 +8,7 @@ async function migrate() {
   try {
     console.log('🚀 Starting migration for Admission Desk & Family Sibling Accounts...');
 
-    // 1. Add family_id to students table
+    // 1. Add family_id and opening_dues to students table
     const studentCols = await db.query('SHOW COLUMNS FROM students');
     const hasFamilyId = studentCols.some(c => c.Field === 'family_id');
     if (!hasFamilyId) {
@@ -16,6 +16,14 @@ async function migrate() {
       console.log('✅ Added family_id column to students table');
     } else {
       console.log('ℹ️ family_id already exists in students table');
+    }
+
+    const hasOpeningDues = studentCols.some(c => c.Field === 'opening_dues');
+    if (!hasOpeningDues) {
+      await db.query('ALTER TABLE `students` ADD COLUMN `opening_dues` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `monthly_fee_rate`');
+      console.log('✅ Added opening_dues column to students table');
+    } else {
+      console.log('ℹ️ opening_dues already exists in students table');
     }
 
     // 2. Add payment_category & family_id to payments table
