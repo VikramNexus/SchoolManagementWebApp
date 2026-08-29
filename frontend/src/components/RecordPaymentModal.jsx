@@ -263,6 +263,31 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
     }).format(val || 0);
   };
 
+  // If user clicked "Print / View JPG Receipt", render ONLY JpgReceiptModal cleanly without modal stacking
+  if (showJpgModal && recordedPaymentSuccess) {
+    return (
+      <JpgReceiptModal
+        isOpen={true}
+        onClose={() => setShowJpgModal(false)}
+        data={{
+          student: selectedStudent || {},
+          payment: {
+            ...recordedPaymentSuccess,
+            amount: formData.amount,
+            payment_mode: formData.payment_mode,
+            payment_date: formData.payment_date,
+            notes: formData.notes,
+          },
+          allocations: recordedPaymentSuccess.allocations || allocationPreview || [],
+          summary: {
+            total_amount: formData.amount,
+          },
+        }}
+        type="payment"
+      />
+    );
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="record-payment-title">
       <div
@@ -683,29 +708,6 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
           </form>
         )}
       </div>
-
-      {/* Official JPG Receipt Modal with WhatsApp Sharing */}
-      {recordedPaymentSuccess && (
-        <JpgReceiptModal
-          isOpen={showJpgModal}
-          onClose={() => setShowJpgModal(false)}
-          data={{
-            student: selectedStudent || {},
-            payment: {
-              ...recordedPaymentSuccess,
-              amount: formData.amount,
-              payment_mode: formData.payment_mode,
-              payment_date: formData.payment_date,
-              notes: formData.notes,
-            },
-            allocations: recordedPaymentSuccess.allocations || allocationPreview || [],
-            summary: {
-              total_amount: formData.amount,
-            },
-          }}
-          type="payment"
-        />
-      )}
     </div>
   );
 }
