@@ -409,8 +409,8 @@ export default function BackupSettings() {
           </div>
         </div>
 
-        {/* Card 2: Class-Wise Student Excel Dossiers Archive (DESKTOP VIEW ONLY) */}
-        <div className="feature-card desktop-only-excel-vault">
+        {/* Card 2: Class-Wise Student Excel Dossiers Archive (Desktop & Mobile) */}
+        <div className="feature-card">
           <div className="feature-card-header">
             <div className="feature-title-wrap">
               <div className="feature-mini-icon green">

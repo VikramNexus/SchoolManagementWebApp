@@ -128,9 +128,8 @@ export default function StudentProfile() {
       const res = await api.get(`/students/${id}/export-excel`, {
         responseType: 'blob',
       });
-      const safeAdm = (student?.admission_no || id).replace(/[^a-zA-Z0-9_-]/g, '_');
-      const safeName = (student?.full_name || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const filename = `Student_Profile_${safeAdm}_${safeName}.xlsx`;
+      const safeName = (student?.full_name || 'Student').trim().replace(/[^a-zA-Z0-9_\s-]/g, '').replace(/\s+/g, '_');
+      const filename = `${safeName}.xlsx`;
       const blob = new Blob([res.data], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });

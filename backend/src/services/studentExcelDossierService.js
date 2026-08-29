@@ -1,7 +1,7 @@
 /**
  * Student Excel Dossier Service — School Management System
  *
- * Generates an ultra-clean, pixel-perfect single-sheet student profile
+ * Generates an ultra-clean, spacious, un-congested single-sheet student profile
  * and running-balance financial fee ledger formatted exactly like
  * standard institutional academic registers.
  */
@@ -38,6 +38,21 @@ function formatMonthYear(monthNum, yearNum) {
   const m = MONTH_ABBR[Number(monthNum)] || `M${monthNum}`;
   const y = String(yearNum || new Date().getFullYear()).slice(-2);
   return `${m}-${y}`;
+}
+
+/**
+ * Helper to apply styled borders to a cell range
+ */
+function applyRangeBorder(sheet, startRow, startCol, endRow, endCol, borderStyle, fillColor) {
+  for (let r = startRow; r <= endRow; r++) {
+    for (let c = startCol; c <= endCol; c++) {
+      const cell = sheet.getCell(r, c);
+      if (borderStyle) cell.border = borderStyle;
+      if (fillColor) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+      }
+    }
+  }
 }
 
 /**
@@ -105,121 +120,203 @@ async function generateStudentExcelWorkbook(studentId) {
   workbook.creator = 'School Management System';
   workbook.created = new Date();
 
-  const safeSheetName = (student.full_name || 'Student').slice(0, 28);
+  const safeSheetName = (student.full_name || 'Student Profile').slice(0, 30);
   const sheet = workbook.addWorksheet(safeSheetName, {
     views: [{ showGridLines: true }],
-    pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1 },
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
   });
 
-  // Set explicit column widths matching the photo layout
+  // Generous column widths ensuring zero text truncation
   sheet.columns = [
-    { key: 'colA', width: 14 }, // Month
-    { key: 'colB', width: 13 }, // Prev Due
-    { key: 'colC', width: 12 }, // Other Fee
-    { key: 'colD', width: 13 }, // Monthly Fee / Tuition
-    { key: 'colE', width: 14 }, // Total Demand
-    { key: 'colF', width: 14 }, // Amount Paid (Credit)
-    { key: 'colG', width: 14 }, // Net Balance Due
-    { key: 'colH', width: 14 }, // Payment Date
-    { key: 'colI', width: 14 }, // Mode
+    { key: 'colA', width: 16 }, // Month
+    { key: 'colB', width: 15 }, // Prev Due
+    { key: 'colC', width: 14 }, // Other Fee
+    { key: 'colD', width: 15 }, // Tuition Fee
+    { key: 'colE', width: 16 }, // Total Demand
+    { key: 'colF', width: 16 }, // Amount Paid (Credit)
+    { key: 'colG', width: 16 }, // Net Balance Due
+    { key: 'colH', width: 16 }, // Payment Date
+    { key: 'colI', width: 16 }, // Mode
   ];
 
-  // Border helper
+  // Border helper styles
   const thinBorder = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  };
+
+  const cardBorder = {
     top: { style: 'thin', color: { argb: 'FF94A3B8' } },
     left: { style: 'thin', color: { argb: 'FF94A3B8' } },
     bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
     right: { style: 'thin', color: { argb: 'FF94A3B8' } },
   };
 
-  const boldBorder = {
-    top: { style: 'medium', color: { argb: 'FF0F172A' } },
-    left: { style: 'medium', color: { argb: 'FF0F172A' } },
-    bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
-    right: { style: 'medium', color: { argb: 'FF0F172A' } },
-  };
-
   // ---------------------------------------------------------
-  // 1. INSTITUTION HEADER
+  // 1. INSTITUTION TITLE HEADER
   // ---------------------------------------------------------
   sheet.mergeCells('A1:I1');
   const titleCell = sheet.getCell('A1');
   titleCell.value = schoolName.toUpperCase();
-  titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF0F172A' } };
+  titleCell.font = { name: 'Calibri', size: 15, bold: true, color: { argb: 'FF0F172A' } };
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
   titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+  sheet.getRow(1).height = 28;
 
   sheet.mergeCells('A2:I2');
   const subCell = sheet.getCell('A2');
   subCell.value = `STUDENT PROFILE & RUNNING FEE REGISTER  •  ${schoolAddress}`;
-  subCell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF475569' } };
+  subCell.font = { name: 'Calibri', size: 9.5, italic: true, color: { argb: 'FF475569' } };
   subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(2).height = 18;
 
   sheet.addRow([]); // Blank spacer row 3
+  sheet.getRow(3).height = 8;
 
   // ---------------------------------------------------------
-  // 2. STUDENT & PARENT PROFILE CARD (Rows 4 - 7)
+  // 2. SPACIOUS 3-COLUMN PROFILE INFORMATION CARDS (Rows 4 to 6)
   // ---------------------------------------------------------
-  const profileRows = [
-    [
-      'Student Name:', student.full_name || '—',
-      'Admission No:', student.admission_no || '—',
-      'Class & Sec:', `${student.class_name || '—'} ${student.section_name || ''}`.trim(),
-      'Category:', student.category === 'hosteller' ? 'Hosteller / Residential' : 'Day Scholar'
-    ],
-    [
-      "Father's Name:", student.father_name || student.parent_name || '—',
-      "Mother's Name:", student.mother_name || '—',
-      'Phone Number:', student.phone || '—',
-      'Monthly Rate:', `₹${Number(student.monthly_fee_rate || 3000).toLocaleString('en-IN')}`
-    ],
-    [
-      'Address:', student.address || '—',
-      'WhatsApp:', student.whatsapp_number || student.phone || '—',
-      'Admission Date:', student.admission_date ? new Date(student.admission_date).toLocaleDateString('en-IN') : '—',
-      'Family ID:', student.family_id || '—'
-    ],
-  ];
+  // Row 4: Student Name | Admission No | Class & Section
+  sheet.mergeCells('A4:C4');
+  sheet.mergeCells('D4:F4');
+  sheet.mergeCells('G4:I4');
 
-  profileRows.forEach((pRow) => {
-    const row = sheet.addRow([
-      pRow[0], pRow[1], '',
-      pRow[2], pRow[3],
-      pRow[4], pRow[5],
-      pRow[6], pRow[7]
-    ]);
-    row.font = { name: 'Calibri', size: 10 };
-    row.getCell(1).font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF334155' } };
-    row.getCell(4).font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF334155' } };
-    row.getCell(6).font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF334155' } };
-    row.getCell(8).font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF334155' } };
-  });
+  const cellA4 = sheet.getCell('A4');
+  cellA4.value = {
+    richText: [
+      { font: { bold: true, color: { argb: 'FF334155' } }, text: 'Student Name: ' },
+      { font: { bold: true, color: { argb: 'FF0F172A' } }, text: student.full_name || '—' }
+    ]
+  };
+  cellA4.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
 
-  sheet.addRow([]); // Blank spacer row 8
+  const cellD4 = sheet.getCell('D4');
+  cellD4.value = {
+    richText: [
+      { font: { bold: true, color: { argb: 'FF334155' } }, text: 'Admission No: ' },
+      { font: { bold: true, color: { argb: 'FF0284C7' } }, text: student.admission_no || '—' }
+    ]
+  };
+  cellD4.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  const cellG4 = sheet.getCell('G4');
+  cellG4.value = {
+    richText: [
+      { font: { bold: true, color: { argb: 'FF334155' } }, text: 'Class & Sec: ' },
+      { font: { bold: true, color: { argb: 'FF0F172A' } }, text: `${student.class_name || '—'} ${student.section_name || ''}`.trim() }
+    ]
+  };
+  cellG4.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  sheet.getRow(4).height = 22;
+  applyRangeBorder(sheet, 4, 1, 4, 3, cardBorder, 'FFF8FAFC');
+  applyRangeBorder(sheet, 4, 4, 4, 6, cardBorder, 'FFF8FAFC');
+  applyRangeBorder(sheet, 4, 7, 4, 9, cardBorder, 'FFF8FAFC');
+
+  // Row 5: Father's Name | Mother's Name | Category & Monthly Rate
+  sheet.mergeCells('A5:C5');
+  sheet.mergeCells('D5:F5');
+  sheet.mergeCells('G5:I5');
+
+  const cellA5 = sheet.getCell('A5');
+  cellA5.value = {
+    richText: [
+      { font: { bold: true, color: { argb: 'FF334155' } }, text: "Father's Name: " },
+      { font: { color: { argb: 'FF0F172A' } }, text: student.father_name || student.parent_name || '—' }
+    ]
+  };
+  cellA5.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  const cellD5 = sheet.getCell('D5');
+  cellD5.value = {
+    richText: [
+      { font: { bold: true, color: { argb: 'FF334155' } }, text: "Mother's Name: " },
+      { font: { color: { argb: 'FF0F172A' } }, text: student.mother_name || '—' }
+    ]
+  };
+  cellD5.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  const cellG5 = sheet.getCell('G5');
+  cellG5.value = {
+    richText: [
+      { font: { bold: true, color: { argb: 'FF334155' } }, text: 'Category / Rate: ' },
+      { font: { color: { argb: 'FF0F172A' } }, text: `${student.category === 'hosteller' ? 'Hosteller' : 'Day Scholar'} (₹${Number(student.monthly_fee_rate || 3000).toLocaleString('en-IN')}/mo)` }
+    ]
+  };
+  cellG5.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  sheet.getRow(5).height = 22;
+  applyRangeBorder(sheet, 5, 1, 5, 3, cardBorder, 'FFF8FAFC');
+  applyRangeBorder(sheet, 5, 4, 5, 6, cardBorder, 'FFF8FAFC');
+  applyRangeBorder(sheet, 5, 7, 5, 9, cardBorder, 'FFF8FAFC');
+
+  // Row 6: Address | Phone Number | Family ID & Admission Date
+  sheet.mergeCells('A6:C6');
+  sheet.mergeCells('D6:F6');
+  sheet.mergeCells('G6:I6');
+
+  const cellA6 = sheet.getCell('A6');
+  cellA6.value = {
+    richText: [
+      { font: { bold: true, color: { argb: 'FF334155' } }, text: 'Address: ' },
+      { font: { color: { argb: 'FF0F172A' } }, text: student.address || '—' }
+    ]
+  };
+  cellA6.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  const cellD6 = sheet.getCell('D6');
+  const phoneText = `${student.phone || '—'}${student.whatsapp_number && student.whatsapp_number !== student.phone ? ' (WA: ' + student.whatsapp_number + ')' : ''}`;
+  cellD6.value = {
+    richText: [
+      { font: { bold: true, color: { argb: 'FF334155' } }, text: 'Phone Number: ' },
+      { font: { color: { argb: 'FF0F172A' } }, text: phoneText }
+    ]
+  };
+  cellD6.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  const cellG6 = sheet.getCell('G6');
+  const admDateStr = student.admission_date ? formatDateShort(student.admission_date) : '—';
+  cellG6.value = {
+    richText: [
+      { font: { bold: true, color: { argb: 'FF334155' } }, text: 'Family / Adm Date: ' },
+      { font: { color: { argb: 'FF0F172A' } }, text: `${student.family_id || '—'}  •  ${admDateStr}` }
+    ]
+  };
+  cellG6.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  sheet.getRow(6).height = 22;
+  applyRangeBorder(sheet, 6, 1, 6, 3, cardBorder, 'FFF8FAFC');
+  applyRangeBorder(sheet, 6, 4, 6, 6, cardBorder, 'FFF8FAFC');
+  applyRangeBorder(sheet, 6, 7, 6, 9, cardBorder, 'FFF8FAFC');
+
+  sheet.addRow([]); // Blank spacer row 7
+  sheet.getRow(7).height = 10;
 
   // ---------------------------------------------------------
-  // 3. RUNNING BALANCE FEE LEDGER TABLE (Headers on Row 9)
+  // 3. RUNNING BALANCE FEE LEDGER TABLE (Headers on Row 8)
   // ---------------------------------------------------------
   const headerRow = sheet.addRow([
     'Month',
-    'Prev Due',
+    'Previous Due',
     'Other Fee',
-    'Tuition',
+    'Tuition Fee',
     'Total Demand',
     'Amount Paid',
     'Net Balance',
-    'Pay Date',
-    'Mode'
+    'Payment Date',
+    'Payment Mode'
   ]);
 
-  headerRow.height = 24;
-  headerRow.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF0F172A' } };
+  headerRow.height = 25;
+  headerRow.font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FFFFFFFF' } };
   headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
 
   for (let c = 1; c <= 9; c++) {
     const cell = headerRow.getCell(c);
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
-    cell.border = boldBorder;
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F2E5A' } }; // Deep Navy Slate
+    cell.border = thinBorder;
   }
 
   // ---------------------------------------------------------
@@ -228,7 +325,6 @@ async function generateStudentExcelWorkbook(studentId) {
   let runningPrevDue = Number(student.opening_dues || 0);
 
   if (monthlyFees.length === 0) {
-    // If no months generated yet, show current status row
     const defaultRate = Number(student.monthly_fee_rate || 3000);
     const totalDemand = runningPrevDue + defaultRate;
     const curMonth = formatMonthYear(new Date().getMonth() + 1, new Date().getFullYear());
@@ -241,9 +337,10 @@ async function generateStudentExcelWorkbook(studentId) {
       totalDemand,
       0,
       totalDemand,
-      '',
-      ''
+      '—',
+      '—'
     ]);
+    r.height = 22;
     r.alignment = { horizontal: 'center', vertical: 'middle' };
     for (let c = 1; c <= 9; c++) {
       const cell = r.getCell(c);
@@ -258,16 +355,16 @@ async function generateStudentExcelWorkbook(studentId) {
       const tuition = Number(mf.amount || student.monthly_fee_rate || 3000);
       const totalDemand = prevDue + otherFee + tuition;
       const paid = Number(mf.actual_paid || 0);
-      // Photo displays paid amount with negative sign (e.g. -5000) or 0
+      // Format paid amount with negative sign (e.g. -5,000) matching accounting registers
       const paidDisplay = paid > 0 ? -paid : 0;
       const netBalance = Math.max(0, totalDemand - paid);
 
-      const payDate = mf.actual_payment_date ? formatDateShort(mf.actual_payment_date) : '';
+      const payDate = mf.actual_payment_date ? formatDateShort(mf.actual_payment_date) : '—';
       const payMode = mf.actual_payment_mode === 'IN_ACCOUNT'
         ? 'in acc.'
         : mf.actual_payment_mode === 'CASH'
         ? 'cash'
-        : mf.actual_payment_mode || '';
+        : mf.actual_payment_mode || '—';
 
       const r = sheet.addRow([
         monthLabel,
@@ -281,7 +378,7 @@ async function generateStudentExcelWorkbook(studentId) {
         payMode
       ]);
 
-      r.height = 20;
+      r.height = 22;
       r.alignment = { horizontal: 'center', vertical: 'middle' };
 
       for (let c = 1; c <= 9; c++) {
@@ -301,23 +398,17 @@ async function generateStudentExcelWorkbook(studentId) {
   // 5. SIGNATURE & AUTHORITY FOOTER BLOCK
   // ---------------------------------------------------------
   sheet.addRow([]); // Blank spacer
-  const signRow = sheet.addRow([
-    '', '', '', '', '', '', '',
-    "Head's Signature", ''
-  ]);
-  signRow.height = 28;
-  const startRowIdx = signRow.number;
+  sheet.addRow([]);
 
-  sheet.mergeCells(`H${startRowIdx}:I${startRowIdx}`);
-  const signCell = sheet.getCell(`H${startRowIdx}`);
+  const curRowNumber = sheet.lastRow.number;
+  sheet.mergeCells(`H${curRowNumber}:I${curRowNumber}`);
+  const signCell = sheet.getCell(`H${curRowNumber}`);
+  signCell.value = "Head's Signature";
   signCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1E293B' } };
   signCell.alignment = { horizontal: 'center', vertical: 'middle' };
-  signCell.border = {
-    top: { style: 'thin', color: { argb: 'FF334155' } },
-    left: { style: 'thin', color: { argb: 'FF334155' } },
-    bottom: { style: 'thin', color: { argb: 'FF334155' } },
-    right: { style: 'thin', color: { argb: 'FF334155' } },
-  };
+  sheet.getRow(curRowNumber).height = 30;
+
+  applyRangeBorder(sheet, curRowNumber, 8, curRowNumber, 9, cardBorder, 'FFF8FAFC');
 
   return workbook;
 }

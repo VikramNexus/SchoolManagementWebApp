@@ -540,12 +540,15 @@ async function exportClassWiseZipArchive(req, res) {
     archive.pipe(res);
 
     // Loop through students, generate individual Excel buffer, and append into Class folder
+    const nameCounts = {};
     for (const st of students) {
-      const cleanClassName = (st.class_name || 'Class_General').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const cleanAdm = (st.admission_no || String(st.id)).replace(/[^a-zA-Z0-9_-]/g, '_');
-      const cleanName = (st.full_name || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanClassName = (st.class_name || 'Class_General').trim().replace(/[^a-zA-Z0-9_\s-]/g, '').replace(/\s+/g, '_');
+      const cleanName = (st.full_name || 'Student').trim().replace(/[^a-zA-Z0-9_\s-]/g, '').replace(/\s+/g, '_');
 
-      const entryPath = `${cleanClassName}/${cleanAdm}_${cleanName}.xlsx`;
+      const classStudentKey = `${cleanClassName}/${cleanName}`;
+      nameCounts[classStudentKey] = (nameCounts[classStudentKey] || 0) + 1;
+      const fileSuffix = nameCounts[classStudentKey] > 1 ? `_${nameCounts[classStudentKey]}` : '';
+      const entryPath = `${cleanClassName}/${cleanName}${fileSuffix}.xlsx`;
 
       try {
         const wb = await generateStudentExcelWorkbook(st.id);

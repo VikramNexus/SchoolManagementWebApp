@@ -560,9 +560,8 @@ async function exportStudentProfileExcel(req, res) {
     const workbook = await generateStudentExcelWorkbook(id);
     const buffer = await workbook.xlsx.writeBuffer();
 
-    const safeName = (student.full_name || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const safeAdm = (student.admission_no || id).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filename = `Student_Ledger_${safeAdm}_${safeName}.xlsx`;
+    const safeName = (student.full_name || 'Student').trim().replace(/[^a-zA-Z0-9_\s-]/g, '').replace(/\s+/g, '_');
+    const filename = `${safeName}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
