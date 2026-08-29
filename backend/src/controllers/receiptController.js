@@ -69,8 +69,13 @@ async function getReceipt(req, res) {
   try {
     let payment = await db.queryOne(
       `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`generated_at\` as receipt_created_at,
-              s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`, s.\`phone\`, s.\`whatsapp_number\`,
-              s.\`father_name\`, s.\`mother_name\`, s.\`parent_name\`, s.\`address\`,
+              s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`,
+              COALESCE(NULLIF(s.\`father_name\`, ''), NULLIF(s.\`parent_name\`, ''), (SELECT NULLIF(s2.\`father_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`father_name\` IS NOT NULL LIMIT 1), '—') as father_name,
+              COALESCE(NULLIF(s.\`mother_name\`, ''), (SELECT NULLIF(s2.\`mother_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`mother_name\` IS NOT NULL LIMIT 1), '') as mother_name,
+              COALESCE(NULLIF(s.\`parent_name\`, ''), NULLIF(s.\`father_name\`, ''), (SELECT COALESCE(NULLIF(s2.\`father_name\`, ''), NULLIF(s2.\`parent_name\`, '')) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND (s2.\`father_name\` IS NOT NULL OR s2.\`parent_name\` IS NOT NULL) LIMIT 1), '—') as parent_name,
+              COALESCE(NULLIF(s.\`phone\`, ''), NULLIF(s.\`whatsapp_number\`, ''), (SELECT NULLIF(s2.\`phone\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`phone\` IS NOT NULL LIMIT 1), '') as phone,
+              COALESCE(NULLIF(s.\`whatsapp_number\`, ''), NULLIF(s.\`phone\`, ''), (SELECT NULLIF(s2.\`whatsapp_number\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`whatsapp_number\` IS NOT NULL LIMIT 1), '') as whatsapp_number,
+              COALESCE(NULLIF(s.\`address\`, ''), (SELECT NULLIF(s2.\`address\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`address\` IS NOT NULL LIMIT 1), '—') as address,
               c.\`name\` as class_name, sec.\`name\` as section_name
        FROM \`payments\` p
        LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
@@ -93,8 +98,13 @@ async function getReceipt(req, res) {
         await generateAndSaveReceipt(actualPaymentId);
         payment = await db.queryOne(
           `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`generated_at\` as receipt_created_at,
-                  s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`, s.\`phone\`, s.\`whatsapp_number\`,
-                  s.\`father_name\`, s.\`mother_name\`, s.\`parent_name\`, s.\`address\`,
+                  s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`,
+                  COALESCE(NULLIF(s.\`father_name\`, ''), NULLIF(s.\`parent_name\`, ''), (SELECT NULLIF(s2.\`father_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`father_name\` IS NOT NULL LIMIT 1), '—') as father_name,
+                  COALESCE(NULLIF(s.\`mother_name\`, ''), (SELECT NULLIF(s2.\`mother_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`mother_name\` IS NOT NULL LIMIT 1), '') as mother_name,
+                  COALESCE(NULLIF(s.\`parent_name\`, ''), NULLIF(s.\`father_name\`, ''), (SELECT COALESCE(NULLIF(s2.\`father_name\`, ''), NULLIF(s2.\`parent_name\`, '')) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND (s2.\`father_name\` IS NOT NULL OR s2.\`parent_name\` IS NOT NULL) LIMIT 1), '—') as parent_name,
+                  COALESCE(NULLIF(s.\`phone\`, ''), NULLIF(s.\`whatsapp_number\`, ''), (SELECT NULLIF(s2.\`phone\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`phone\` IS NOT NULL LIMIT 1), '') as phone,
+                  COALESCE(NULLIF(s.\`whatsapp_number\`, ''), NULLIF(s.\`phone\`, ''), (SELECT NULLIF(s2.\`whatsapp_number\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`whatsapp_number\` IS NOT NULL LIMIT 1), '') as whatsapp_number,
+                  COALESCE(NULLIF(s.\`address\`, ''), (SELECT NULLIF(s2.\`address\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`address\` IS NOT NULL LIMIT 1), '—') as address,
                   c.\`name\` as class_name, sec.\`name\` as section_name
            FROM \`payments\` p
            LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
@@ -308,13 +318,13 @@ async function listReceipts(req, res) {
         s.\`full_name\`,
         s.\`full_name\` as student_name,
         s.\`admission_no\`,
-        s.\`father_name\`,
-        s.\`mother_name\`,
-        s.\`parent_name\`,
+        COALESCE(NULLIF(s.\`father_name\`, ''), NULLIF(s.\`parent_name\`, ''), (SELECT NULLIF(s2.\`father_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`father_name\` IS NOT NULL LIMIT 1), '—') as father_name,
+        COALESCE(NULLIF(s.\`mother_name\`, ''), (SELECT NULLIF(s2.\`mother_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`mother_name\` IS NOT NULL LIMIT 1), '') as mother_name,
+        COALESCE(NULLIF(s.\`parent_name\`, ''), NULLIF(s.\`father_name\`, ''), (SELECT COALESCE(NULLIF(s2.\`father_name\`, ''), NULLIF(s2.\`parent_name\`, '')) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND (s2.\`father_name\` IS NOT NULL OR s2.\`parent_name\` IS NOT NULL) LIMIT 1), '—') as parent_name,
         s.\`category\` as student_category,
-        s.\`phone\`,
-        s.\`whatsapp_number\`,
-        s.\`address\`,
+        COALESCE(NULLIF(s.\`phone\`, ''), NULLIF(s.\`whatsapp_number\`, ''), (SELECT NULLIF(s2.\`phone\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`phone\` IS NOT NULL LIMIT 1), '') as phone,
+        COALESCE(NULLIF(s.\`whatsapp_number\`, ''), NULLIF(s.\`phone\`, ''), (SELECT NULLIF(s2.\`whatsapp_number\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`whatsapp_number\` IS NOT NULL LIMIT 1), '') as whatsapp_number,
+        COALESCE(NULLIF(s.\`address\`, ''), (SELECT NULLIF(s2.\`address\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`address\` IS NOT NULL LIMIT 1), '—') as address,
         c.\`name\` as class_name,
         sec.\`name\` as section_name
       FROM \`payments\` p

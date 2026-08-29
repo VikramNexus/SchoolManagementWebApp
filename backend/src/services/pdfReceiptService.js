@@ -73,9 +73,14 @@ async function getSchoolSettings() {
 async function getPaymentDetailsForReceipt(paymentId) {
   return await db.queryOne(
     `SELECT p.*, s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`,
-           s.\`father_name\`, s.\`mother_name\`, s.\`parent_name\`, s.\`phone\`, s.\`whatsapp_number\`, s.\`address\`,
-           c.\`name\` as class_name, sec.\`name\` as section_name,
-           r.\`receipt_number\`
+            COALESCE(NULLIF(s.\`father_name\`, ''), NULLIF(s.\`parent_name\`, ''), (SELECT NULLIF(s2.\`father_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`father_name\` IS NOT NULL LIMIT 1), '—') as father_name,
+            COALESCE(NULLIF(s.\`mother_name\`, ''), (SELECT NULLIF(s2.\`mother_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`mother_name\` IS NOT NULL LIMIT 1), '') as mother_name,
+            COALESCE(NULLIF(s.\`parent_name\`, ''), NULLIF(s.\`father_name\`, ''), (SELECT COALESCE(NULLIF(s2.\`father_name\`, ''), NULLIF(s2.\`parent_name\`, '')) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND (s2.\`father_name\` IS NOT NULL OR s2.\`parent_name\` IS NOT NULL) LIMIT 1), '—') as parent_name,
+            COALESCE(NULLIF(s.\`phone\`, ''), NULLIF(s.\`whatsapp_number\`, ''), (SELECT NULLIF(s2.\`phone\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`phone\` IS NOT NULL LIMIT 1), '') as phone,
+            COALESCE(NULLIF(s.\`whatsapp_number\`, ''), NULLIF(s.\`phone\`, ''), (SELECT NULLIF(s2.\`whatsapp_number\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`whatsapp_number\` IS NOT NULL LIMIT 1), '') as whatsapp_number,
+            COALESCE(NULLIF(s.\`address\`, ''), (SELECT NULLIF(s2.\`address\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`address\` IS NOT NULL LIMIT 1), '—') as address,
+            c.\`name\` as class_name, sec.\`name\` as section_name,
+            r.\`receipt_number\`
      FROM \`payments\` p
      LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
      LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
@@ -93,7 +98,8 @@ async function getPaymentAllocations(paymentId) {
   const rows = await db.query(
     `SELECT pa.\`id\` as allocation_id, pa.\`allocated_amount\`, pa.\`monthly_fee_id\`, pa.\`additional_fee_id\`,
             mf.\`fee_month\`, mf.\`fee_year\`, mf.\`fee_amount\`, mf.\`paid_amount\` as monthly_paid, mf.\`due_amount\` as monthly_due, mf.\`status\` as monthly_status,
-            saf.\`description\` as additional_description, saf.\`amount\` as additional_amount, saf.\`paid_amount\` as additional_paid, saf.\`due_date\`,
+            COALESCE(NULLIF(saf.\`description\`, ''), ft.\`name\`) as additional_description,
+            saf.\`amount\` as additional_amount, saf.\`paid_amount\` as additional_paid, saf.\`due_date\`,
             ft.\`name\` as fee_type_name
      FROM \`payment_allocations\` pa
      LEFT JOIN \`monthly_fees\` mf ON mf.\`id\` = pa.\`monthly_fee_id\`
@@ -104,31 +110,73 @@ async function getPaymentAllocations(paymentId) {
     [paymentId]
   );
 
-  return rows.map((r) => {
-    let description = 'Fee Payment';
-    let period = '—';
-    let feeAmount = Number(r.allocated_amount);
-    let isAdditional = Boolean(r.additional_fee_id || r.additional_description);
+  if (rows && rows.length > 0) {
+    return rows.map((r) => {
+      let description = '';
+      let period = '—';
+      let feeAmount = Number(r.allocated_amount);
+      let isAdditional = Boolean(r.additional_fee_id || r.additional_description);
 
-    if (r.fee_month) {
-      description = `${formatMonth(r.fee_month)} ${r.fee_year || ''} Tuition Fee`;
-      period = `${formatMonth(r.fee_month)} ${r.fee_year || ''}`;
-      feeAmount = Number(r.fee_amount || r.allocated_amount);
-    } else if (r.additional_description || r.fee_type_name) {
-      description = r.additional_description || r.fee_type_name || 'Additional / Admission Charge';
-      period = 'One-Time / Term';
-      feeAmount = Number(r.additional_amount || r.allocated_amount);
+      if (r.additional_description && r.additional_description.trim() && r.additional_description !== 'Fee Payment') {
+        description = r.additional_description.trim();
+        period = 'One-Time / Term';
+        feeAmount = Number(r.additional_amount || r.allocated_amount);
+        isAdditional = true;
+      } else if (r.fee_type_name && r.fee_type_name.trim() && r.fee_type_name !== 'Fee Payment') {
+        description = r.fee_type_name.trim();
+        period = 'One-Time / Term';
+        feeAmount = Number(r.additional_amount || r.allocated_amount);
+        isAdditional = true;
+      } else if (r.fee_month) {
+        description = `${formatMonth(r.fee_month)} ${r.fee_year || ''} Monthly Tuition Fee`;
+        period = `${formatMonth(r.fee_month)} ${r.fee_year || ''}`;
+        feeAmount = Number(r.fee_amount || r.allocated_amount);
+        isAdditional = false;
+      } else {
+        description = 'Admission & Academic Fee Payment';
+        period = 'Payment';
+      }
+
+      return {
+        ...r,
+        description,
+        period,
+        fee_amount: feeAmount,
+        allocated_amount: Number(r.allocated_amount),
+        is_additional: isAdditional,
+      };
+    });
+  }
+
+  // Fallback: If no allocation records found, look up student's additional charges or monthly fees
+  const payment = await db.queryOne(
+    'SELECT `student_id`, `amount`, `payment_category`, `notes`, `payment_date` FROM `payments` WHERE `id` = ?',
+    [paymentId]
+  );
+
+  if (payment && payment.student_id) {
+    const studentSafs = await db.query(
+      `SELECT saf.\`id\`, saf.\`description\` as additional_description, saf.\`amount\` as additional_amount, saf.\`paid_amount\`, ft.\`name\` as fee_type_name
+       FROM \`student_additional_fees\` saf
+       LEFT JOIN \`fee_types\` ft ON ft.\`id\` = saf.\`fee_type_id\`
+       WHERE saf.\`student_id\` = ?
+       ORDER BY saf.\`id\` ASC`,
+      [payment.student_id]
+    );
+
+    if (studentSafs && studentSafs.length > 0) {
+      return studentSafs.map((saf, idx) => ({
+        allocation_id: idx + 1,
+        allocated_amount: Number(saf.paid_amount || saf.additional_amount || 0),
+        fee_amount: Number(saf.additional_amount || 0),
+        description: saf.additional_description || saf.fee_type_name || 'Admission / Custom Charge',
+        period: 'One-Time / Term',
+        is_additional: true,
+      }));
     }
+  }
 
-    return {
-      ...r,
-      description,
-      period,
-      fee_amount: feeAmount,
-      allocated_amount: Number(r.allocated_amount),
-      is_additional: isAdditional,
-    };
-  });
+  return [];
 }
 
 /**

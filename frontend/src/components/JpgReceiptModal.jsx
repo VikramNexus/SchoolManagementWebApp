@@ -107,18 +107,37 @@ export default function JpgReceiptModal({
         year: 'numeric',
       });
 
-  const parentName =
-    student?.father_name ||
-    student?.parent_name ||
-    student?.mother_name ||
-    payment?.father_name ||
-    payment?.parent_name ||
-    data?.father_name ||
-    data?.parent_name ||
-    '—';
+  const cleanText = (val) => {
+    if (!val || val === '—' || val === '-' || val === 'N/A' || val === 'null' || val === 'undefined') return '';
+    return String(val).trim();
+  };
+
+  const fatherName =
+    cleanText(student?.father_name) ||
+    cleanText(payment?.father_name) ||
+    cleanText(data?.father_name) ||
+    cleanText(student?.parent_name) ||
+    cleanText(payment?.parent_name) ||
+    cleanText(data?.parent_name) ||
+    '';
+
+  const motherName =
+    cleanText(student?.mother_name) ||
+    cleanText(payment?.mother_name) ||
+    cleanText(data?.mother_name) ||
+    '';
+
+  const parentName = fatherName
+    ? (motherName ? `${fatherName} (M: ${motherName})` : fatherName)
+    : (motherName || '—');
 
   const parentPhone =
-    student?.phone || student?.father_phone || student?.whatsapp_number || payment?.phone || '';
+    cleanText(student?.phone) ||
+    cleanText(student?.father_phone) ||
+    cleanText(student?.whatsapp_number) ||
+    cleanText(payment?.phone) ||
+    cleanText(data?.phone) ||
+    '';
   const totalAmount = payment?.amount || summary?.total_amount || data?.amount || 0;
 
   // 1. Download Full-Page High-Res JPG without clipping
@@ -148,43 +167,40 @@ export default function JpgReceiptModal({
       const dataUrl = await captureElementAsJpg(receiptRef.current);
 
       let targetUrl = '';
-      if (type === 'admission' || type === 'family') {
-        const targetId = student?.id || payment?.student_id || student?.student_id || data?.students?.[0]?.student_id || data?.students?.[0]?.id || 1;
-        targetUrl = `/admissions/send-whatsapp-jpg/${targetId}`;
-      } else if (type === 'dues') {
-        const targetId = student?.id || payment?.student_id;
-        targetUrl = `/receipts/send-dues-whatsapp-jpg/${targetId}`;
-      } else {
-        const targetId = payment?.id || receipt?.payment_id || student?.id;
-        targetUrl = `/receipts/send-whatsapp-jpg/${targetId}`;
-      }
-
-      const res = await api.post(targetUrl, {
+      const payload = {
         imageBase64: dataUrl,
         phone: parentPhone,
-      });
+      };
+
+      if (payment?.id) {
+        targetUrl = `/receipts/send-whatsapp-jpg/${payment.id}`;
+      } else if (student?.id) {
+        targetUrl = `/admissions/send-whatsapp-jpg/${student.id}`;
+      } else {
+        throw new Error('No payment or student reference ID available for WhatsApp dispatch.');
+      }
+
+      const res = await api.post(targetUrl, payload);
 
       if (res.data && res.data.success) {
         setSentSuccess(true);
-        toast.success(`✓ Official JPEG Receipt sent to parent's WhatsApp (${parentPhone || 'Parent'}) in background!`);
-        setTimeout(() => setSentSuccess(false), 4000);
+        toast.success(`✓ Official Receipt JPG sent via WhatsApp to ${parentPhone || 'Parent'}!`);
+        setTimeout(() => setSentSuccess(false), 5000);
       } else {
-        throw new Error(res.data?.message || 'Failed to send');
+        throw new Error(res.data?.message || 'Failed to dispatch WhatsApp message');
       }
     } catch (err) {
-      console.error('[Send WhatsApp Background]', err);
-      toast.error(err.response?.data?.message || 'Failed to send JPEG via WhatsApp. Make sure your WhatsApp phone is linked in Settings.');
+      console.error('[WhatsApp Background Send]', err);
+      toast.error(err.response?.data?.message || err.message || 'WhatsApp dispatch failed');
     } finally {
       setSendingWa(false);
     }
   };
 
+  // 3. Native / Browser Print
   const handlePrint = () => {
-    if (receiptRef.current) {
-      printReceiptElement(receiptRef.current, `Receipt_${receiptNumber}_${student?.full_name || 'Student'}`);
-    } else {
-      window.print();
-    }
+    if (!receiptRef.current) return;
+    printReceiptElement(receiptRef.current);
   };
 
   return (
@@ -327,19 +343,28 @@ export default function JpgReceiptModal({
                   <tbody>
                     {allocations && allocations.length > 0 ? (
                       allocations.map((item, idx) => {
-                        let itemDesc = 'Fee Payment';
-                        if (item.fee_month) {
+                        let itemDesc = '';
+                        
+                        // Exact description from custom admission charges or additional fees
+                        if (item.additional_description && item.additional_description.trim() && item.additional_description !== 'Fee Payment') {
+                          itemDesc = item.additional_description.trim();
+                        } else if (item.description && item.description.trim() && item.description !== 'Fee Payment') {
+                          itemDesc = item.description.trim();
+                        } else if (item.saf_desc && item.saf_desc.trim() && item.saf_desc !== 'Fee Payment') {
+                          itemDesc = item.saf_desc.trim();
+                        } else if (item.fee_type_name && item.fee_type_name.trim() && item.fee_type_name !== 'Fee Payment') {
+                          itemDesc = item.fee_type_name.trim();
+                        } else if (item.fee_month) {
                           const monthName = new Date(2000, Number(item.fee_month) - 1).toLocaleString('en-IN', {
                             month: 'long',
                           });
                           itemDesc = `${monthName} ${item.fee_year || ''} Monthly Tuition Fee`;
-                        } else if (item.description || item.fee_type_name) {
-                          itemDesc = item.description || item.fee_type_name;
-                        } else if (item.additional_description) {
-                          itemDesc = item.additional_description;
                         } else if (payment?.payment_category === 'ADMISSION_CHARGE') {
-                          itemDesc = 'Admission / Enrollment Fee';
+                          itemDesc = 'Admission / Enrollment Charge';
+                        } else {
+                          itemDesc = 'Fee Payment';
                         }
+
                         const itemFee = Number(item.fee_amount || item.amount || item.allocated_amount || totalAmount);
                         const itemPaid = Number(item.allocated_amount || item.paid_amount || item.amount || totalAmount);
 
