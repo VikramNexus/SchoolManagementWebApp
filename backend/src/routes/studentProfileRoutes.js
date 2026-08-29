@@ -13,6 +13,7 @@ const {
   generateMonthFee,
   updateMonthlyFeeRecord,
   deleteMonthlyFeeRecord,
+  exportStudentProfileExcel,
 } = require('../controllers/studentProfileController');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -22,6 +23,7 @@ const router = express.Router();
 router.use(authenticateToken);
 
 router.get('/:id/profile', getStudentProfile);
+router.get('/:id/export-excel', exportStudentProfileExcel);
 router.patch('/:id/monthly-rate', updateMonthlyRate);
 router.post('/:id/add-fee', addStudentFee);
 router.patch('/:id/add-fee/:feeId', updateStudentFee);

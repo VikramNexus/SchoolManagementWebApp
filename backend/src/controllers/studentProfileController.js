@@ -6,6 +6,7 @@
  */
 
 const db = require('../config/db');
+const ExcelJS = require('exceljs');
 
 /**
  * GET /api/students/:id/profile
@@ -537,6 +538,242 @@ async function giveFeeDiscount(req, res) {
   }
 }
 
+/**
+ * GET /api/students/:id/export-excel
+ * Export complete individual student profile, monthly fee history, additional fees & receipts dossier (.xlsx)
+ */
+async function exportStudentProfileExcel(req, res) {
+  const { id } = req.params;
+
+  try {
+    // 1. Get Student Bio
+    const student = await db.queryOne(
+      `SELECT s.*, c.\`name\` as class_name, sec.\`name\` as section_name
+       FROM \`students\` s
+       LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+       LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
+       WHERE s.\`id\` = ? AND s.\`status\` != 'deleted'`,
+      [id]
+    );
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found.' });
+    }
+
+    // 2. Get Monthly Fees
+    const monthlyFees = await db.query(
+      `SELECT mf.*,
+         COALESCE(
+           (SELECT SUM(pa.\`allocated_amount\`) FROM \`payment_allocations\` pa WHERE pa.\`monthly_fee_id\` = mf.\`id\`),
+           mf.\`paid_amount\`,
+           0
+         ) as actual_paid,
+         (SELECT p.\`payment_date\`
+          FROM \`payment_allocations\` pa
+          JOIN \`payments\` p ON p.\`id\` = pa.\`payment_id\`
+          WHERE pa.\`monthly_fee_id\` = mf.\`id\`
+          ORDER BY p.\`payment_date\` DESC LIMIT 1) as payment_date,
+         (SELECT p.\`payment_mode\`
+          FROM \`payment_allocations\` pa
+          JOIN \`payments\` p ON p.\`id\` = pa.\`payment_id\`
+          WHERE pa.\`monthly_fee_id\` = mf.\`id\`
+          ORDER BY p.\`payment_date\` DESC LIMIT 1) as payment_mode,
+         (SELECT p.\`receipt_number\`
+          FROM \`payment_allocations\` pa
+          JOIN \`payments\` p ON p.\`id\` = pa.\`payment_id\`
+          WHERE pa.\`monthly_fee_id\` = mf.\`id\`
+          ORDER BY p.\`payment_date\` DESC LIMIT 1) as receipt_no
+       FROM \`monthly_fees\` mf
+       WHERE mf.\`student_id\` = ?
+       ORDER BY mf.\`fee_year\` DESC, mf.\`fee_month\` DESC`,
+      [id]
+    );
+
+    // 3. Get Additional & Custom Fees
+    const additionalFees = await db.query(
+      `SELECT saf.*, ft.\`name\` as fee_type_name
+       FROM \`student_additional_fees\` saf
+       LEFT JOIN \`fee_types\` ft ON ft.\`id\` = saf.\`fee_type_id\`
+       WHERE saf.\`student_id\` = ?
+       ORDER BY saf.\`due_date\` DESC, saf.\`id\` DESC`,
+      [id]
+    );
+
+    // 4. Get Payment Receipts
+    const payments = await db.query(
+      `SELECT p.*
+       FROM \`payments\` p
+       WHERE p.\`student_id\` = ?
+       ORDER BY p.\`payment_date\` DESC, p.\`id\` DESC`,
+      [id]
+    );
+
+    // Build Excel Workbook
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'School Management System';
+    workbook.created = new Date();
+
+    const headerFont = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+
+    // ----------------------------------------------------
+    // Sheet 1: 👤 Student Bio & Parents
+    // ----------------------------------------------------
+    const wsBio = workbook.addWorksheet('👤 Student Profile', { views: [{ showGridLines: true }] });
+    wsBio.columns = [
+      { header: 'Profile Field', key: 'field', width: 28 },
+      { header: 'Student & Guardian Details', key: 'value', width: 45 },
+    ];
+    wsBio.getRow(1).font = headerFont;
+    wsBio.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } }; // Blue
+
+    const bioData = [
+      { field: 'Admission Number', value: student.admission_no || '—' },
+      { field: 'Full Name', value: student.full_name || '—' },
+      { field: 'Class & Section', value: `${student.class_name || '—'} ${student.section_name || ''}`.trim() },
+      { field: 'Roll Number', value: student.roll_number || '—' },
+      { field: 'Category / Residence', value: student.category === 'hosteller' ? 'Hosteller / Residential' : 'Day Scholar' },
+      { field: 'Monthly Tuition Rate', value: `₹${Number(student.monthly_fee_rate || 3000).toLocaleString('en-IN')}` },
+      { field: "Father's Name", value: student.father_name || student.parent_name || '—' },
+      { field: "Mother's Name", value: student.mother_name || '—' },
+      { field: 'Primary Phone Number', value: student.phone || '—' },
+      { field: 'WhatsApp Number', value: student.whatsapp_number || student.phone || '—' },
+      { field: 'Residential Address', value: student.address || '—' },
+      { field: 'Date of Birth', value: student.dob ? new Date(student.dob).toLocaleDateString('en-IN') : '—' },
+      { field: 'Gender', value: student.gender ? (student.gender.charAt(0).toUpperCase() + student.gender.slice(1)) : '—' },
+      { field: 'Blood Group', value: student.blood_group || '—' },
+      { field: 'Emergency Contact', value: student.emergency_contact || '—' },
+      { field: 'Admission Date', value: student.admission_date ? new Date(student.admission_date).toLocaleDateString('en-IN') : '—' },
+      { field: 'Family Group ID', value: student.family_id || '—' },
+      { field: 'Enrollment Status', value: (student.status || 'active').toUpperCase() },
+      { field: 'Opening / Previous Balance', value: `₹${Number(student.opening_dues || 0).toLocaleString('en-IN')}` },
+    ];
+
+    bioData.forEach((item) => {
+      const r = wsBio.addRow(item);
+      r.getCell('field').font = { bold: true, color: { argb: 'FF1E293B' } };
+    });
+
+    // ----------------------------------------------------
+    // Sheet 2: 📅 Monthly Tuition Ledger
+    // ----------------------------------------------------
+    const wsMonth = workbook.addWorksheet('📅 Monthly Tuition', { views: [{ showGridLines: true }] });
+    wsMonth.columns = [
+      { header: 'Month', key: 'month_name', width: 14 },
+      { header: 'Year', key: 'fee_year', width: 10 },
+      { header: 'Assessed Fee (₹)', key: 'amount', width: 18 },
+      { header: 'Concession / Discount (₹)', key: 'discount_amount', width: 22 },
+      { header: 'Amount Paid (₹)', key: 'actual_paid', width: 18 },
+      { header: 'Pending Due (₹)', key: 'due_amount', width: 18 },
+      { header: 'Status', key: 'status', width: 14 },
+      { header: 'Payment Date', key: 'payment_date', width: 16 },
+      { header: 'Payment Mode', key: 'payment_mode', width: 16 },
+      { header: 'Receipt No', key: 'receipt_no', width: 18 },
+    ];
+    wsMonth.getRow(1).font = headerFont;
+    wsMonth.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF16A34A' } }; // Green
+
+    const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    monthlyFees.forEach((mf) => {
+      const row = wsMonth.addRow({
+        month_name: monthNames[mf.fee_month] || `Month ${mf.fee_month}`,
+        fee_year: mf.fee_year,
+        amount: Number(mf.amount || 0),
+        discount_amount: Number(mf.discount_amount || 0),
+        actual_paid: Number(mf.actual_paid || 0),
+        due_amount: Math.max(0, Number(mf.amount || 0) - Number(mf.discount_amount || 0) - Number(mf.actual_paid || 0)),
+        status: mf.status,
+        payment_date: mf.payment_date ? new Date(mf.payment_date).toLocaleDateString('en-IN') : '—',
+        payment_mode: mf.payment_mode || '—',
+        receipt_no: mf.receipt_no || '—',
+      });
+      row.getCell('amount').numFmt = '₹#,##0.00';
+      row.getCell('discount_amount').numFmt = '₹#,##0.00';
+      row.getCell('actual_paid').numFmt = '₹#,##0.00';
+      row.getCell('due_amount').numFmt = '₹#,##0.00';
+    });
+
+    // ----------------------------------------------------
+    // Sheet 3: 💳 Additional & Custom Fees
+    // ----------------------------------------------------
+    const wsAdd = workbook.addWorksheet('💳 Additional Fees', { views: [{ showGridLines: true }] });
+    wsAdd.columns = [
+      { header: 'Fee Description', key: 'description', width: 32 },
+      { header: 'Fee Category', key: 'category', width: 20 },
+      { header: 'Total Assessed (₹)', key: 'amount', width: 20 },
+      { header: 'Discount (₹)', key: 'discount_amount', width: 16 },
+      { header: 'Amount Paid (₹)', key: 'paid_amount', width: 18 },
+      { header: 'Balance Due (₹)', key: 'due_amount', width: 18 },
+      { header: 'Status', key: 'status', width: 14 },
+      { header: 'Due Date', key: 'due_date', width: 16 },
+    ];
+    wsAdd.getRow(1).font = headerFont;
+    wsAdd.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } }; // Purple
+
+    additionalFees.forEach((af) => {
+      const total = Number(af.amount || 0);
+      const paid = Number(af.paid_amount || 0);
+      const disc = Number(af.discount_amount || 0);
+      const row = wsAdd.addRow({
+        description: af.description || af.fee_type_name || 'Additional Fee',
+        category: af.fee_type_name || 'Custom Expense',
+        amount: total,
+        discount_amount: disc,
+        paid_amount: paid,
+        due_amount: Math.max(0, total - paid - disc),
+        status: af.status,
+        due_date: af.due_date ? new Date(af.due_date).toLocaleDateString('en-IN') : '—',
+      });
+      row.getCell('amount').numFmt = '₹#,##0.00';
+      row.getCell('discount_amount').numFmt = '₹#,##0.00';
+      row.getCell('paid_amount').numFmt = '₹#,##0.00';
+      row.getCell('due_amount').numFmt = '₹#,##0.00';
+    });
+
+    // ----------------------------------------------------
+    // Sheet 4: 🧾 Payment Receipts & Ledger History
+    // ----------------------------------------------------
+    const wsPay = workbook.addWorksheet('🧾 Receipts Ledger', { views: [{ showGridLines: true }] });
+    wsPay.columns = [
+      { header: 'Receipt Number', key: 'receipt_number', width: 22 },
+      { header: 'Payment Date', key: 'payment_date', width: 16 },
+      { header: 'Amount Paid (₹)', key: 'amount', width: 20 },
+      { header: 'Payment Mode', key: 'payment_mode', width: 18 },
+      { header: 'Category', key: 'payment_category', width: 22 },
+      { header: 'Notes / Remarks', key: 'notes', width: 35 },
+    ];
+    wsPay.getRow(1).font = headerFont;
+    wsPay.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD97706' } }; // Amber
+
+    payments.forEach((p) => {
+      const row = wsPay.addRow({
+        receipt_number: p.receipt_number || `PAY-${p.id}`,
+        payment_date: p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-IN') : '—',
+        amount: Number(p.amount || 0),
+        payment_mode: p.payment_mode === 'IN_ACCOUNT' ? 'In Account / Online' : 'Cash',
+        payment_category: p.payment_category || 'FEE_PAYMENT',
+        notes: p.notes || '—',
+      });
+      row.getCell('amount').numFmt = '₹#,##0.00';
+    });
+
+    const safeName = (student.full_name || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeAdm = (student.admission_no || id).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `Student_Profile_${safeAdm}_${safeName}.xlsx`;
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    return res.send(buffer);
+  } catch (err) {
+    console.error('[studentProfileController.exportStudentProfileExcel] Error:', err);
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, message: 'Failed to export student profile Excel: ' + err.message });
+    }
+  }
+}
+
 module.exports = {
   getStudentProfile,
   updateMonthlyRate,
@@ -547,4 +784,5 @@ module.exports = {
   generateMonthFee,
   updateMonthlyFeeRecord,
   deleteMonthlyFeeRecord,
+  exportStudentProfileExcel,
 };

@@ -41,6 +41,7 @@ import {
   Eye,
   Gift,
   IndianRupee,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -116,6 +117,34 @@ export default function StudentProfile() {
         summary: { total_amount: foundPayment.amount },
       });
       setShowReceiptModal(true);
+    }
+  };
+
+  const [exportingExcel, setExportingExcel] = useState(false);
+
+  const handleExportStudentExcel = async () => {
+    try {
+      setExportingExcel(true);
+      const res = await api.get(`/students/${id}/export-excel`, {
+        responseType: 'blob',
+      });
+      const safeAdm = (student?.admission_no || id).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeName = (student?.full_name || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `Student_Profile_${safeAdm}_${safeName}.xlsx`;
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      await saveFileToDeviceStorage({
+        data: blob,
+        filename,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      toast.success(`✓ Exported: ${filename}`);
+    } catch (err) {
+      console.error('[handleExportStudentExcel]', err);
+      toast.error('Failed to export student profile to Excel.');
+    } finally {
+      setExportingExcel(false);
     }
   };
 
@@ -842,6 +871,16 @@ export default function StudentProfile() {
           </div>
         </div>
         <div className="header-right">
+          <button
+            className="btn btn-secondary btn-header-action"
+            onClick={handleExportStudentExcel}
+            disabled={exportingExcel}
+            title="Export full student profile, monthly fee history, and receipts to Excel"
+            style={{ background: '#f0fdf4', color: '#166534', borderColor: '#bbf7d0', fontWeight: 700 }}
+          >
+            {exportingExcel ? <Loader2 size={13} className="spin" /> : <FileSpreadsheet size={13} />}
+            <span>{exportingExcel ? 'Exporting…' : 'Export Profile (.xlsx)'}</span>
+          </button>
           <button className="btn btn-secondary btn-header-action" onClick={() => setShowEditProfileModal(true)}>
             <Edit2 size={13} /> Edit Profile
           </button>

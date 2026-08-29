@@ -557,7 +557,7 @@ async function exportMasterExcelArchive(req, res) {
     summaryData.forEach((row) => wsSummary.addRow(row));
 
     // ----------------------------------------------------
-    // Sheet 2: Student & Family Directory
+    // Sheet 2: Student Profiles & Demographic Directory
     // ----------------------------------------------------
     const wsStudents = workbook.addWorksheet('👨‍🎓 Student Directory', { views: [{ showGridLines: true }] });
     wsStudents.columns = [
@@ -566,29 +566,46 @@ async function exportMasterExcelArchive(req, res) {
       { header: 'Class', key: 'class_name', width: 14 },
       { header: 'Section', key: 'section_name', width: 10 },
       { header: 'Category', key: 'category', width: 15 },
+      { header: 'Monthly Rate (₹)', key: 'monthly_fee_rate', width: 18 },
       { header: "Father's Name", key: 'father_name', width: 22 },
       { header: "Mother's Name", key: 'mother_name', width: 22 },
       { header: 'Primary Phone', key: 'phone', width: 16 },
       { header: 'WhatsApp Number', key: 'whatsapp_number', width: 16 },
+      { header: 'Address', key: 'address', width: 30 },
+      { header: 'Gender', key: 'gender', width: 12 },
       { header: 'Family ID', key: 'family_id', width: 14 },
       { header: 'Admission Date', key: 'admission_date', width: 15 },
       { header: 'Status', key: 'status', width: 12 },
+      { header: 'Total Paid (₹)', key: 'total_paid', width: 18 },
+      { header: 'Balance Due (₹)', key: 'balance_due', width: 18 },
     ];
     wsStudents.getRow(1).font = headerFont;
     wsStudents.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
 
     const students = await db.query(`
       SELECT s.admission_no, s.full_name, c.name as class_name, sec.name as section_name,
-             s.category, COALESCE(s.father_name, s.parent_name, '—') as father_name,
+             s.category, COALESCE(s.monthly_fee_rate, 3000) as monthly_fee_rate,
+             COALESCE(s.father_name, s.parent_name, '—') as father_name,
              COALESCE(s.mother_name, '—') as mother_name, s.phone, s.whatsapp_number,
-             s.family_id, DATE_FORMAT(s.admission_date, '%Y-%m-%d') as admission_date, s.status
+             s.address, s.gender, s.family_id,
+             DATE_FORMAT(s.admission_date, '%Y-%m-%d') as admission_date, s.status,
+             COALESCE((SELECT SUM(amount) FROM payments WHERE student_id = s.id), 0) as total_paid,
+             (
+               COALESCE((SELECT SUM(due_amount) FROM monthly_fees WHERE student_id = s.id AND status IN ('DUE', 'PARTIAL')), 0) +
+               COALESCE((SELECT SUM(GREATEST(0, amount - paid_amount)) FROM student_additional_fees WHERE student_id = s.id AND status IN ('DUE', 'PARTIAL')), 0)
+             ) as balance_due
       FROM students s
       LEFT JOIN classes c ON c.id = s.class_id
       LEFT JOIN sections sec ON sec.id = s.section_id
       ORDER BY c.id ASC, s.full_name ASC
     `);
 
-    students.forEach((s) => wsStudents.addRow(s));
+    students.forEach((s) => {
+      const row = wsStudents.addRow(s);
+      row.getCell('monthly_fee_rate').numFmt = '₹#,##0.00';
+      row.getCell('total_paid').numFmt = '₹#,##0.00';
+      row.getCell('balance_due').numFmt = '₹#,##0.00';
+    });
 
     // ----------------------------------------------------
     // Sheet 3: Fee Collections Ledger
