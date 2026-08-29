@@ -12,8 +12,10 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
+const archiver = require('archiver');
 const nodemailer = require('nodemailer');
 const db = require('../config/db');
+const { generateStudentExcelWorkbook } = require('../services/studentExcelDossierService');
 
 // Backup directory inside backend/uploads/backups
 const BACKUP_DIR = path.resolve(__dirname, '../../uploads/backups');
@@ -503,234 +505,68 @@ async function getBackupInfo(req, res) {
 }
 
 /**
- * GET /api/backup/export-excel
- * Option 4: Master Multi-Sheet Excel Financial & Demographic Archive (exceljs)
+ * GET /api/backup/export-excel or /api/backup/export-class-wise-zip
+ * Export All Students Class-Wise into a Structured ZIP Archive (.zip)
+ * Each student's file is formatted as an individual Excel Dossier inside their Class folder.
  */
-async function exportMasterExcelArchive(req, res) {
+async function exportClassWiseZipArchive(req, res) {
   try {
-    console.log('[backupController] Generating Master Excel Archive...');
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'School Management System';
-    workbook.created = new Date();
-
-    // Color definitions
-    const primaryFill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF0284C7' }, // Blue
-    };
-    const headerFont = {
-      name: 'Calibri',
-      size: 11,
-      bold: true,
-      color: { argb: 'FFFFFFFF' },
-    };
-
-    // ----------------------------------------------------
-    // Sheet 1: School Overview & Summary
-    // ----------------------------------------------------
-    const wsSummary = workbook.addWorksheet('🏫 School Overview', { views: [{ showGridLines: true }] });
-    wsSummary.columns = [
-      { header: 'Metric / Information', key: 'key', width: 35 },
-      { header: 'Value / Details', key: 'val', width: 45 },
-    ];
-
-    const schoolInfo = await db.queryOne('SELECT * FROM school_settings LIMIT 1') || {};
-    const totalStudents = await db.queryOne('SELECT COUNT(*) as count FROM students WHERE status = "active"');
-    const totalPayments = await db.queryOne('SELECT COALESCE(SUM(amount), 0) as total FROM payments');
-    const totalMonthlyDues = await db.queryOne('SELECT COALESCE(SUM(due_amount), 0) as total FROM monthly_fees WHERE status IN ("DUE", "PARTIAL")');
-
-    const summaryData = [
-      { key: 'School Name', val: schoolInfo.school_name || 'Aryavart Shikshan Sansthan' },
-      { key: 'Affiliation / Board', val: schoolInfo.affiliation_number || 'State Board' },
-      { key: 'School Phone', val: schoolInfo.phone || '+91-9876543210' },
-      { key: 'School Email', val: schoolInfo.email || 'info@school.edu' },
-      { key: 'Campus Address', val: schoolInfo.address || 'Knowledge Campus' },
-      { key: 'Archive Generation Timestamp', val: new Date().toLocaleString('en-IN') },
-      { key: 'Total Active Students', val: totalStudents?.count || 0 },
-      { key: 'Total Fee Collections (All Time)', val: `₹${Number(totalPayments?.total || 0).toLocaleString('en-IN')}` },
-      { key: 'Total Outstanding Tuition Dues', val: `₹${Number(totalMonthlyDues?.total || 0).toLocaleString('en-IN')}` },
-    ];
-
-    wsSummary.getRow(1).font = headerFont;
-    wsSummary.getRow(1).fill = primaryFill;
-    summaryData.forEach((row) => wsSummary.addRow(row));
-
-    // ----------------------------------------------------
-    // Sheet 2: Student Profiles & Demographic Directory
-    // ----------------------------------------------------
-    const wsStudents = workbook.addWorksheet('👨‍🎓 Student Directory', { views: [{ showGridLines: true }] });
-    wsStudents.columns = [
-      { header: 'Admission No', key: 'admission_no', width: 16 },
-      { header: 'Student Full Name', key: 'full_name', width: 25 },
-      { header: 'Class', key: 'class_name', width: 14 },
-      { header: 'Section', key: 'section_name', width: 10 },
-      { header: 'Category', key: 'category', width: 15 },
-      { header: 'Monthly Rate (₹)', key: 'monthly_fee_rate', width: 18 },
-      { header: "Father's Name", key: 'father_name', width: 22 },
-      { header: "Mother's Name", key: 'mother_name', width: 22 },
-      { header: 'Primary Phone', key: 'phone', width: 16 },
-      { header: 'WhatsApp Number', key: 'whatsapp_number', width: 16 },
-      { header: 'Address', key: 'address', width: 30 },
-      { header: 'Gender', key: 'gender', width: 12 },
-      { header: 'Family ID', key: 'family_id', width: 14 },
-      { header: 'Admission Date', key: 'admission_date', width: 15 },
-      { header: 'Status', key: 'status', width: 12 },
-      { header: 'Total Paid (₹)', key: 'total_paid', width: 18 },
-      { header: 'Balance Due (₹)', key: 'balance_due', width: 18 },
-    ];
-    wsStudents.getRow(1).font = headerFont;
-    wsStudents.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
-
+    console.log('[backupController] Generating Class-Wise Student Excel ZIP Archive...');
     const students = await db.query(`
-      SELECT s.admission_no, s.full_name, c.name as class_name, sec.name as section_name,
-             s.category, COALESCE(s.monthly_fee_rate, 3000) as monthly_fee_rate,
-             COALESCE(s.father_name, s.parent_name, '—') as father_name,
-             COALESCE(s.mother_name, '—') as mother_name, s.phone, s.whatsapp_number,
-             s.address, s.gender, s.family_id,
-             DATE_FORMAT(s.admission_date, '%Y-%m-%d') as admission_date, s.status,
-             COALESCE((SELECT SUM(amount) FROM payments WHERE student_id = s.id), 0) as total_paid,
-             (
-               COALESCE((SELECT SUM(due_amount) FROM monthly_fees WHERE student_id = s.id AND status IN ('DUE', 'PARTIAL')), 0) +
-               COALESCE((SELECT SUM(GREATEST(0, amount - paid_amount)) FROM student_additional_fees WHERE student_id = s.id AND status IN ('DUE', 'PARTIAL')), 0)
-             ) as balance_due
-      FROM students s
-      LEFT JOIN classes c ON c.id = s.class_id
-      LEFT JOIN sections sec ON sec.id = s.section_id
-      ORDER BY c.id ASC, s.full_name ASC
-    `);
-
-    students.forEach((s) => {
-      const row = wsStudents.addRow(s);
-      row.getCell('monthly_fee_rate').numFmt = '₹#,##0.00';
-      row.getCell('total_paid').numFmt = '₹#,##0.00';
-      row.getCell('balance_due').numFmt = '₹#,##0.00';
-    });
-
-    // ----------------------------------------------------
-    // Sheet 3: Fee Collections Ledger
-    // ----------------------------------------------------
-    const wsPayments = workbook.addWorksheet('💳 Fee Collections', { views: [{ showGridLines: true }] });
-    wsPayments.columns = [
-      { header: 'Receipt No', key: 'receipt_number', width: 18 },
-      { header: 'Student Name', key: 'student_name', width: 24 },
-      { header: 'Admission No', key: 'admission_no', width: 16 },
-      { header: 'Class', key: 'class_name', width: 14 },
-      { header: 'Payment Date', key: 'payment_date', width: 14 },
-      { header: 'Amount Paid (₹)', key: 'amount', width: 18 },
-      { header: 'Payment Mode', key: 'payment_mode', width: 16 },
-      { header: 'Category', key: 'payment_category', width: 18 },
-      { header: 'Notes / Remarks', key: 'notes', width: 35 },
-    ];
-    wsPayments.getRow(1).font = headerFont;
-    wsPayments.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF16A34A' } }; // Green
-
-    const payments = await db.query(`
-      SELECT COALESCE(r.receipt_number, p.receipt_number, CONCAT('RCP-', p.id)) as receipt_number,
-             s.full_name as student_name, s.admission_no, c.name as class_name,
-             DATE_FORMAT(p.payment_date, '%Y-%m-%d') as payment_date,
-             p.amount, p.payment_mode, p.payment_category, p.notes
-      FROM payments p
-      JOIN students s ON s.id = p.student_id
-      LEFT JOIN classes c ON c.id = s.class_id
-      LEFT JOIN receipts r ON r.payment_id = p.id
-      ORDER BY p.payment_date DESC, p.id DESC
-    `);
-
-    payments.forEach((p) => {
-      const row = wsPayments.addRow(p);
-      row.getCell('amount').numFmt = '₹#,##0.00';
-    });
-
-    // ----------------------------------------------------
-    // Sheet 4: Outstanding Dues Register
-    // ----------------------------------------------------
-    const wsDues = workbook.addWorksheet('⚠️ Outstanding Dues', { views: [{ showGridLines: true }] });
-    wsDues.columns = [
-      { header: 'Admission No', key: 'admission_no', width: 16 },
-      { header: 'Student Name', key: 'full_name', width: 24 },
-      { header: 'Class', key: 'class_name', width: 14 },
-      { header: "Father's Name", key: 'father_name', width: 22 },
-      { header: 'Phone Number', key: 'phone', width: 16 },
-      { header: 'Monthly Tuition Dues (₹)', key: 'monthly_due', width: 24 },
-      { header: 'Additional Fees Dues (₹)', key: 'add_due', width: 24 },
-      { header: 'Total Outstanding Due (₹)', key: 'total_due', width: 26 },
-    ];
-    wsDues.getRow(1).font = headerFont;
-    wsDues.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }; // Red
-
-    const dues = await db.query(`
-      SELECT s.admission_no, s.full_name, c.name as class_name,
-             COALESCE(s.father_name, s.parent_name, '—') as father_name, s.phone,
-             COALESCE((SELECT SUM(due_amount) FROM monthly_fees WHERE student_id = s.id AND status IN ('DUE', 'PARTIAL')), 0) as monthly_due,
-             COALESCE((SELECT SUM(GREATEST(0, amount - paid_amount)) FROM student_additional_fees WHERE student_id = s.id AND status IN ('DUE', 'PARTIAL')), 0) as add_due,
-             (
-               COALESCE((SELECT SUM(due_amount) FROM monthly_fees WHERE student_id = s.id AND status IN ('DUE', 'PARTIAL')), 0) +
-               COALESCE((SELECT SUM(GREATEST(0, amount - paid_amount)) FROM student_additional_fees WHERE student_id = s.id AND status IN ('DUE', 'PARTIAL')), 0)
-             ) as total_due
+      SELECT s.id, s.admission_no, s.full_name, COALESCE(c.name, 'Unassigned_Class') as class_name
       FROM students s
       LEFT JOIN classes c ON c.id = s.class_id
       WHERE s.status = 'active'
-      HAVING total_due > 0
-      ORDER BY total_due DESC
+      ORDER BY c.id ASC, s.full_name ASC
     `);
 
-    dues.forEach((d) => {
-      const row = wsDues.addRow(d);
-      row.getCell('monthly_due').numFmt = '₹#,##0.00';
-      row.getCell('add_due').numFmt = '₹#,##0.00';
-      row.getCell('total_due').numFmt = '₹#,##0.00';
+    const archive = (typeof archiver === 'function')
+      ? archiver('zip', { zlib: { level: 9 } })
+      : (archiver.ZipArchive ? new archiver.ZipArchive({ zlib: { level: 9 } }) : new archiver.Archiver('zip', { zlib: { level: 9 } }));
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const zipFilename = `School_Student_Ledgers_ClassWise_${timestamp}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+
+    archive.on('error', (err) => {
+      console.error('[exportClassWiseZipArchive] Archiver error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Failed to build ZIP archive: ' + err.message });
+      }
     });
 
-    // ----------------------------------------------------
-    // Sheet 5: Classes & Fee Structure
-    // ----------------------------------------------------
-    const wsClasses = workbook.addWorksheet('📚 Classes & Rates', { views: [{ showGridLines: true }] });
-    wsClasses.columns = [
-      { header: 'Class ID', key: 'id', width: 12 },
-      { header: 'Class Name', key: 'name', width: 20 },
-      { header: 'Base Tuition Fee (₹)', key: 'base_tuition_fee', width: 22 },
-      { header: 'Hostel Fee (₹)', key: 'hostel_fee', width: 20 },
-      { header: 'Active Students Enrolled', key: 'student_count', width: 25 },
-    ];
-    wsClasses.getRow(1).font = headerFont;
-    wsClasses.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }; // Indigo
+    archive.pipe(res);
 
-    const classRates = await db.query(`
-      SELECT c.id, c.name,
-             COUNT(s.id) as student_count
-      FROM classes c
-      LEFT JOIN students s ON s.class_id = c.id AND s.status = 'active'
-      GROUP BY c.id, c.name
-      ORDER BY c.id ASC
-    `);
+    // Loop through students, generate individual Excel buffer, and append into Class folder
+    for (const st of students) {
+      const cleanClassName = (st.class_name || 'Class_General').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanAdm = (st.admission_no || String(st.id)).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanName = (st.full_name || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
 
-    classRates.forEach((cl) => {
-      const row = wsClasses.addRow({
-        id: cl.id,
-        name: cl.name,
-        base_tuition_fee: 3000,
-        hostel_fee: 5000,
-        student_count: cl.student_count || 0,
-      });
-      row.getCell('base_tuition_fee').numFmt = '₹#,##0.00';
-      row.getCell('hostel_fee').numFmt = '₹#,##0.00';
-    });
+      const entryPath = `${cleanClassName}/${cleanAdm}_${cleanName}.xlsx`;
 
-    const filename = `School_Master_Archive_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    const buffer = await workbook.xlsx.writeBuffer();
+      try {
+        const wb = await generateStudentExcelWorkbook(st.id);
+        const buffer = await wb.xlsx.writeBuffer();
+        archive.append(buffer, { name: entryPath });
+      } catch (stErr) {
+        console.warn(`[exportClassWiseZipArchive] Skipped student #${st.id}:`, stErr.message);
+      }
+    }
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
-    return res.send(buffer);
+    await archive.finalize();
   } catch (err) {
-    console.error('[backupController.exportMasterExcelArchive] Error:', err);
+    console.error('[backupController.exportClassWiseZipArchive] Error:', err);
     if (!res.headersSent) {
-      return res.status(500).json({ success: false, message: `Failed to export Excel archive: ${err.message}` });
+      return res.status(500).json({ success: false, message: `Failed to export Class-Wise ZIP archive: ${err.message}` });
     }
   }
 }
+
+// Alias for backwards compatibility
+const exportMasterExcelArchive = exportClassWiseZipArchive;
 
 /**
  * POST /api/backup/send-cloud
@@ -826,6 +662,7 @@ module.exports = {
   getBackupInfo,
   uploadBackup,
   exportMasterExcelArchive,
+  exportClassWiseZipArchive,
   sendCloudBackupEmail,
   upload,
 };

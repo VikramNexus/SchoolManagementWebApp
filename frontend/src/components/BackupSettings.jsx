@@ -140,26 +140,26 @@ export default function BackupSettings() {
     }
   };
 
-  // 1-Click Export Master Multi-Sheet Excel Archive (.xlsx) — Desktop View Only
+  // 1-Click Export Class-Wise Student Excel Dossiers Archive (.zip) — Desktop View Only
   const handleExportMasterExcel = async () => {
     try {
       setExportingExcel(true);
       const res = await api.get('/backup/export-excel', {
         responseType: 'blob',
       });
+      const filename = `School_Student_Ledgers_ClassWise_${new Date().toISOString().slice(0, 10)}.zip`;
       const blob = new Blob([res.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        type: 'application/zip',
       });
-      const filename = `School_Master_Archive_${new Date().toISOString().slice(0, 10)}.xlsx`;
       await saveFileToDeviceStorage({
         data: blob,
         filename,
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        mimeType: 'application/zip',
       });
-      toast.success('✓ Master Excel Archive exported successfully!');
+      toast.success('✓ Class-Wise Student Excel Archive (.zip) downloaded successfully!');
     } catch (err) {
       console.error('[handleExportMasterExcel]', err);
-      toast.error('Failed to export Master Excel archive.');
+      toast.error('Failed to export Class-Wise Excel ZIP archive.');
     } finally {
       setExportingExcel(false);
     }
@@ -409,7 +409,7 @@ export default function BackupSettings() {
           </div>
         </div>
 
-        {/* Card 2: Master Multi-Sheet Excel Archive (DESKTOP VIEW ONLY) */}
+        {/* Card 2: Class-Wise Student Excel Dossiers Archive (DESKTOP VIEW ONLY) */}
         <div className="feature-card desktop-only-excel-vault">
           <div className="feature-card-header">
             <div className="feature-title-wrap">
@@ -417,21 +417,21 @@ export default function BackupSettings() {
                 <FileSpreadsheet size={18} />
               </div>
               <div>
-                <h3 className="feature-title">Master Excel Data Vault</h3>
-                <span className="feature-badge green">Desktop View Only (.xlsx)</span>
+                <h3 className="feature-title">Class-Wise Student Excel Dossiers</h3>
+                <span className="feature-badge green">Structured ZIP Archive (.zip)</span>
               </div>
             </div>
           </div>
 
           <p className="feature-desc">
-            Export a complete, human-readable 5-sheet formatted Excel workbook containing Student Directory, Fee Ledgers, Dues Register, and Class Rates for offline auditing in Microsoft Excel.
+            Download all students' individual formatted Excel Dossiers (Student Profile + Running-Balance Fee Ledger) organized into separate folders by class for offline auditing in Microsoft Excel.
           </p>
 
           <div className="excel-pills-row">
-            <span className="pill-tag">✓ 5 Color Sheets</span>
-            <span className="pill-tag">✓ Student Directory</span>
-            <span className="pill-tag">✓ Fee Ledger</span>
-            <span className="pill-tag">✓ Dues Register</span>
+            <span className="pill-tag">✓ Class Folders (I, II, VII...)</span>
+            <span className="pill-tag">✓ Formatted Student Excel</span>
+            <span className="pill-tag">✓ Running Balance Ledger</span>
+            <span className="pill-tag">✓ Head's Signature Block</span>
           </div>
 
           <div className="feature-btn-stack">
@@ -442,7 +442,7 @@ export default function BackupSettings() {
               disabled={exportingExcel}
             >
               {exportingExcel ? <Loader2 size={16} className="spin" /> : <FileSpreadsheet size={16} />}
-              <span>{exportingExcel ? 'Generating Master Excel…' : 'Export Master School Excel (.xlsx)'}</span>
+              <span>{exportingExcel ? 'Building Class-Wise ZIP…' : '📦 Download Class-Wise Excel Archive (.zip)'}</span>
             </button>
           </div>
         </div>
