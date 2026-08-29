@@ -167,8 +167,10 @@ export default function Receipts() {
         setSelectedReceipt({
           ...res.data,
           student: res.data.student || {
-            full_name: receiptOrId.student_name,
+            full_name: receiptOrId.student_name || receiptOrId.full_name,
             admission_no: receiptOrId.admission_no,
+            father_name: receiptOrId.father_name || receiptOrId.parent_name || '—',
+            parent_name: receiptOrId.parent_name || receiptOrId.father_name || '—',
             class_name: receiptOrId.class_name,
             section_name: receiptOrId.section_name,
             phone: receiptOrId.phone || receiptOrId.whatsapp_number,
@@ -200,10 +202,13 @@ export default function Receipts() {
             payment_date: receiptOrId.payment_date,
             payment_mode: receiptOrId.payment_mode,
             notes: receiptOrId.notes,
+            father_name: receiptOrId.father_name || receiptOrId.parent_name || '—',
           },
           student: {
-            full_name: receiptOrId.student_name,
+            full_name: receiptOrId.student_name || receiptOrId.full_name,
             admission_no: receiptOrId.admission_no,
+            father_name: receiptOrId.father_name || receiptOrId.parent_name || '—',
+            parent_name: receiptOrId.parent_name || receiptOrId.father_name || '—',
             class_name: receiptOrId.class_name,
             section_name: receiptOrId.section_name,
             category: receiptOrId.student_category,
@@ -542,9 +547,9 @@ export default function Receipts() {
                               type="button"
                               className="btn-action view"
                               onClick={() => handleView(r)}
-                              title="View & Download Official JPG Receipt"
+                              title="Print & View Official JPG Receipt"
                             >
-                              <Eye size={13} /> JPG View
+                              <Printer size={13} /> Print / JPG
                             </button>
                             <WhatsAppDirectButton
                               compact

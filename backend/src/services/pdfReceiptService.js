@@ -67,9 +67,13 @@ async function getSchoolSettings() {
 /**
  * Get payment details with student info and allocations
  */
+/**
+ * Get payment details with student info and allocations
+ */
 async function getPaymentDetailsForReceipt(paymentId) {
   return await db.queryOne(
     `SELECT p.*, s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`,
+           s.\`father_name\`, s.\`mother_name\`, s.\`parent_name\`, s.\`phone\`, s.\`whatsapp_number\`, s.\`address\`,
            c.\`name\` as class_name, sec.\`name\` as section_name,
            r.\`receipt_number\`
      FROM \`payments\` p
@@ -83,17 +87,48 @@ async function getPaymentDetailsForReceipt(paymentId) {
 }
 
 /**
- * Get payment allocations with month details
+ * Get payment allocations with month and additional fee details
  */
 async function getPaymentAllocations(paymentId) {
-  return await db.query(
-    `SELECT pa.\`allocated_amount\`, mf.\`fee_month\`, mf.\`fee_year\`, mf.\`fee_amount\`, mf.\`paid_amount\`, mf.\`due_amount\`, mf.\`status\`
+  const rows = await db.query(
+    `SELECT pa.\`id\` as allocation_id, pa.\`allocated_amount\`, pa.\`monthly_fee_id\`, pa.\`additional_fee_id\`,
+            mf.\`fee_month\`, mf.\`fee_year\`, mf.\`fee_amount\`, mf.\`paid_amount\` as monthly_paid, mf.\`due_amount\` as monthly_due, mf.\`status\` as monthly_status,
+            saf.\`description\` as additional_description, saf.\`amount\` as additional_amount, saf.\`paid_amount\` as additional_paid, saf.\`due_date\`,
+            ft.\`name\` as fee_type_name
      FROM \`payment_allocations\` pa
      LEFT JOIN \`monthly_fees\` mf ON mf.\`id\` = pa.\`monthly_fee_id\`
+     LEFT JOIN \`student_additional_fees\` saf ON saf.\`id\` = pa.\`additional_fee_id\`
+     LEFT JOIN \`fee_types\` ft ON ft.\`id\` = saf.\`fee_type_id\`
      WHERE pa.\`payment_id\` = ?
-     ORDER BY mf.\`fee_year\` ASC, mf.\`fee_month\` ASC`,
+     ORDER BY pa.\`id\` ASC`,
     [paymentId]
   );
+
+  return rows.map((r) => {
+    let description = 'Fee Payment';
+    let period = '—';
+    let feeAmount = Number(r.allocated_amount);
+    let isAdditional = Boolean(r.additional_fee_id || r.additional_description);
+
+    if (r.fee_month) {
+      description = `${formatMonth(r.fee_month)} ${r.fee_year || ''} Tuition Fee`;
+      period = `${formatMonth(r.fee_month)} ${r.fee_year || ''}`;
+      feeAmount = Number(r.fee_amount || r.allocated_amount);
+    } else if (r.additional_description || r.fee_type_name) {
+      description = r.additional_description || r.fee_type_name || 'Additional / Admission Charge';
+      period = 'One-Time / Term';
+      feeAmount = Number(r.additional_amount || r.allocated_amount);
+    }
+
+    return {
+      ...r,
+      description,
+      period,
+      fee_amount: feeAmount,
+      allocated_amount: Number(r.allocated_amount),
+      is_additional: isAdditional,
+    };
+  });
 }
 
 /**
@@ -147,7 +182,7 @@ function formatCurrency(amount, symbol = '₹') {
  */
 async function generateReceiptPDF(paymentId) {
   // Fetch all required data
-  const [payment, school, allocations] = await Promise.all([
+  const [payment, school, rawAllocations] = await Promise.all([
     getPaymentDetailsForReceipt(paymentId),
     getSchoolSettings(),
     getPaymentAllocations(paymentId)
@@ -155,6 +190,20 @@ async function generateReceiptPDF(paymentId) {
 
   if (!payment) {
     throw new Error('Payment not found');
+  }
+
+  // Ensure allocations array is non-empty for display
+  let allocations = rawAllocations;
+  if (!allocations || allocations.length === 0) {
+    const fallbackDesc = payment.payment_category === 'ADMISSION_CHARGE'
+      ? 'Admission & Initial Enrollment Fees'
+      : (payment.notes ? payment.notes.replace(/^\[.*?\]\s*/, '') : 'School Fee Collection');
+    allocations = [{
+      description: fallbackDesc,
+      period: 'Payment',
+      fee_amount: Number(payment.amount),
+      allocated_amount: Number(payment.amount),
+    }];
   }
 
   const studentOutstanding = await getStudentOutstanding(payment.student_id);
@@ -246,15 +295,19 @@ async function generateReceiptPDF(paymentId) {
   y += 15;
 
   // "FEE RECEIPT" title
-  doc.fontSize(18)
+  const receiptTitle = payment.payment_category === 'ADMISSION_CHARGE'
+    ? 'OFFICIAL ADMISSION & ENROLLMENT RECEIPT'
+    : 'OFFICIAL FEE PAYMENT RECEIPT';
+
+  doc.fontSize(16)
      .font('Helvetica-Bold')
      .fillColor('#1a1a2e')
-     .text('FEE RECEIPT', 50, y, { align: 'center' });
+     .text(receiptTitle, 50, y, { align: 'center' });
 
   y += 25;
 
   // Receipt number and date
-  doc.fontSize(11)
+  doc.fontSize(10)
      .font('Helvetica')
      .fillColor('#4a4a6a');
 
@@ -268,70 +321,69 @@ async function generateReceiptPDF(paymentId) {
   y += 25;
 
   // ================================================================
-  // STUDENT INFORMATION
+  // STUDENT & PARENT INFORMATION
   // ================================================================
-  // Section header
-  doc.fontSize(12)
+  doc.fontSize(11)
      .font('Helvetica-Bold')
      .fillColor('#1a1a2e')
-     .text('Student Information', 50, y);
+     .text('Student & Parent Information', 50, y);
 
-  y += 20;
+  y += 18;
 
-  // Student details in a nice layout
+  const parentName = payment.father_name || payment.parent_name || payment.mother_name || '—';
   const studentInfo = [
-    { label: 'Name', value: payment.full_name || '—' },
+    { label: 'Student Name', value: payment.full_name || '—' },
     { label: 'Admission No', value: payment.admission_no || '—' },
-    { label: 'Class', value: payment.class_name ? `${payment.class_name}${payment.section_name ? '-' + payment.section_name : ''}` : '—' },
-    { label: 'Category', value: payment.category === 'hosteller' ? 'Hosteller' : 'Day Scholar' },
+    { label: 'Father / Guardian', value: parentName },
+    { label: 'Class & Section', value: payment.class_name ? `${payment.class_name}${payment.section_name ? ' (' + payment.section_name + ')' : ''}` : '—' },
+    { label: 'Contact Phone', value: payment.phone || payment.whatsapp_number || '—' },
+    { label: 'Category', value: payment.category === 'hosteller' ? 'Hosteller (Hostel)' : 'Day Scholar' },
   ];
 
-  const colWidth = 220;
+  const colWidth = 245;
   studentInfo.forEach((item, index) => {
     const col = index % 2;
     const row = Math.floor(index / 2);
     const x = 50 + col * colWidth;
-    const itemY = y + row * 22;
+    const itemY = y + row * 20;
 
-    doc.fontSize(10)
+    doc.fontSize(9)
        .font('Helvetica-Bold')
        .fillColor('#4a4a6a')
        .text(`${item.label}:`, x, itemY, { continued: true });
 
     doc.font('Helvetica')
        .fillColor('#1a1a2e')
-       .text(` ${item.value}`, x + 80, itemY);
+       .text(` ${item.value}`, x + 95, itemY);
   });
 
-  y += (Math.ceil(studentInfo.length / 2) * 22) + 15;
+  y += (Math.ceil(studentInfo.length / 2) * 20) + 15;
 
   // ================================================================
-  // PAYMENT BREAKDOWN TABLE
+  // ITEMIZED PAYMENT BREAKDOWN TABLE
   // ================================================================
-  // Section header
-  doc.fontSize(12)
+  doc.fontSize(11)
      .font('Helvetica-Bold')
      .fillColor('#1a1a2e')
-     .text('Payment Allocation Breakdown', 50, y);
+     .text('Itemized Fee Payment Breakdown', 50, y);
 
   y += 15;
 
   // Table header
   const tableCols = [
-    { x: 50, width: 80, label: 'Month', align: 'left' },
-    { x: 140, width: 70, label: 'Year', align: 'center' },
-    { x: 220, width: 100, label: 'Fee Amount', align: 'right' },
-    { x: 330, width: 100, label: 'Paid', align: 'right' },
-    { x: 440, width: 100, label: 'Allocated', align: 'right' },
+    { x: 50, width: 35, label: '#', align: 'center' },
+    { x: 85, width: 235, label: 'Fee Description / Head', align: 'left' },
+    { x: 320, width: 110, label: 'Fee Amount', align: 'right' },
+    { x: 430, width: 115, label: 'Amount Paid', align: 'right' },
   ];
 
   // Draw header background
-  doc.rect(50, y, 495, 22)
-     .fillColor('#1a1a2e')
+  doc.rect(50, y, 495, 20)
+     .fillColor('#1e293b')
      .fill();
 
   doc.fillColor('#ffffff')
-     .fontSize(10)
+     .fontSize(9)
      .font('Helvetica-Bold');
 
   tableCols.forEach(col => {
@@ -341,12 +393,10 @@ async function generateReceiptPDF(paymentId) {
     });
   });
 
-  y += 22;
+  y += 20;
 
   // Table rows
   let totalAllocated = 0;
-  let totalFeeAmount = 0;
-  let totalPaidBefore = 0;
 
   doc.font('Helvetica')
      .fillColor('#1a1a2e')
@@ -359,29 +409,23 @@ async function generateReceiptPDF(paymentId) {
     // Alternating row background
     if (isEven) {
       doc.rect(50, rowY, 495, 20)
-         .fillColor('#f8f8fc')
+         .fillColor('#f8fafc')
          .fill();
     }
 
-    const monthName = formatMonth(alloc.fee_month);
-    const feeAmt = Number(alloc.fee_amount);
-    const paidAmt = Number(alloc.paid_amount);
+    const feeAmt = Number(alloc.fee_amount || alloc.allocated_amount);
     const allocAmt = Number(alloc.allocated_amount);
-
     totalAllocated += allocAmt;
-    totalFeeAmount += feeAmt;
-    totalPaidBefore += paidAmt;
 
     const cells = [
-      { x: tableCols[0].x, width: tableCols[0].width, text: `${monthName} ${alloc.fee_year}`, align: 'left' },
-      { x: tableCols[1].x, width: tableCols[1].width, text: String(alloc.fee_year), align: 'center' },
+      { x: tableCols[0].x, width: tableCols[0].width, text: String(index + 1), align: 'center' },
+      { x: tableCols[1].x, width: tableCols[1].width, text: alloc.description || 'Fee Installment', align: 'left' },
       { x: tableCols[2].x, width: tableCols[2].width, text: formatCurrency(feeAmt, school?.currency_symbol || '₹'), align: 'right' },
-      { x: tableCols[3].x, width: tableCols[3].width, text: formatCurrency(paidAmt, school?.currency_symbol || '₹'), align: 'right' },
-      { x: tableCols[4].x, width: tableCols[4].width, text: formatCurrency(allocAmt, school?.currency_symbol || '₹'), align: 'right' },
+      { x: tableCols[3].x, width: tableCols[3].width, text: formatCurrency(allocAmt, school?.currency_symbol || '₹'), align: 'right' },
     ];
 
     cells.forEach(cell => {
-      doc.text(cell.text, cell.x + 5, rowY + 4, {
+      doc.text(cell.text, cell.x + 5, rowY + 5, {
         width: cell.width - 10,
         align: cell.align
       });
@@ -391,21 +435,21 @@ async function generateReceiptPDF(paymentId) {
   y += allocations.length * 20;
 
   // Table total row
-  doc.rect(50, y, 495, 25)
-     .fillColor('#1a1a2e')
+  doc.rect(50, y, 495, 22)
+     .fillColor('#1e293b')
      .fill();
 
   doc.fillColor('#ffffff')
-     .fontSize(10)
+     .fontSize(9)
      .font('Helvetica-Bold');
 
-  doc.text('TOTAL', 55, y + 7, { width: tableCols[0].width + tableCols[1].width + tableCols[2].width - 10, align: 'right' });
-  doc.text(formatCurrency(totalAllocated, school?.currency_symbol || '₹'), tableCols[4].x + 5, y + 7, {
-    width: tableCols[4].width - 10,
+  doc.text('TOTAL AMOUNT PAID', 55, y + 6, { width: tableCols[0].width + tableCols[1].width + tableCols[2].width - 10, align: 'right' });
+  doc.text(formatCurrency(totalAllocated, school?.currency_symbol || '₹'), tableCols[3].x + 5, y + 6, {
+    width: tableCols[3].width - 10,
     align: 'right'
   });
 
-  y += 35;
+  y += 32;
 
   // ================================================================
   // SUMMARY SECTION

@@ -23,6 +23,7 @@ import {
   Building,
   Banknote,
   Sparkles,
+  Printer,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -338,7 +339,7 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
                 style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#fff' }}
                 onClick={() => setShowJpgModal(true)}
               >
-                <Download size={18} /> View &amp; Download JPG Receipt
+                <Printer size={18} /> 🖨️ Print / View JPG Receipt
               </button>
               <WhatsAppDirectButton
                 onSend={() => api.post(`/receipts/send-whatsapp/${recordedPaymentSuccess.id}`)}

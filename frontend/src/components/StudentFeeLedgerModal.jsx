@@ -20,7 +20,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
-import { downloadElementAsJpg, captureElementAsJpg, shareReceiptViaWhatsApp } from '../utils/receiptGenerator';
+import { downloadElementAsJpg, captureElementAsJpg, shareReceiptViaWhatsApp, printReceiptElement } from '../utils/receiptGenerator';
 import { saveFileToDeviceStorage } from '../utils/fileDownloader';
 import { WhatsAppIcon } from './WhatsAppDirectButton';
 import { useToast } from './Toast';
@@ -493,7 +493,13 @@ export default function StudentFeeLedgerModal({
           <button
             type="button"
             className="btn-action-print"
-            onClick={() => window.print()}
+            onClick={() => {
+              if (ledgerRef.current) {
+                printReceiptElement(ledgerRef.current, isFamily ? 'Family Fee Ledger Statement' : 'Student Fee Statement');
+              } else {
+                window.print();
+              }
+            }}
             title="Print statement"
           >
             <Printer size={16} />

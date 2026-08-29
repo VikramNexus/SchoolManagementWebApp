@@ -41,6 +41,7 @@ import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import WhatsAppDirectButton from '../components/WhatsAppDirectButton';
 import JpgReceiptModal from '../components/JpgReceiptModal';
+import RecordPaymentModal from '../components/RecordPaymentModal';
 import './Admissions.css';
 
 const MONTH_OPTIONS = [
@@ -138,6 +139,10 @@ export default function Admissions() {
   const [showJpgReceiptModal, setShowJpgReceiptModal] = useState(false);
   const [tableJpgData, setTableJpgData] = useState(null);
   const [showTableJpgModal, setShowTableJpgModal] = useState(false);
+  const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+  const [selectedStudentForPayment, setSelectedStudentForPayment] = useState(null);
+  const [selectedRegisterReceipt, setSelectedRegisterReceipt] = useState(null);
+  const [loadingRegisterReceiptId, setLoadingRegisterReceiptId] = useState(null);
 
   // Sibling live search results
   const [siblingSearchResults, setSiblingSearchResults] = useState([]);
@@ -481,6 +486,106 @@ export default function Admissions() {
     setEnrollmentSuccess(null);
   };
 
+  const getAdmissionAllocations = () => {
+    const allocs = [];
+    children.forEach((c) => {
+      if (c.has_admission_fee && Number(c.admission_fee_amount) > 0) {
+        allocs.push({
+          description: `One-Time Admission Fee (${c.full_name || 'Student'})`,
+          fee_amount: Number(c.admission_fee_amount),
+          allocated_amount: Number(c.admission_fee_amount),
+        });
+      }
+      if (c.has_security_deposit && Number(c.security_deposit_amount) > 0) {
+        allocs.push({
+          description: `Security Deposit / Caution Money (${c.full_name || 'Student'})`,
+          fee_amount: Number(c.security_deposit_amount),
+          allocated_amount: Number(c.security_deposit_amount),
+        });
+      }
+      (c.custom_expenses || []).forEach((exp) => {
+        if (exp.description && Number(exp.amount) > 0) {
+          allocs.push({
+            description: `${exp.description} (${c.full_name || 'Student'})`,
+            fee_amount: Number(exp.amount),
+            allocated_amount: Number(exp.amount),
+          });
+        }
+      });
+      if (c.include_advance_month && Number(c.advance_fee_amount) > 0) {
+        const mName = MONTH_OPTIONS.find((m) => m.value === Number(c.advance_fee_month))?.label || 'Advance';
+        allocs.push({
+          description: `${mName} ${c.advance_fee_year} Advance Tuition (${c.full_name || 'Student'})`,
+          fee_amount: Number(c.advance_fee_amount),
+          allocated_amount: Number(c.advance_fee_amount),
+        });
+      }
+      if (c.has_opening_dues && Number(c.opening_dues_amount) > 0) {
+        allocs.push({
+          description: `Previous / Opening Dues (${c.full_name || 'Student'})`,
+          fee_amount: Number(c.opening_dues_amount),
+          allocated_amount: Number(c.opening_dues_amount),
+        });
+      }
+    });
+    return allocs;
+  };
+
+  const handleViewRegisterReceipt = async (std) => {
+    try {
+      setLoadingRegisterReceiptId(std.id);
+      const res = await api.get(`/receipts?student_id=${std.id}&limit=1`);
+      if (res.data.success && res.data.receipts && res.data.receipts.length > 0) {
+        const rcptItem = res.data.receipts[0];
+        const detailRes = await api.get(`/receipts/${rcptItem.payment_id || rcptItem.id}`);
+        if (detailRes.data && detailRes.data.success) {
+          setSelectedRegisterReceipt(detailRes.data);
+          return;
+        }
+      }
+
+      // If no payment record yet, generate admission receipt preview
+      setSelectedRegisterReceipt({
+        student: {
+          id: std.id,
+          full_name: std.full_name,
+          admission_no: std.admission_no,
+          father_name: std.father_name || std.parent_name || '—',
+          parent_name: std.parent_name || std.father_name || '—',
+          class_name: std.class_name,
+          section_name: std.section_name,
+          phone: std.phone,
+        },
+        payment: {
+          amount: 0,
+          payment_date: std.admission_date || new Date().toISOString(),
+          payment_mode: 'CASH',
+          notes: 'Official Admission Enrollment Record',
+        },
+        allocations: [],
+        summary: { total_amount: 0 },
+      });
+    } catch (err) {
+      console.error('[handleViewRegisterReceipt]', err);
+      toast.error('Failed to load admission receipt');
+    } finally {
+      setLoadingRegisterReceiptId(null);
+    }
+  };
+
+  const handleOpenRegisterPay = (std) => {
+    setSelectedStudentForPayment({
+      id: std.id,
+      full_name: std.full_name,
+      admission_no: std.admission_no,
+      class_name: std.class_name,
+      category: std.category || 'day_scholar',
+      phone: std.phone,
+      whatsapp_number: std.whatsapp_number || std.phone,
+    });
+    setShowRecordPaymentModal(true);
+  };
+
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -557,20 +662,47 @@ export default function Admissions() {
                 ))}
               </div>
 
-              {/* Receipt / Payment Preview */}
-              {enrollmentSuccess.total_paid > 0 && (
-                <div className="receipt-success-preview">
-                  <div className="rcpt-preview-header">
-                    <span>Receipt No: <strong>{enrollmentSuccess.payments?.[0]?.receipt_number || 'ADM-PAID'}</strong></span>
-                    <span>Total Amount Collected: <strong>{formatCurrency(enrollmentSuccess.total_paid)}</strong></span>
-                  </div>
-                  <p className="rcpt-notes">
-                    Initial advance tuition and admission charges have been allocated to the fee ledgers via FIFO.
-                  </p>
+              {/* Financial Breakdown & Receipt Preview */}
+              <div className="receipt-success-preview">
+                <div className="rcpt-preview-header">
+                  <span>Total Assessed: <strong>{formatCurrency(enrollmentSuccess.total_assessed || 0)}</strong></span>
+                  <span>Amount Collected: <strong style={{ color: '#16a34a' }}>{formatCurrency(enrollmentSuccess.total_paid || 0)}</strong></span>
+                  <span>Remaining Dues: <strong style={{ color: (enrollmentSuccess.total_due || 0) > 0 ? '#dc2626' : '#16a34a' }}>{formatCurrency(enrollmentSuccess.total_due || 0)}</strong></span>
                 </div>
-              )}
+                {enrollmentSuccess.payments?.[0]?.receipt_number && (
+                  <p className="rcpt-notes">
+                    Official Receipt No: <strong>{enrollmentSuccess.payments[0].receipt_number}</strong> • Initial advance tuition and admission charges allocated via FIFO.
+                  </p>
+                )}
+              </div>
 
               <div className="success-actions-row">
+                {/* Action 1: Collect Payment if unpaid or partial */}
+                {((enrollmentSuccess.total_due || 0) > 0 || enrollmentSuccess.total_paid === 0) && (
+                  <button
+                    type="button"
+                    className="btn-success-profile"
+                    style={{ background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: '#fff' }}
+                    onClick={() => {
+                      const firstStd = enrollmentSuccess.students?.[0];
+                      setSelectedStudentForPayment({
+                        id: firstStd?.student_id || firstStd?.id,
+                        full_name: firstStd?.full_name,
+                        admission_no: firstStd?.admission_no,
+                        class_name: classes.find((c) => c.id === Number(firstStd?.class_id))?.name || 'Class',
+                        category: firstStd?.category || 'day_scholar',
+                        phone: parentData.phone,
+                        whatsapp_number: parentData.whatsapp_number,
+                      });
+                      setShowRecordPaymentModal(true);
+                    }}
+                  >
+                    <CreditCard size={17} />
+                    <span>💳 Collect / Record Payment</span>
+                  </button>
+                )}
+
+                {/* Action 2: View & Print Official JPG Receipt */}
                 <button
                   type="button"
                   className="btn-success-profile"
@@ -578,21 +710,39 @@ export default function Admissions() {
                   onClick={() => setShowJpgReceiptModal(true)}
                 >
                   <Receipt size={17} />
-                  <span>View &amp; Share JPG Receipt</span>
+                  <span>🖨️ Print / View JPG Receipt</span>
                 </button>
 
+                {/* Action 3: Send via WhatsApp */}
                 {enrollmentSuccess.students.length > 0 && (
                   <WhatsAppDirectButton
                     onSend={() => api.post(`/admissions/send-whatsapp/${enrollmentSuccess.students[0].student_id}`)}
                     onOpenJpg={() => setShowJpgReceiptModal(true)}
                     phone={parentData.whatsapp_number || parentData.phone}
-                    defaultLabel="Send Admission Receipt via WhatsApp"
+                    defaultLabel="Send WhatsApp Receipt"
                     successLabel="✓ WhatsApp Sent to Parent"
                     size="md"
                     itemTitle="Admission Receipt"
                   />
                 )}
 
+                {/* Action 4: Download PDF Receipt */}
+                {enrollmentSuccess.payments?.[0]?.id && (
+                  <button
+                    type="button"
+                    className="btn-success-profile"
+                    style={{ background: '#334155', color: '#fff' }}
+                    onClick={() => {
+                      const pId = enrollmentSuccess.payments[0].id;
+                      window.open(`/api/receipts/download/${pId}`, '_blank');
+                    }}
+                  >
+                    <Download size={17} />
+                    <span>Download PDF</span>
+                  </button>
+                )}
+
+                {/* Action 5: Admit Another */}
                 <button
                   type="button"
                   className="btn-success-new"
@@ -1436,6 +1586,31 @@ export default function Admissions() {
                           >
                             <Eye size={14} /> Profile
                           </button>
+                          <button
+                            type="button"
+                            className="btn-action-view"
+                            style={{ background: '#0284c7', color: '#fff' }}
+                            onClick={() => handleViewRegisterReceipt(std)}
+                            disabled={loadingRegisterReceiptId === std.id}
+                            title="Print / View Admission Receipt"
+                          >
+                            {loadingRegisterReceiptId === std.id ? (
+                              <Loader2 size={14} className="spin" />
+                            ) : (
+                              <Printer size={14} />
+                            )}
+                            <span>Receipt</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-action-view"
+                            style={{ background: '#16a34a', color: '#fff' }}
+                            onClick={() => handleOpenRegisterPay(std)}
+                            title="Record Payment for Student"
+                          >
+                            <CreditCard size={14} />
+                            <span>Pay</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1447,32 +1622,73 @@ export default function Admissions() {
         </div>
       )}
 
-      {/* Universal JPG Receipt Modal */}
+      {/* Universal JPG Receipt Modal for Post-Admission */}
       {showJpgReceiptModal && enrollmentSuccess && (
         <JpgReceiptModal
           isOpen={showJpgReceiptModal}
           onClose={() => setShowJpgReceiptModal(false)}
           data={{
-            student: enrollmentSuccess.students?.[0] || {
-              full_name: children[0]?.full_name,
-              admission_no: 'ADM-PENDING',
+            student: {
+              ...(enrollmentSuccess.students?.[0] || {}),
+              full_name: children[0]?.full_name || enrollmentSuccess.students?.[0]?.full_name,
+              admission_no: enrollmentSuccess.students?.[0]?.admission_no || 'ADM-PENDING',
               class_name: classes.find((c) => c.id === Number(children[0]?.class_id))?.name || 'Class',
+              father_name: parentData.father_name || parentData.parent_name || '—',
+              mother_name: parentData.mother_name || null,
+              parent_name: parentData.father_name || parentData.parent_name || '—',
+              phone: parentData.whatsapp_number || parentData.phone,
+              whatsapp_number: parentData.whatsapp_number || parentData.phone,
+              category: children[0]?.category || 'day_scholar',
             },
             students: enrollmentSuccess.students,
             payment: enrollmentSuccess.payments?.[0] || {
               amount: enrollmentSuccess.total_paid,
               payment_date: parentData.admission_date,
               payment_mode: parentData.payment_mode,
+              payment_category: 'ADMISSION_CHARGE',
+              father_name: parentData.father_name || parentData.parent_name || '—',
+              notes: parentData.payment_notes,
             },
             receipt: {
-              receipt_number: enrollmentSuccess.payments?.[0]?.receipt_number || 'ADM-REC',
+              receipt_number: enrollmentSuccess.payments?.[0]?.receipt_number || `ADM-REC-${Date.now().toString().slice(-6)}`,
             },
-            allocations: [],
+            allocations: getAdmissionAllocations(),
             summary: {
-              total_amount: enrollmentSuccess.total_paid,
+              total_amount: enrollmentSuccess.total_paid || totalFamilyAssessed,
             },
           }}
-          type={enrollmentSuccess.students.length > 1 ? 'family' : 'payment'}
+          type={enrollmentSuccess.students.length > 1 ? 'family' : 'admission'}
+        />
+      )}
+
+      {/* Register List JPG Receipt Modal */}
+      {selectedRegisterReceipt && (
+        <JpgReceiptModal
+          isOpen={Boolean(selectedRegisterReceipt)}
+          onClose={() => setSelectedRegisterReceipt(null)}
+          data={selectedRegisterReceipt}
+          type="admission"
+        />
+      )}
+
+      {/* Post-Admission Quick Payment Modal */}
+      {showRecordPaymentModal && (
+        <RecordPaymentModal
+          initialStudent={selectedStudentForPayment}
+          defaultCategory="ADMISSION_CHARGE"
+          defaultNotes="Admission fees collection"
+          onClose={() => {
+            setShowRecordPaymentModal(false);
+            setSelectedStudentForPayment(null);
+          }}
+          onSaved={() => {
+            setShowRecordPaymentModal(false);
+            setSelectedStudentForPayment(null);
+            fetchData();
+            if (activeTab === 'register') {
+              fetchRegisterList();
+            }
+          }}
         />
       )}
     </div>

@@ -18,7 +18,7 @@ import {
   CheckCircle2,
   Send,
 } from 'lucide-react';
-import { captureElementAsJpg, downloadElementAsJpg } from '../utils/receiptGenerator';
+import { captureElementAsJpg, downloadElementAsJpg, printReceiptElement } from '../utils/receiptGenerator';
 import { WhatsAppIcon } from './WhatsAppDirectButton';
 import { useToast } from './Toast';
 import { api } from '../context/AuthContext';
@@ -93,6 +93,7 @@ export default function JpgReceiptModal({
   const receiptNumber =
     receipt?.receipt_number ||
     payment?.receipt_number ||
+    data?.receipt_number ||
     `RCP-${payment?.id || Date.now().toString().slice(-6)}`;
   const paymentDate = payment?.payment_date
     ? new Date(payment.payment_date).toLocaleDateString('en-IN', {
@@ -106,9 +107,19 @@ export default function JpgReceiptModal({
         year: 'numeric',
       });
 
+  const parentName =
+    student?.father_name ||
+    student?.parent_name ||
+    student?.mother_name ||
+    payment?.father_name ||
+    payment?.parent_name ||
+    data?.father_name ||
+    data?.parent_name ||
+    '—';
+
   const parentPhone =
     student?.phone || student?.father_phone || student?.whatsapp_number || payment?.phone || '';
-  const totalAmount = payment?.amount || summary?.total_amount || 0;
+  const totalAmount = payment?.amount || summary?.total_amount || data?.amount || 0;
 
   // 1. Download Full-Page High-Res JPG without clipping
   const handleDownloadJpg = async () => {
@@ -169,7 +180,11 @@ export default function JpgReceiptModal({
   };
 
   const handlePrint = () => {
-    window.print();
+    if (receiptRef.current) {
+      printReceiptElement(receiptRef.current, `Receipt_${receiptNumber}_${student?.full_name || 'Student'}`);
+    } else {
+      window.print();
+    }
   };
 
   return (
@@ -179,7 +194,7 @@ export default function JpgReceiptModal({
         <div className="jpg-receipt-modal-header">
           <div className="modal-title-chip">
             <Receipt size={18} />
-            <span>Official Fee Receipt (JPG Format)</span>
+            <span>Official Fee Receipt (JPG &amp; Print)</span>
           </div>
           <button type="button" className="btn-close-receipt" onClick={onClose} aria-label="Close">
             <X size={20} />
@@ -264,17 +279,17 @@ export default function JpgReceiptModal({
                 <div className="detail-col">
                   <div className="detail-row">
                     <span className="lbl">Student Name:</span>
-                    <span className="val font-bold">{student.full_name || 'Student Name'}</span>
+                    <span className="val font-bold">{student.full_name || payment.full_name || 'Student Name'}</span>
                   </div>
                   <div className="detail-row">
                     <span className="lbl">Admission No:</span>
-                    <span className="val font-mono">{student.admission_no || 'N/A'}</span>
+                    <span className="val font-mono">{student.admission_no || payment.admission_no || 'N/A'}</span>
                   </div>
                   <div className="detail-row">
                     <span className="lbl">Class &amp; Section:</span>
                     <span className="val">
-                      {student.class_name || 'Class'}{' '}
-                      {student.section_name ? `(${student.section_name})` : ''}
+                      {student.class_name || payment.class_name || 'Class'}{' '}
+                      {(student.section_name || payment.section_name) ? `(${student.section_name || payment.section_name})` : ''}
                     </span>
                   </div>
                 </div>
@@ -282,7 +297,7 @@ export default function JpgReceiptModal({
                 <div className="detail-col">
                   <div className="detail-row">
                     <span className="lbl">Father / Guardian:</span>
-                    <span className="val">{student.father_name || student.parent_name || '—'}</span>
+                    <span className="val font-bold">{parentName}</span>
                   </div>
                   <div className="detail-row">
                     <span className="lbl">Contact Number:</span>
@@ -291,7 +306,7 @@ export default function JpgReceiptModal({
                   <div className="detail-row">
                     <span className="lbl">Category:</span>
                     <span className="val">
-                      {student.category === 'hosteller' ? 'Hosteller (Hostel Accommodation)' : 'Day Scholar'}
+                      {(student.category || payment.category) === 'hosteller' ? 'Hosteller (Hostel Accommodation)' : 'Day Scholar'}
                     </span>
                   </div>
                 </div>
@@ -311,31 +326,47 @@ export default function JpgReceiptModal({
                   </thead>
                   <tbody>
                     {allocations && allocations.length > 0 ? (
-                      allocations.map((item, idx) => (
-                        <tr key={idx}>
-                          <td>{idx + 1}</td>
-                          <td className="font-medium">
-                            {item.fee_month
-                              ? `${new Date(2000, item.fee_month - 1).toLocaleString('en-IN', {
-                                  month: 'long',
-                                })} ${item.fee_year || ''} Tuition Fee`
-                              : item.description || item.fee_type_name || 'Fee Installment'}
-                          </td>
-                          <td className="text-right">
-                            ₹{Number(item.fee_amount || item.amount || totalAmount).toLocaleString('en-IN')}
-                          </td>
-                          <td className="text-right text-green font-bold">
-                            ₹{Number(item.allocated_amount || item.amount || totalAmount).toLocaleString('en-IN')}
-                          </td>
-                          <td className="text-center">
-                            <span className="paid-tag">PAID</span>
-                          </td>
-                        </tr>
-                      ))
+                      allocations.map((item, idx) => {
+                        let itemDesc = 'Fee Payment';
+                        if (item.fee_month) {
+                          const monthName = new Date(2000, Number(item.fee_month) - 1).toLocaleString('en-IN', {
+                            month: 'long',
+                          });
+                          itemDesc = `${monthName} ${item.fee_year || ''} Monthly Tuition Fee`;
+                        } else if (item.description || item.fee_type_name) {
+                          itemDesc = item.description || item.fee_type_name;
+                        } else if (item.additional_description) {
+                          itemDesc = item.additional_description;
+                        } else if (payment?.payment_category === 'ADMISSION_CHARGE') {
+                          itemDesc = 'Admission / Enrollment Fee';
+                        }
+                        const itemFee = Number(item.fee_amount || item.amount || item.allocated_amount || totalAmount);
+                        const itemPaid = Number(item.allocated_amount || item.paid_amount || item.amount || totalAmount);
+
+                        return (
+                          <tr key={idx}>
+                            <td>{idx + 1}</td>
+                            <td className="font-medium">{itemDesc}</td>
+                            <td className="text-right">
+                              ₹{itemFee.toLocaleString('en-IN')}
+                            </td>
+                            <td className="text-right text-green font-bold">
+                              ₹{itemPaid.toLocaleString('en-IN')}
+                            </td>
+                            <td className="text-center">
+                              <span className="paid-tag">PAID</span>
+                            </td>
+                          </tr>
+                        );
+                      })
                     ) : (
                       <tr>
                         <td>1</td>
-                        <td className="font-medium">School Fee Payment</td>
+                        <td className="font-medium">
+                          {payment.payment_category === 'ADMISSION_CHARGE'
+                            ? 'Admission & Initial Enrollment Fees'
+                            : (payment.notes ? payment.notes.replace(/^\[.*?\]\s*/, '') : 'School Fee Payment')}
+                        </td>
                         <td className="text-right">₹{Number(totalAmount).toLocaleString('en-IN')}</td>
                         <td className="text-right text-green font-bold">
                           ₹{Number(totalAmount).toLocaleString('en-IN')}

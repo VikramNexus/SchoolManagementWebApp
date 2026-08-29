@@ -30,6 +30,7 @@ import {
   CheckCircle,
   GraduationCap,
   Sparkles,
+  Printer,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -578,10 +579,10 @@ export default function Payments() {
                               className="btn-action receipt-btn"
                               onClick={() => handleViewReceipt(p)}
                               disabled={loadingReceiptId === p.id}
-                              title="View & Download Official JPG Receipt"
+                              title="Print / View Official JPG Receipt"
                             >
-                              {loadingReceiptId === p.id ? <Loader2 size={13} className="spin" /> : <Receipt size={13} />}
-                              <span>Receipt</span>
+                              {loadingReceiptId === p.id ? <Loader2 size={13} className="spin" /> : <Printer size={13} />}
+                              <span>Print / Receipt</span>
                             </button>
                             <WhatsAppDirectButton
                               compact
@@ -834,6 +835,17 @@ export default function Payments() {
               ) : null}
             </div>
             <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#fff' }}
+                onClick={() => {
+                  setDetailsModalOpen(false);
+                  handleViewReceipt(selectedPaymentDetails.payment);
+                }}
+              >
+                <Printer size={16} /> 🖨️ Print / View Receipt
+              </button>
               <button type="button" className="btn btn-secondary" onClick={() => setDetailsModalOpen(false)}>
                 Close
               </button>

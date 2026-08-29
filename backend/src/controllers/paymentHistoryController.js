@@ -103,8 +103,12 @@ async function getPaymentHistory(req, res) {
         s.\`full_name\` as student_name,
         s.\`admission_no\`,
         s.\`admission_no\` as student_admission_no,
+        s.\`father_name\`,
+        s.\`mother_name\`,
+        s.\`parent_name\`,
         s.\`phone\`,
         s.\`whatsapp_number\`,
+        s.\`address\`,
         s.\`category\`,
         s.\`category\` as student_category,
         c.\`name\` as class_name,
@@ -135,6 +139,8 @@ async function getPaymentHistory(req, res) {
         full_name: p.full_name || p.student_name || '—',
         student_name: p.full_name || p.student_name || '—',
         admission_no: p.admission_no || p.student_admission_no || '—',
+        father_name: p.father_name || p.parent_name || '—',
+        parent_name: p.parent_name || p.father_name || '—',
         receipt_number: p.receipt_number || p.receipt_no || `RCP-${p.id}`,
       })),
       summary: {
@@ -220,18 +226,14 @@ async function getCollectionSummary(req, res) {
     return res.json({
       success: true,
       summary: {
-        today: {
-          total_amount: Number(todayTotal.total),
-          count: todayTotal.count,
-        },
-        month_to_date: {
-          total_amount: Number(monthTotal.total),
-          count: monthTotal.count,
-        },
-        total_payments: overall.total_count,
-        grand_total: Number(overall.grand_total),
-        daily: daily.map(d => ({ ...d, total_amount: Number(d.total_amount) })),
-        monthly: monthly.map(m => ({ ...m, total_amount: Number(m.total_amount) })),
+        today: Number(todayTotal?.total || 0),
+        today_count: Number(todayTotal?.count || 0),
+        this_month: Number(monthTotal?.total || 0),
+        month_count: Number(monthTotal?.count || 0),
+        total_collected: Number(overall?.grand_total || 0),
+        total_count: Number(overall?.total_count || 0),
+        daily_trend: daily || [],
+        monthly_trend: monthly || [],
       },
     });
   } catch (err) {
@@ -257,8 +259,12 @@ async function getPaymentDetails(req, res) {
         s.\`full_name\` as student_name,
         s.\`admission_no\`,
         s.\`admission_no\` as student_admission_no,
+        s.\`father_name\`,
+        s.\`mother_name\`,
+        s.\`parent_name\`,
         s.\`phone\`,
         s.\`whatsapp_number\`,
+        s.\`address\`,
         s.\`category\`,
         s.\`category\` as student_category,
         c.\`name\` as class_name,
@@ -288,10 +294,12 @@ async function getPaymentDetails(req, res) {
         mf.\`due_amount\` as current_due,
         mf.\`status\` as fee_status,
         saf.\`description\` as additional_fee_description,
-        saf.\`amount\` as additional_fee_amount
+        saf.\`amount\` as additional_fee_amount,
+        ft.\`name\` as fee_type_name
        FROM \`payment_allocations\` pa
        LEFT JOIN \`monthly_fees\` mf ON mf.\`id\` = pa.\`monthly_fee_id\`
        LEFT JOIN \`student_additional_fees\` saf ON saf.\`id\` = pa.\`additional_fee_id\`
+       LEFT JOIN \`fee_types\` ft ON ft.\`id\` = saf.\`fee_type_id\`
        WHERE pa.\`payment_id\` = ?
        ORDER BY pa.\`id\` ASC`,
       [id]
@@ -305,13 +313,27 @@ async function getPaymentDetails(req, res) {
         full_name: payment.full_name || payment.student_name || '—',
         student_name: payment.full_name || payment.student_name || '—',
         admission_no: payment.admission_no || payment.student_admission_no || '—',
+        father_name: payment.father_name || payment.parent_name || '—',
+        parent_name: payment.parent_name || payment.father_name || '—',
       },
-      allocations: allocations.map(a => ({
-        ...a,
-        allocated_amount: Number(a.allocated_amount || 0),
-        fee_amount: Number(a.fee_amount || a.additional_fee_amount || a.allocated_amount || 0),
-        description: a.additional_fee_description || null,
-      })),
+      allocations: allocations.map(a => {
+        let description = 'Fee Payment';
+        let period = '—';
+        if (a.fee_month) {
+          description = `Monthly Tuition Fee (${a.fee_month}/${a.fee_year})`;
+          period = `${a.fee_month}/${a.fee_year}`;
+        } else if (a.additional_fee_description || a.fee_type_name) {
+          description = a.additional_fee_description || a.fee_type_name || 'Admission / Custom Fee';
+          period = 'One-Time';
+        }
+        return {
+          ...a,
+          allocated_amount: Number(a.allocated_amount || 0),
+          fee_amount: Number(a.fee_amount || a.additional_fee_amount || a.allocated_amount || 0),
+          description,
+          period,
+        };
+      }),
     });
   } catch (err) {
     console.error('[paymentHistoryController.getPaymentDetails]', err);

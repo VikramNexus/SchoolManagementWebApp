@@ -70,6 +70,7 @@ async function getReceipt(req, res) {
     let payment = await db.queryOne(
       `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`generated_at\` as receipt_created_at,
               s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`, s.\`phone\`, s.\`whatsapp_number\`,
+              s.\`father_name\`, s.\`mother_name\`, s.\`parent_name\`, s.\`address\`,
               c.\`name\` as class_name, sec.\`name\` as section_name
        FROM \`payments\` p
        LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
@@ -93,6 +94,7 @@ async function getReceipt(req, res) {
         payment = await db.queryOne(
           `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`generated_at\` as receipt_created_at,
                   s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`, s.\`phone\`, s.\`whatsapp_number\`,
+                  s.\`father_name\`, s.\`mother_name\`, s.\`parent_name\`, s.\`address\`,
                   c.\`name\` as class_name, sec.\`name\` as section_name
            FROM \`payments\` p
            LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
@@ -154,11 +156,15 @@ async function getReceipt(req, res) {
         id: payment.student_id,
         full_name: payment.full_name,
         admission_no: payment.admission_no,
+        father_name: payment.father_name || payment.parent_name || '—',
+        mother_name: payment.mother_name || null,
+        parent_name: payment.parent_name || payment.father_name || '—',
         class_name: payment.class_name,
         section_name: payment.section_name,
         category: payment.category,
         phone: payment.phone,
         whatsapp_number: payment.whatsapp_number,
+        address: payment.address,
       },
       allocations,
       school,
@@ -238,8 +244,8 @@ async function listReceipts(req, res) {
 
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
-      conditions.push('(s.`full_name` LIKE ? OR s.`admission_no` LIKE ? OR r.`receipt_number` LIKE ? OR p.`receipt_number` LIKE ? OR s.`phone` LIKE ?)');
-      values.push(term, term, term, term, term);
+      conditions.push('(s.`full_name` LIKE ? OR s.`admission_no` LIKE ? OR s.`father_name` LIKE ? OR s.`parent_name` LIKE ? OR r.`receipt_number` LIKE ? OR p.`receipt_number` LIKE ? OR s.`phone` LIKE ?)');
+      values.push(term, term, term, term, term, term, term);
     }
 
     if (student_id) {
@@ -302,9 +308,13 @@ async function listReceipts(req, res) {
         s.\`full_name\`,
         s.\`full_name\` as student_name,
         s.\`admission_no\`,
+        s.\`father_name\`,
+        s.\`mother_name\`,
+        s.\`parent_name\`,
         s.\`category\` as student_category,
         s.\`phone\`,
         s.\`whatsapp_number\`,
+        s.\`address\`,
         c.\`name\` as class_name,
         sec.\`name\` as section_name
       FROM \`payments\` p
