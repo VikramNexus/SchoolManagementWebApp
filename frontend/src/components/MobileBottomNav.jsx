@@ -11,7 +11,7 @@ import {
   Users,
   AlertTriangle,
   Receipt,
-  Database,
+  CreditCard,
 } from 'lucide-react';
 import './MobileBottomNav.css';
 
@@ -21,7 +21,7 @@ const BOTTOM_NAV_ITEMS = [
   { path: '/students', label: 'Students', icon: Users },
   { path: '/pending-fees', label: 'Dues', icon: AlertTriangle },
   { path: '/receipts', label: 'Receipts', icon: Receipt },
-  { path: '/backup', label: 'Backup', icon: Database },
+  { path: '/payments', label: 'Payments', icon: CreditCard },
 ];
 
 export default function MobileBottomNav() {

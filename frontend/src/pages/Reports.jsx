@@ -39,7 +39,6 @@ import {
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import { saveFileToDeviceStorage } from '../utils/fileDownloader';
-import JpgReceiptModal from '../components/JpgReceiptModal';
 import './Reports.css';
 
 export default function Reports() {
@@ -70,23 +69,6 @@ export default function Reports() {
   const [duesPage, setDuesPage] = useState(1);
   const [loadingDues, setLoadingDues] = useState(false);
 
-  // Payments Tab State
-  const [paymentsList, setPaymentsList] = useState([]);
-  const [paymentsSummary, setPaymentsSummary] = useState({ total_amount: 0, cash_amount: 0, bank_amount: 0, total_transactions: 0 });
-  const [loadingPayments, setLoadingPayments] = useState(false);
-  const [paymentsSearch, setPaymentsSearch] = useState('');
-  const [paymentsClassFilter, setPaymentsClassFilter] = useState('');
-  const [paymentsModeFilter, setPaymentsModeFilter] = useState('');
-  const [paymentsPage, setPaymentsPage] = useState(1);
-  const [paymentsTotalPages, setPaymentsTotalPages] = useState(1);
-  const [paymentsTotalRecords, setPaymentsTotalRecords] = useState(0);
-  const [expandedReportPayments, setExpandedReportPayments] = useState({});
-
-  // Receipt Modal State for Reports
-  const [selectedReceiptData, setSelectedReceiptData] = useState(null);
-  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
-  const [loadingReceiptId, setLoadingReceiptId] = useState(null);
-
   // Action states
   const [sendingWaId, setSendingWaId] = useState(null);
   const [expandedReceipts, setExpandedReceipts] = useState({});
@@ -112,7 +94,6 @@ export default function Reports() {
 
   const TABS = [
     { id: 'executive', label: 'Executive & Day-Book', icon: BarChart3, badge: 'Live Today' },
-    { id: 'payments', label: 'Fee Payments & Breakdown', icon: CreditCard, badge: 'Audited' },
     { id: 'defaulters', label: 'Defaulters & Aging', icon: AlertTriangle, badge: 'Recovery' },
     { id: 'demographics', label: 'Student Demographics', icon: Users },
   ];
@@ -167,77 +148,6 @@ export default function Reports() {
       setLoadingDues(false);
     }
   }, [duesPage, duesSearch, selectedClass, selectedCategory, selectedAging, toast]);
-
-  // 4. Fetch Payments Tab Records
-  const fetchReportPayments = useCallback(async () => {
-    try {
-      setLoadingPayments(true);
-      const params = new URLSearchParams({
-        page: paymentsPage.toString(),
-        limit: '25',
-      });
-      if (paymentsSearch.trim()) params.append('search', paymentsSearch.trim());
-      if (paymentsClassFilter) params.append('class_id', paymentsClassFilter);
-      if (paymentsModeFilter) params.append('payment_mode', paymentsModeFilter);
-
-      const [payRes, sumRes] = await Promise.all([
-        api.get(`/payments?${params.toString()}`),
-        api.get('/payments/summary').catch(() => ({ data: { success: false } })),
-      ]);
-
-      if (payRes.data.success) {
-        setPaymentsList(payRes.data.payments || []);
-        setPaymentsTotalPages(payRes.data.pagination?.totalPages || 1);
-        setPaymentsTotalRecords(payRes.data.pagination?.total || (payRes.data.payments || []).length);
-      }
-      if (sumRes.data?.success && sumRes.data?.summary) {
-        setPaymentsSummary(sumRes.data.summary);
-      }
-    } catch (err) {
-      console.error('[fetchReportPayments]', err);
-    } finally {
-      setLoadingPayments(false);
-    }
-  }, [paymentsPage, paymentsSearch, paymentsClassFilter, paymentsModeFilter]);
-
-  useEffect(() => {
-    if (activeTab === 'payments') {
-      fetchReportPayments();
-    }
-  }, [activeTab, fetchReportPayments]);
-
-  const handleViewReceipt = async (paymentOrItem) => {
-    if (!paymentOrItem) return;
-    const paymentId = typeof paymentOrItem === 'object'
-      ? (paymentOrItem.id || paymentOrItem.payment_id || paymentOrItem.receipt_number || paymentOrItem.receipt_no)
-      : paymentOrItem;
-
-    try {
-      setLoadingReceiptId(paymentId);
-      const res = await api.get(`/receipts/${paymentId}`);
-      if (res.data && res.data.success) {
-        setSelectedReceiptData({
-          ...res.data,
-          student: res.data.student || {
-            full_name: paymentOrItem.full_name,
-            admission_no: paymentOrItem.admission_no,
-            class_name: paymentOrItem.class_name,
-            section_name: paymentOrItem.section_name,
-            phone: paymentOrItem.phone || paymentOrItem.whatsapp_number,
-          },
-          payment: res.data.payment || paymentOrItem,
-          allocations: res.data.allocations || [],
-        });
-        setReceiptModalOpen(true);
-      } else {
-        toast.error('Failed to load receipt details.');
-      }
-    } catch (err) {
-      toast.error('Could not load receipt.');
-    } finally {
-      setLoadingReceiptId(null);
-    }
-  };
 
   // Initial Load
   useEffect(() => {
@@ -454,16 +364,6 @@ export default function Reports() {
           >
             <FileSpreadsheet size={16} />
             <span>⚠️ Dues Excel</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn-header-excel blue"
-            onClick={() => navigate('/backup')}
-            title="Database Backup & Restore Desk"
-          >
-            <ShieldCheck size={16} />
-            <span>💾 Backup Desk</span>
           </button>
         </div>
       </div>
@@ -826,291 +726,6 @@ export default function Reports() {
                       </tbody>
                     </table>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* ============================================================ */}
-            {/* TAB 2: FEE PAYMENTS & COLLECTIONS INTELLIGENCE               */}
-            {/* ============================================================ */}
-            {activeTab === 'payments' && (
-              <div className="tab-pane-fade">
-                {/* 2x2 Summary Grid */}
-                <div className="reports-2x2-stats-grid">
-                  <div className="summary-stat-card card-green">
-                    <div className="stat-card-icon green">
-                      <CreditCard size={20} />
-                    </div>
-                    <div className="stat-card-info">
-                      <span className="stat-card-lbl">Total Realized Revenue</span>
-                      <strong className="stat-card-val text-green">
-                        {formatRs(paymentsSummary.total_amount || fin.collected)}
-                      </strong>
-                      <span className="stat-card-sub">
-                        {paymentsTotalRecords || paymentsList.length} Validated Receipts
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="summary-stat-card card-amber">
-                    <div className="stat-card-icon amber">
-                      <DollarSign size={20} />
-                    </div>
-                    <div className="stat-card-info">
-                      <span className="stat-card-lbl">Direct Cash Collections</span>
-                      <strong className="stat-card-val text-amber">
-                        {formatRs(paymentsSummary.cash_amount || todayData.cash)}
-                      </strong>
-                      <span className="stat-card-sub">Counter Cash Collections</span>
-                    </div>
-                  </div>
-
-                  <div className="summary-stat-card card-blue">
-                    <div className="stat-card-icon blue">
-                      <Building2 size={20} />
-                    </div>
-                    <div className="stat-card-info">
-                      <span className="stat-card-lbl">Bank / UPI / In Account</span>
-                      <strong className="stat-card-val text-blue">
-                        {formatRs(paymentsSummary.bank_amount || todayData.bank)}
-                      </strong>
-                      <span className="stat-card-sub">Digital &amp; Bank Transfers</span>
-                    </div>
-                  </div>
-
-                  <div className="summary-stat-card card-purple">
-                    <div className="stat-card-icon purple">
-                      <Users size={20} />
-                    </div>
-                    <div className="stat-card-info">
-                      <span className="stat-card-lbl">Household Family Reach</span>
-                      <strong className="stat-card-val text-purple">
-                        {demo.families} Households
-                      </strong>
-                      <span className="stat-card-sub">
-                        {demo.total_students} Enrolled Students
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Filter & Search Bar */}
-                <div className="report-filter-bar">
-                  <div className="search-input-wrap">
-                    <Search size={16} className="search-icon" />
-                    <input
-                      type="text"
-                      className="report-search-field"
-                      placeholder="Search payment by student, admission #, or receipt #…"
-                      value={paymentsSearch}
-                      onChange={(e) => { setPaymentsSearch(e.target.value); setPaymentsPage(1); }}
-                    />
-                    {paymentsSearch && (
-                      <button
-                        type="button"
-                        className="clear-search-btn"
-                        onClick={() => { setPaymentsSearch(''); setPaymentsPage(1); }}
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="filter-dropdowns-cluster">
-                    <select
-                      className="report-select-field"
-                      value={paymentsClassFilter}
-                      onChange={(e) => { setPaymentsClassFilter(e.target.value); setPaymentsPage(1); }}
-                    >
-                      <option value="">All Classes</option>
-                      {classesList.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      className="report-select-field"
-                      value={paymentsModeFilter}
-                      onChange={(e) => { setPaymentsModeFilter(e.target.value); setPaymentsPage(1); }}
-                    >
-                      <option value="">All Payment Modes</option>
-                      <option value="CASH">💵 Cash Counter</option>
-                      <option value="IN_ACCOUNT">🏦 Bank / In Account</option>
-                    </select>
-
-                    <button
-                      type="button"
-                      className="btn-quick-export-excel green"
-                      onClick={() => setShowCollectionModal(true)}
-                      title="Export Collection Ledger as Excel"
-                    >
-                      <FileSpreadsheet size={15} />
-                      <span>Export Collections Excel</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Payments Table Panel */}
-                <div className="card-panel full-width-panel">
-                  <div className="panel-header">
-                    <div className="panel-title-wrap">
-                      <Receipt size={18} className="text-green" />
-                      <div>
-                        <h3 className="panel-title">Audited Fee Payment Ledger</h3>
-                        <span className="panel-sub">Itemized transaction receipts, sibling allocations, and channel verification</span>
-                      </div>
-                    </div>
-                    <span className="badge-chip green">{paymentsTotalRecords || paymentsList.length} Transactions</span>
-                  </div>
-
-                  {loadingPayments ? (
-                    <div className="reports-loading-state mini">
-                      <Loader2 size={24} className="spin text-blue" />
-                      <span>Loading collection records…</span>
-                    </div>
-                  ) : paymentsList.length > 0 ? (
-                    <div className="table-responsive">
-                      <table className="clean-report-table">
-                        <thead>
-                          <tr>
-                            <th>Receipt #</th>
-                            <th>Student &amp; Family</th>
-                            <th>Class</th>
-                            <th>Channel</th>
-                            <th>Date</th>
-                            <th className="text-right">Amount</th>
-                            <th className="text-center">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paymentsList.map((p) => {
-                            const rNo = p.receipt_number || `RCP-${p.id}`;
-                            const isFam = p.is_family || rNo.startsWith('FAM') || (p.notes && p.notes.includes('Family Receipt'));
-                            return (
-                              <tr key={p.id}>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="receipt-chip-btn"
-                                    onClick={() => handleViewReceipt(p)}
-                                    title="View & Print Official JPG Receipt"
-                                  >
-                                    <Receipt size={12} />
-                                    <span>{rNo}</span>
-                                  </button>
-                                </td>
-                                <td>
-                                  {isFam ? (
-                                    <div className="family-cell-stack">
-                                      <div className="family-badge-toggle-row">
-                                        <span className="family-pill-mini">👨‍👧‍👦 Family Payment</span>
-                                        {p.notes && (
-                                          <button
-                                            type="button"
-                                            className="btn-sibling-toggle"
-                                            onClick={() => setExpandedReportPayments(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
-                                            title={expandedReportPayments[p.id] ? 'Hide note' : 'View receipt note'}
-                                          >
-                                            {expandedReportPayments[p.id] ? 'Hide' : '👁️ View'}
-                                          </button>
-                                        )}
-                                      </div>
-                                      <strong
-                                        className="student-click-link font-bold"
-                                        onClick={() => navigate(`/students/${p.student_id}`)}
-                                        title={`View ${p.full_name}'s Profile`}
-                                      >
-                                        {p.full_name || '—'}
-                                      </strong>
-                                      <small className="student-adm-sub font-mono">{p.admission_no || '—'}</small>
-                                      {expandedReportPayments[p.id] && p.notes && (
-                                        <div className="sibling-drawer-content">
-                                          <span className="sibling-meta-chip">{p.notes}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <>
-                                      <strong
-                                        className="student-click-link font-bold"
-                                        onClick={() => navigate(`/students/${p.student_id}`)}
-                                        title={`View ${p.full_name}'s Profile`}
-                                      >
-                                        {p.full_name || '—'}
-                                      </strong>
-                                      <small className="student-adm-sub font-mono">{p.admission_no || '—'}</small>
-                                    </>
-                                  )}
-                                </td>
-                                <td>
-                                  <span className="class-badge-pill">
-                                    {p.class_name ? `${p.class_name}${p.section_name ? `-${p.section_name}` : ''}` : '—'}
-                                  </span>
-                                </td>
-                                <td>
-                                  <span className={`channel-pill ${p.payment_mode === 'IN_ACCOUNT' ? 'bank' : 'cash'}`}>
-                                    {p.payment_mode === 'IN_ACCOUNT' ? '🏦 Bank/UPI' : '💵 Cash'}
-                                  </span>
-                                </td>
-                                <td>
-                                  <span className="text-muted font-mono" style={{ fontSize: '12px' }}>
-                                    {p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                                  </span>
-                                </td>
-                                <td className="text-right font-bold text-green">
-                                  {formatRs(p.amount)}
-                                </td>
-                                <td className="text-center">
-                                  <div className="action-btn-cluster" style={{ justifyContent: 'center' }}>
-                                    <button
-                                      type="button"
-                                      className="btn-action-print-icon"
-                                      onClick={() => handleViewReceipt(p)}
-                                      disabled={loadingReceiptId === (p.id || p.receipt_number)}
-                                      title="Print & View Official JPG Receipt"
-                                    >
-                                      <Printer size={13} />
-                                      <span>Receipt</span>
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="empty-panel-msg">
-                      <Receipt size={32} className="text-muted" />
-                      <p>No fee payment records found matching this filter criteria.</p>
-                    </div>
-                  )}
-
-                  {/* Pagination */}
-                  {paymentsTotalPages > 1 && (
-                    <div className="report-pagination-wrap">
-                      <button
-                        type="button"
-                        className="btn-page-nav"
-                        disabled={paymentsPage <= 1}
-                        onClick={() => setPaymentsPage(prev => Math.max(1, prev - 1))}
-                      >
-                        Previous
-                      </button>
-                      <span className="page-indicator-text">
-                        Page <strong>{paymentsPage}</strong> of <strong>{paymentsTotalPages}</strong>
-                      </span>
-                      <button
-                        type="button"
-                        className="btn-page-nav"
-                        disabled={paymentsPage >= paymentsTotalPages}
-                        onClick={() => setPaymentsPage(prev => Math.min(paymentsTotalPages, prev + 1))}
-                      >
-                        Next
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -1762,19 +1377,6 @@ export default function Reports() {
             </form>
           </div>
         </div>
-      )}
-
-      {/* Official Full-Page JPG / Printable Receipt Modal */}
-      {receiptModalOpen && selectedReceiptData && (
-        <JpgReceiptModal
-          isOpen={receiptModalOpen}
-          onClose={() => {
-            setReceiptModalOpen(false);
-            setSelectedReceiptData(null);
-          }}
-          data={selectedReceiptData}
-          type="payment"
-        />
       )}
     </div>
   );

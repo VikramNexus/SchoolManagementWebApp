@@ -292,6 +292,20 @@
   color: #ffffff;
 }
 
+.backup-header-shortcut-btn {
+  color: var(--topbar-text-muted);
+}
+
+.backup-header-shortcut-btn:hover {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.backup-header-shortcut-btn.active {
+  background: #2563eb;
+  color: #ffffff;
+}
+
 /* Dropdown base */
 .dropdown {
   position: relative;

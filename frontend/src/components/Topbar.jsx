@@ -193,7 +193,7 @@ export default function Topbar() {
 
       {/* Right: Notifications, User menu */}
       <div className="topbar-right">
-        {/* Quick Reports Header Shortcut (Prominently visible on Mobile next to Notifications) */}
+        {/* Quick Reports Header Shortcut */}
         <button
           type="button"
           className={`icon-btn reports-header-shortcut-btn ${location.pathname === '/reports' ? 'active' : ''}`}
@@ -202,6 +202,17 @@ export default function Topbar() {
           aria-label="Executive Reports"
         >
           <BarChart3 size={20} />
+        </button>
+
+        {/* Quick Backup Header Shortcut (beside Notifications) */}
+        <button
+          type="button"
+          className={`icon-btn backup-header-shortcut-btn ${location.pathname === '/backup' ? 'active' : ''}`}
+          onClick={() => navigate('/backup')}
+          title="System Database Backup & Restore Desk"
+          aria-label="Backup & Restore"
+        >
+          <Database size={20} />
         </button>
 
         {/* Notifications */}
