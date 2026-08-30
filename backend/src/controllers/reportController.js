@@ -504,6 +504,10 @@ async function getCollectionsReport(req, res) {
  */
 const ExcelJS = require('exceljs');
 
+/**
+ * GET /api/reports/export-collections-excel
+ * Generate Clean, Compact, High-Contrast B&W Monochrome Collections Excel
+ */
 async function exportCollectionsExcel(req, res) {
   try {
     const { preset = 'today', from_date, to_date, class_id, payment_mode } = req.query || {};
@@ -522,13 +526,13 @@ async function exportCollectionsExcel(req, res) {
       dateDesc = `This Week's Collections`;
     } else if (preset === 'this_month') {
       conditions.push('YEAR(p.payment_date) = YEAR(CURDATE()) AND MONTH(p.payment_date) = MONTH(CURDATE())');
-      dateDesc = `Current Month Collections (${new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })})`;
+      dateDesc = `Month Collections (${new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })})`;
     } else if (preset === 'session') {
       dateDesc = `Session 2025–2026 Full Collections`;
     } else if (preset === 'custom' && from_date && to_date) {
       conditions.push('DATE(p.payment_date) >= ? AND DATE(p.payment_date) <= ?');
       values.push(from_date, to_date);
-      dateDesc = `Collections from ${from_date} to ${to_date}`;
+      dateDesc = `Collections (${from_date} to ${to_date})`;
     }
 
     if (class_id) {
@@ -545,7 +549,6 @@ async function exportCollectionsExcel(req, res) {
     const rows = await db.query(`
       SELECT
         p.id,
-        p.receipt_number,
         p.payment_date,
         p.amount,
         p.payment_mode,
@@ -554,8 +557,7 @@ async function exportCollectionsExcel(req, res) {
         s.full_name as student_name,
         COALESCE(NULLIF(s.father_name, ''), NULLIF(s.parent_name, ''), '—') as father_name,
         c.name as class_name,
-        sec.name as section_name,
-        s.category
+        sec.name as section_name
       FROM payments p
       LEFT JOIN students s ON s.id = p.student_id
       LEFT JOIN classes c ON c.id = s.class_id
@@ -570,52 +572,53 @@ async function exportCollectionsExcel(req, res) {
 
     const sheet = workbook.addWorksheet('Collection Register', {
       views: [{ showGridLines: true }],
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
     });
 
-    // 1. Title Banner
-    sheet.mergeCells('A1:J1');
+    const endColLetter = 'I';
+
+    // 1. School Header Banner (High-Contrast B&W)
+    sheet.mergeCells(`A1:${endColLetter}1`);
     const titleCell = sheet.getCell('A1');
     titleCell.value = 'ARYAVART (P.S.G) SHIKSHAN SANSTHAN';
-    titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
-    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    titleCell.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FF000000' } };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    sheet.getRow(1).height = 32;
+    sheet.getRow(1).height = 24;
 
     // 2. Subtitle Banner
-    sheet.mergeCells('A2:J2');
+    sheet.mergeCells(`A2:${endColLetter}2`);
     const subCell = sheet.getCell('A2');
-    subCell.value = `FEE COLLECTION REGISTER • ${dateDesc.toUpperCase()} • GENERATED ON ${new Date().toLocaleString('en-IN')}`;
-    subCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF475569' } };
-    subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    subCell.value = `FEE COLLECTION REGISTER • ${dateDesc.toUpperCase()} • PRINTED ON ${new Date().toLocaleString('en-IN')}`;
+    subCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF333333' } };
     subCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    sheet.getRow(2).height = 22;
+    sheet.getRow(2).height = 18;
 
     sheet.addRow([]);
+    sheet.getRow(3).height = 6;
 
-    // 3. Headers
+    // 3. Clean Table Headers
     const headers = [
       'S.No',
-      'Receipt No',
-      'Payment Date',
+      'Date',
       'Adm No',
       'Student Name',
-      'Class & Sec',
       "Father's Name",
-      'Channel',
-      'Amount (Rs.)',
-      'Remarks / Note',
+      'Class & Sec',
+      'Payment Received (Rs.)',
+      'Mode (Cash/Bank)',
+      'Remarks',
     ];
     const headerRow = sheet.addRow(headers);
-    headerRow.height = 24;
+    headerRow.height = 22;
     headerRow.eachCell((cell) => {
-      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; // Light gray 10%
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.border = {
-        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        top: { style: 'medium', color: { argb: 'FF000000' } },
+        bottom: { style: 'medium', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+        right: { style: 'thin', color: { argb: 'FF9CA3AF' } },
       };
     });
 
@@ -625,30 +628,36 @@ async function exportCollectionsExcel(req, res) {
       totalAmount += amt;
       const dataRow = sheet.addRow([
         idx + 1,
-        r.receipt_number || `RCP-${r.id}`,
         r.payment_date ? new Date(r.payment_date).toLocaleDateString('en-IN') : '—',
         r.admission_no || 'N/A',
         r.student_name || '—',
-        `${r.class_name || ''} ${r.section_name ? `(${r.section_name})` : ''}`.trim(),
         r.father_name || '—',
-        r.payment_mode === 'IN_ACCOUNT' ? 'Bank / UPI' : 'Cash',
+        `${r.class_name || ''} ${r.section_name ? `(${r.section_name})` : ''}`.trim() || '—',
         amt,
+        r.payment_mode === 'IN_ACCOUNT' ? 'Bank / UPI' : 'Cash',
         r.notes || '—',
       ]);
 
-      dataRow.height = 20;
+      dataRow.height = 19;
+      const isEven = idx % 2 === 1;
       dataRow.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Arial', size: 9.5, color: { argb: 'FF000000' } };
+        if (isEven) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+        }
         cell.border = {
-          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
         };
-        if (colNumber === 1 || colNumber === 2 || colNumber === 3 || colNumber === 4 || colNumber === 8) {
+
+        if (colNumber === 1 || colNumber === 2 || colNumber === 3 || colNumber === 6 || colNumber === 8) {
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        } else if (colNumber === 9) {
+        } else if (colNumber === 7) {
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
           cell.numFmt = '#,##0.00';
+          cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF000000' } };
         } else {
           cell.alignment = { horizontal: 'left', vertical: 'middle' };
         }
@@ -662,35 +671,33 @@ async function exportCollectionsExcel(req, res) {
       '',
       '',
       '',
-      '',
-      '',
-      'GRAND TOTAL:',
+      'TOTAL RECEIVED:',
       totalAmount,
-      `${rows.length} Transactions`,
+      `${rows.length} Txns`,
+      '',
     ]);
-    totalRow.height = 24;
+    totalRow.height = 22;
     totalRow.eachCell((cell, colNumber) => {
-      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF0F172A' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
-      if (colNumber === 9) {
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
+      if (colNumber === 7) {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
         cell.numFmt = '#,##0.00';
       } else {
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
       }
       cell.border = {
-        top: { style: 'medium', color: { argb: 'FF0F172A' } },
-        bottom: { style: 'double', color: { argb: 'FF0F172A' } },
+        top: { style: 'medium', color: { argb: 'FF000000' } },
+        bottom: { style: 'double', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+        right: { style: 'thin', color: { argb: 'FF9CA3AF' } },
       };
     });
 
-    sheet.columns.forEach((col) => {
-      let maxLen = 12;
-      col.eachCell({ includeEmpty: false }, (cell) => {
-        const len = cell.value ? String(cell.value).length : 0;
-        if (len > maxLen) maxLen = Math.min(len + 4, 38);
-      });
-      col.width = maxLen;
+    // Exact Compact Column Widths (fits horizontally on page)
+    const widths = [6, 12, 14, 20, 18, 14, 18, 14, 22];
+    sheet.columns.forEach((col, idx) => {
+      col.width = widths[idx] || 15;
     });
 
     const filename = `Collections_${preset}_${new Date().toISOString().slice(0, 10)}.xlsx`;
@@ -709,7 +716,7 @@ async function exportCollectionsExcel(req, res) {
 
 /**
  * GET /api/reports/export-dues-excel
- * Generate Custom Filtered Excel Sheet of Outstanding Dues & Defaulters
+ * Generate Clean, Compact, High-Contrast B&W Monochrome Outstanding Dues Excel
  */
 async function exportDuesExcel(req, res) {
   try {
@@ -784,29 +791,31 @@ async function exportDuesExcel(req, res) {
 
     const sheet = workbook.addWorksheet('Outstanding Dues', {
       views: [{ showGridLines: true }],
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
     });
 
-    // 1. Title Banner
-    sheet.mergeCells('A1:K1');
+    const endColLetter = 'K';
+
+    // 1. Title Banner (Clean B&W)
+    sheet.mergeCells(`A1:${endColLetter}1`);
     const titleCell = sheet.getCell('A1');
     titleCell.value = 'ARYAVART (P.S.G) SHIKSHAN SANSTHAN';
-    titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
-    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF991B1B' } };
+    titleCell.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FF000000' } };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    sheet.getRow(1).height = 32;
+    sheet.getRow(1).height = 24;
 
     // 2. Subtitle Banner
-    sheet.mergeCells('A2:K2');
+    sheet.mergeCells(`A2:${endColLetter}2`);
     const subCell = sheet.getCell('A2');
-    subCell.value = `STUDENT OUTSTANDING DUES REPORT • ${aging.toUpperCase()} DEFAULTERS • GENERATED ON ${new Date().toLocaleString('en-IN')}`;
-    subCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF475569' } };
-    subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+    subCell.value = `STUDENT OUTSTANDING DUES REPORT • ${aging.toUpperCase()} DEFAULTERS • PRINTED ON ${new Date().toLocaleString('en-IN')}`;
+    subCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF333333' } };
     subCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    sheet.getRow(2).height = 22;
+    sheet.getRow(2).height = 18;
 
     sheet.addRow([]);
+    sheet.getRow(3).height = 6;
 
-    // 3. Headers
+    // 3. Clean Table Headers
     const headers = [
       'S.No',
       'Adm No',
@@ -821,16 +830,16 @@ async function exportDuesExcel(req, res) {
       'Overdue Status',
     ];
     const headerRow = sheet.addRow(headers);
-    headerRow.height = 24;
+    headerRow.height = 22;
     headerRow.eachCell((cell) => {
-      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; // Light gray
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.border = {
-        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        top: { style: 'medium', color: { argb: 'FF000000' } },
+        bottom: { style: 'medium', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+        right: { style: 'thin', color: { argb: 'FF9CA3AF' } },
       };
     });
 
@@ -849,8 +858,8 @@ async function exportDuesExcel(req, res) {
       totalOutstanding += tot;
 
       let status = '1 Month Due';
-      if (months >= 3 || tot >= 5000) status = 'Critical Defaulter (3+ Mo)';
-      else if (months === 2 || tot >= 2000) status = 'Moderate (2 Months)';
+      if (months >= 3 || tot >= 5000) status = 'Critical (3+ Mo)';
+      else if (months === 2 || tot >= 2000) status = 'Moderate (2 Mo)';
 
       const dataRow = sheet.addRow([
         idx + 1,
@@ -858,7 +867,7 @@ async function exportDuesExcel(req, res) {
         r.student_name || '—',
         r.father_name || '—',
         r.contact_number || '—',
-        `${r.class_name || ''} ${r.section_name ? `(${r.section_name})` : ''}`.trim(),
+        `${r.class_name || ''} ${r.section_name ? `(${r.section_name})` : ''}`.trim() || '—',
         r.category === 'hosteller' ? 'Hostel' : 'Day Scholar',
         mDue,
         aDue,
@@ -866,20 +875,26 @@ async function exportDuesExcel(req, res) {
         status,
       ]);
 
-      dataRow.height = 20;
+      dataRow.height = 19;
+      const isEven = idx % 2 === 1;
       dataRow.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Arial', size: 9.5, color: { argb: 'FF000000' } };
+        if (isEven) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+        }
         cell.border = {
-          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
         };
-        if (colNumber === 1 || colNumber === 2 || colNumber === 6 || colNumber === 7 || colNumber === 11) {
+
+        if (colNumber === 1 || colNumber === 2 || colNumber === 5 || colNumber === 6 || colNumber === 7 || colNumber === 11) {
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
         } else if (colNumber === 8 || colNumber === 9 || colNumber === 10) {
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
           cell.numFmt = '#,##0.00';
-          if (colNumber === 10) cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFDC2626' } };
+          if (colNumber === 10) cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF000000' } };
         } else {
           cell.alignment = { horizontal: 'left', vertical: 'middle' };
         }
@@ -900,30 +915,28 @@ async function exportDuesExcel(req, res) {
       totalOutstanding,
       `${rows.length} Defaulters`,
     ]);
-    totalRow.height = 24;
+    totalRow.height = 22;
     totalRow.eachCell((cell, colNumber) => {
-      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF0F172A' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
       if (colNumber >= 8 && colNumber <= 10) {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
         cell.numFmt = '#,##0.00';
-        cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF991B1B' } };
       } else {
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
       }
       cell.border = {
-        top: { style: 'medium', color: { argb: 'FF991B1B' } },
-        bottom: { style: 'double', color: { argb: 'FF991B1B' } },
+        top: { style: 'medium', color: { argb: 'FF000000' } },
+        bottom: { style: 'double', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+        right: { style: 'thin', color: { argb: 'FF9CA3AF' } },
       };
     });
 
-    sheet.columns.forEach((col) => {
-      let maxLen = 12;
-      col.eachCell({ includeEmpty: false }, (cell) => {
-        const len = cell.value ? String(cell.value).length : 0;
-        if (len > maxLen) maxLen = Math.min(len + 4, 38);
-      });
-      col.width = maxLen;
+    // Exact Compact Column Widths (fits cleanly on screen & A4 paper)
+    const widths = [6, 14, 20, 18, 14, 14, 12, 16, 16, 18, 16];
+    sheet.columns.forEach((col, idx) => {
+      col.width = widths[idx] || 15;
     });
 
     const filename = `Outstanding_Dues_${aging}_${new Date().toISOString().slice(0, 10)}.xlsx`;
