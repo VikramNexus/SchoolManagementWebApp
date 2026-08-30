@@ -1353,14 +1353,21 @@
 .btn-action-view {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
-  padding: 0.35rem 0.75rem;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  padding: 0 10px;
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 6px;
   color: #0284c7;
   font-size: 0.775rem;
   font-weight: 700;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
   cursor: pointer;
   transition: all 0.15s ease;
 }

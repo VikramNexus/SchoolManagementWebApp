@@ -555,21 +555,29 @@
 .action-buttons-group {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 6px;
   justify-content: center;
+  flex-wrap: nowrap;
 }
 
 .btn-action-collect-due {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #ffffff;
   border: none;
   font-size: 0.775rem;
   font-weight: 700;
-  padding: 0.45rem 0.85rem;
-  border-radius: 7px;
+  padding: 0 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
   transition: all 0.15s ease;
@@ -584,14 +592,21 @@
 .btn-action-dues-notice {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
   background: #ffffff;
   border: 1px solid #cbd5e1;
   color: #475569;
   font-size: 0.775rem;
   font-weight: 700;
-  padding: 0.4rem 0.65rem;
-  border-radius: 7px;
+  padding: 0 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -610,8 +625,14 @@
   border: 1px solid #bae6fd;
   color: #0284c7;
   width: 32px;
+  min-width: 32px;
+  max-width: 32px;
   height: 32px;
-  border-radius: 7px;
+  min-height: 32px;
+  max-height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  box-sizing: border-box;
   cursor: pointer;
   transition: all 0.15s ease;
 }

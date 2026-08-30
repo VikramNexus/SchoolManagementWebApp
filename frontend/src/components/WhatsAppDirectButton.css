@@ -61,16 +61,27 @@
 }
 
 .btn-whatsapp-direct.compact {
-  padding: 0.4rem;
+  padding: 0;
   width: 32px;
+  min-width: 32px;
+  max-width: 32px;
   height: 32px;
-  border-radius: 8px;
+  min-height: 32px;
+  max-height: 32px;
+  border-radius: 6px;
+  box-sizing: border-box;
 }
 
 .btn-whatsapp-direct.compact.sm {
-  width: 28px;
-  height: 28px;
-  padding: 0.25rem;
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  box-sizing: border-box;
 }
 
 .wa-chevron-indicator {

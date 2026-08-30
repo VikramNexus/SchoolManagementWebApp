@@ -1105,23 +1105,31 @@
 .urgency-badge.critical { background: #fee2e2; color: #dc2626; }
 
 .action-btn-cluster {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .btn-action-wa-icon {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 5px 9px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  padding: 0 10px;
   background: #25d366;
   color: #ffffff;
   border: none;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 700;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1131,14 +1139,21 @@
 .btn-action-print-icon {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 5px 9px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  padding: 0 10px;
   background: #f1f5f9;
   color: #334155;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
   cursor: pointer;
   transition: all 0.2s;
 }
