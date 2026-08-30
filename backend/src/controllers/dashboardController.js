@@ -51,20 +51,20 @@ async function getKpis(req, res) {
         WHERE s.\`status\` = 'active'
       `),
 
-      // Monthly tuition fees collected (actual sum of paid_amount across active students' monthly fee schedules)
+      // Monthly fees desk collections (all regular monthly tuition fees collected after admission)
       db.queryOne(`
-        SELECT COALESCE(SUM(mf.\`paid_amount\`), 0) as total
-        FROM \`monthly_fees\` mf
-        JOIN \`students\` s ON s.\`id\` = mf.\`student_id\`
-        WHERE s.\`status\` = 'active'
+        SELECT COALESCE(SUM(p.\`amount\`), 0) as total
+        FROM \`payments\` p
+        JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+        WHERE s.\`status\` = 'active' AND (p.\`payment_category\` != 'ADMISSION_CHARGE' OR p.\`payment_category\` IS NULL)
       `),
 
-      // Admission desk fees & one-time charges collected
+      // Admission desk collections (all fees collected at admission time, including admission charges, caution deposit, kits & advance month tuition)
       db.queryOne(`
-        SELECT COALESCE(SUM(saf.\`paid_amount\`), 0) as total
-        FROM \`student_additional_fees\` saf
-        JOIN \`students\` s ON s.\`id\` = saf.\`student_id\`
-        WHERE s.\`status\` = 'active'
+        SELECT COALESCE(SUM(p.\`amount\`), 0) as total
+        FROM \`payments\` p
+        JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+        WHERE s.\`status\` = 'active' AND p.\`payment_category\` = 'ADMISSION_CHARGE'
       `),
 
       // Outstanding fees (live sum of unpaid due_amount across monthly fees and additional charges)
