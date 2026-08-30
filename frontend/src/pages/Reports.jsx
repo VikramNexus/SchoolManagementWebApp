@@ -71,6 +71,8 @@ export default function Reports() {
 
   // Action states
   const [sendingWaId, setSendingWaId] = useState(null);
+  const [expandedReceipts, setExpandedReceipts] = useState({});
+  const [expandedDefaulters, setExpandedDefaulters] = useState({});
 
   // Excel Modal States
   const [showCollectionModal, setShowCollectionModal] = useState(false);
@@ -495,28 +497,38 @@ export default function Reports() {
                                 <td>
                                   {rcp.is_family ? (
                                     <div className="family-cell-stack">
-                                      <span className="family-pill-mini" title="Family payment for multiple siblings">
-                                        👨‍👧‍👦 Family ({rcp.sibling_count || 2} Siblings)
-                                      </span>
-                                      <div className="sibling-names-list">
-                                        {rcp.raw_names ? rcp.raw_names.split(' & ').map((name, i) => (
-                                          <div key={i} className="sibling-name-entry">
-                                            <span className="bullet">•</span>
-                                            <strong
-                                              className="sibling-name-text"
-                                              onClick={() => navigate(`/students/${rcp.student_id}`)}
-                                              title={`View ${name}'s Profile`}
-                                            >
-                                              {name}
-                                            </strong>
-                                          </div>
-                                        )) : (
-                                          <strong className="student-click-link" onClick={() => navigate(`/students/${rcp.student_id}`)}>
-                                            {rcp.student_name}
-                                          </strong>
-                                        )}
+                                      <div className="family-badge-toggle-row">
+                                        <span className="family-pill-mini" title="Family payment for multiple siblings">
+                                          👨‍👧‍👦 Family ({rcp.sibling_count || 2} Siblings)
+                                        </span>
+                                        <button
+                                          type="button"
+                                          className="btn-sibling-toggle"
+                                          onClick={() => setExpandedReceipts(prev => ({ ...prev, [rcp.id]: !prev[rcp.id] }))}
+                                          title={expandedReceipts[rcp.id] ? 'Hide sibling breakdown' : 'View individual siblings'}
+                                        >
+                                          {expandedReceipts[rcp.id] ? 'Hide' : '👁️ View'}
+                                        </button>
                                       </div>
-                                      <small className="student-adm-sub">({rcp.admission_no || 'N/A'})</small>
+                                      <div className="family-main-name">
+                                        <strong
+                                          className="student-click-link"
+                                          onClick={() => navigate(`/students/${rcp.student_id}`)}
+                                        >
+                                          {rcp.raw_names || rcp.student_name}
+                                        </strong>
+                                      </div>
+                                      {expandedReceipts[rcp.id] && (
+                                        <div className="sibling-drawer-content">
+                                          {rcp.raw_names ? rcp.raw_names.split(' & ').map((name, i) => (
+                                            <div key={i} className="sibling-drawer-item">
+                                              <span className="bullet">•</span>
+                                              <span className="sibling-name-text">{name}</span>
+                                            </div>
+                                          )) : null}
+                                          <span className="student-adm-sub">Adm: {rcp.admission_no || 'N/A'}</span>
+                                        </div>
+                                      )}
                                     </div>
                                   ) : (
                                     <>
@@ -851,28 +863,41 @@ export default function Reports() {
                               <td>
                                 {s.is_family ? (
                                   <div className="family-cell-stack">
-                                    <span className="family-pill-mini">👨‍👧‍👦 Family Account ({s.sibling_count || 2} Siblings)</span>
-                                    <div className="sibling-names-list">
-                                      {s.siblings_detail && s.siblings_detail.length > 0 ? (
-                                        s.siblings_detail.map((sib, i) => (
-                                          <div key={i} className="sibling-name-entry">
-                                            <span className="bullet">•</span>
-                                            <strong
-                                              className="sibling-name-text"
-                                              onClick={() => navigate(`/students/${sib.student_id}`)}
-                                              title={`View ${sib.student_name}'s Profile`}
-                                            >
-                                              {sib.student_name}
-                                            </strong>
-                                            <span className="sibling-meta-chip">{sib.class_name} · {sib.admission_no}</span>
-                                          </div>
-                                        ))
-                                      ) : (
-                                        <strong className="student-click-link" onClick={() => navigate(`/students/${s.id}`)}>
-                                          {s.full_name}
-                                        </strong>
-                                      )}
+                                    <div className="family-badge-toggle-row">
+                                      <span className="family-pill-mini">👨‍👧‍👦 Family Account ({s.sibling_count || 2} Siblings)</span>
+                                      <button
+                                        type="button"
+                                        className="btn-sibling-toggle"
+                                        onClick={() => setExpandedDefaulters(prev => ({ ...prev, [s.id]: !prev[s.id] }))}
+                                        title={expandedDefaulters[s.id] ? 'Hide sibling breakdown' : 'View individual siblings'}
+                                      >
+                                        {expandedDefaulters[s.id] ? 'Hide' : '👁️ View'}
+                                      </button>
                                     </div>
+                                    <div className="family-main-name">
+                                      <strong className="student-click-link" onClick={() => navigate(`/students/${s.id}`)}>
+                                        {s.full_name}
+                                      </strong>
+                                    </div>
+                                    {expandedDefaulters[s.id] && (
+                                      <div className="sibling-drawer-content">
+                                        {s.siblings_detail && s.siblings_detail.length > 0 ? (
+                                          s.siblings_detail.map((sib, i) => (
+                                            <div key={i} className="sibling-drawer-item">
+                                              <span className="bullet">•</span>
+                                              <strong
+                                                className="sibling-name-link"
+                                                onClick={() => navigate(`/students/${sib.student_id}`)}
+                                                title={`View ${sib.student_name}'s Profile`}
+                                              >
+                                                {sib.student_name}
+                                              </strong>
+                                              <span className="sibling-meta-chip">{sib.class_name} · {sib.admission_no}</span>
+                                            </div>
+                                          ))
+                                        ) : null}
+                                      </div>
+                                    )}
                                     <div className="student-parent-sub">Father: {s.father_name || s.parent_name || '—'}</div>
                                   </div>
                                 ) : (

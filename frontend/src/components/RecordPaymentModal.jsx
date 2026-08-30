@@ -49,14 +49,18 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
     initialStudent ? `${initialStudent.admission_no || ''} - ${initialStudent.full_name || ''}` : ''
   );
   const [selectedStudent, setSelectedStudent] = useState(initialStudent);
+  const [isFamilyMode, setIsFamilyMode] = useState(Boolean(initialStudent?.is_family));
+  const [familySiblings, setFamilySiblings] = useState(initialStudent?.siblings_detail || []);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [outstandingAmount, setOutstandingAmount] = useState(0);
+  const [outstandingAmount, setOutstandingAmount] = useState(
+    initialStudent?.is_family ? Number(initialStudent.total_dues || 0) : 0
+  );
 
   const [pendingMonthlyFees, setPendingMonthlyFees] = useState([]);
   const [pendingAdditionalFees, setPendingAdditionalFees] = useState([]);
 
   const [formData, setFormData] = useState({
-    amount: defaultAmount ? String(defaultAmount) : '',
+    amount: defaultAmount ? String(defaultAmount) : (initialStudent?.total_dues ? String(initialStudent.total_dues) : ''),
     payment_mode: 'CASH',
     payment_category: defaultCategory || 'MONTHLY_TUITION',
     payment_date: new Date().toISOString().slice(0, 10),
@@ -80,7 +84,26 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
   }, [toast]);
 
   // Fetch pending dues when student is selected
-  const fetchOutstanding = async (studentId) => {
+  const fetchOutstanding = async (studentId, studentObj = null) => {
+    const student = studentObj || selectedStudent || initialStudent;
+    const isFamily = student?.is_family || (student?.siblings_detail && student.siblings_detail.length > 0);
+
+    if (isFamily) {
+      try {
+        const famRes = await api.get(`/family/by-student/${studentId}`);
+        if (famRes.data?.success && famRes.data?.siblings?.length > 1) {
+          const siblings = famRes.data.siblings;
+          const totalDues = Number(famRes.data.total_family_dues || student.total_dues || 0);
+          setOutstandingAmount(totalDues);
+          setFamilySiblings(siblings);
+          setIsFamilyMode(true);
+          return;
+        }
+      } catch (famErr) {
+        console.warn('Family fetch fallback:', famErr);
+      }
+    }
+
     try {
       const res = await api.get(`/students/${studentId}/profile`);
       if (res.data.success) {
@@ -94,6 +117,7 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
         const additionalDue = additional.reduce((sum, f) => sum + Number(f.amount || 0), 0);
         const total = monthlyDue + additionalDue;
         setOutstandingAmount(total);
+        setIsFamilyMode(false);
       }
     } catch (err) {
       setOutstandingAmount(0);
@@ -105,7 +129,7 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
   useEffect(() => {
     fetchStudents();
     if (initialStudent?.id) {
-      fetchOutstanding(initialStudent.id);
+      fetchOutstanding(initialStudent.id, initialStudent);
     }
   }, [fetchStudents, initialStudent]);
 
@@ -124,7 +148,7 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
     setSelectedStudent(student);
     setSearchQuery(`${student.admission_no} - ${student.full_name}`);
     setShowDropdown(false);
-    fetchOutstanding(student.id);
+    fetchOutstanding(student.id, student);
   };
 
   const handleAmountChange = (e) => {
@@ -142,6 +166,23 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
   const calculateAllocationPreview = () => {
     let remaining = Number(formData.amount) || 0;
     if (remaining <= 0) return [];
+
+    if (isFamilyMode && familySiblings && familySiblings.length > 0) {
+      const preview = [];
+      for (const sib of familySiblings) {
+        if (remaining <= 0) break;
+        const due = Number(sib.total_due || sib.monthly_dues || 0);
+        const allocated = Math.min(remaining, due > 0 ? due : remaining);
+        remaining -= allocated;
+        preview.push({
+          title: `${sib.full_name} (${sib.class_name || 'Class'}) Fee Allocation`,
+          dueAmount: due,
+          allocatedAmount: allocated,
+          isCleared: allocated >= due,
+        });
+      }
+      return preview;
+    }
 
     const preview = [];
 
@@ -200,6 +241,46 @@ export default function RecordPaymentModal({ initialStudent = null, defaultCateg
 
     try {
       setSaving(true);
+
+      if (isFamilyMode && familySiblings && familySiblings.length > 1) {
+        let rem = Number(formData.amount);
+        const allocations = [];
+        for (const sib of familySiblings) {
+          if (rem <= 0) break;
+          const sibDue = Number(sib.total_due || sib.monthly_dues || 0);
+          const alloc = Math.min(rem, sibDue > 0 ? sibDue : rem);
+          allocations.push({
+            student_id: sib.id,
+            amount: alloc,
+          });
+          rem -= alloc;
+        }
+
+        if (rem > 0 && allocations.length > 0) {
+          allocations[0].amount += rem;
+        }
+
+        const famPayload = {
+          family_id: selectedStudent.family_id,
+          payment_mode: formData.payment_mode || 'CASH',
+          payment_date: formData.payment_date,
+          notes: formData.notes || 'Combined family fee payment',
+          allocations,
+        };
+
+        const res = await api.post('/family/record-payment', famPayload);
+        if (res.data.success) {
+          toast.success(`Family payment of ₹${Number(formData.amount).toLocaleString('en-IN')} recorded successfully.`);
+          setRecordedPaymentSuccess({
+            id: res.data.payments?.[0]?.payment_id || 1,
+            receipt_number: res.data.receipt_number,
+            is_family: true,
+            allocations: res.data.payments,
+          });
+        }
+        return;
+      }
+
       const payload = {
         student_id: selectedStudent.id,
         amount: Number(formData.amount),
