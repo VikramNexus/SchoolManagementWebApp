@@ -507,9 +507,14 @@ export default function PendingFees() {
                     <tr key={std.id} className="pending-table-row">
                       <td className="student-name-cell">
                         <div className="student-info-block">
+                          {std.is_family && (
+                            <span className="family-account-badge" title="Combined Family Account for all siblings">
+                              <Users size={12} /> Family ({std.sibling_count} Siblings)
+                            </span>
+                          )}
                           <button
                             type="button"
-                            className="student-name-link"
+                            className="student-name-link font-bold"
                             onClick={() => navigate(`/students/${std.id}`)}
                             title="Open Student Profile & Fee Ledger"
                           >

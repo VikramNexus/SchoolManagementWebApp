@@ -175,7 +175,7 @@ async function getExecutiveOverview(req, res) {
 
 /**
  * GET /api/reports/pending-dues-list
- * List all active students with outstanding dues breakdown & aging tier
+ * List active students/families with outstanding dues breakdown & aging tier (Unified Sibling Aggregation)
  */
 async function getPendingDuesList(req, res) {
   const { tab, type, search, class_id, category, aging, page = 1, limit = 50 } = req.query || {};
@@ -200,7 +200,6 @@ async function getPendingDuesList(req, res) {
     }
 
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
-
     const numLimit = Math.max(1, Number(limit) || 50);
     const numPage = Math.max(1, Number(page) || 1);
     const numOffset = (numPage - 1) * numLimit;
@@ -222,6 +221,7 @@ async function getPendingDuesList(req, res) {
         s.id,
         s.admission_no,
         s.full_name,
+        s.family_id,
         COALESCE(NULLIF(s.father_name, ''), NULLIF(s.parent_name, ''), '—') as father_name,
         s.parent_name,
         s.phone,
@@ -250,81 +250,133 @@ async function getPendingDuesList(req, res) {
       ${whereClause}
       ${havingCondition}
       ${orderClause}
-      LIMIT ? OFFSET ?
     `;
 
-    const students = await db.query(dataSql, [...values, numLimit, numOffset]);
+    const rawStudents = await db.query(dataSql, values);
 
-    // Calculate totals
-    const totalsSql = `
-      SELECT
-        COUNT(DISTINCT student_id) as total_students,
-        COALESCE(SUM(monthly_due), 0) as total_monthly_dues,
-        COALESCE(SUM(add_due), 0) as total_additional_dues,
-        COALESCE(SUM(total_due), 0) as total_outstanding
-      FROM (
-        SELECT
-          s.id as student_id,
-          COALESCE(
-            (SELECT SUM(mf.due_amount)
-             FROM monthly_fees mf
-             WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')), 0
-          ) as monthly_due,
-          COALESCE(
-            (SELECT COUNT(mf.id)
-             FROM monthly_fees mf
-             WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')), 0
-          ) as overdue_months,
-          COALESCE(
-            (SELECT SUM(GREATEST(0, saf.amount - saf.paid_amount - saf.discount_amount))
-             FROM student_additional_fees saf
-             WHERE saf.student_id = s.id AND saf.status IN ('DUE', 'PARTIAL')), 0
-          ) as add_due,
-          (
-            COALESCE((SELECT SUM(mf.due_amount) FROM monthly_fees mf WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')), 0) +
-            COALESCE((SELECT SUM(GREATEST(0, saf.amount - saf.paid_amount - saf.discount_amount)) FROM student_additional_fees saf WHERE saf.student_id = s.id AND saf.status IN ('DUE', 'PARTIAL')), 0)
-          ) as total_due
-        FROM students s
-        ${whereClause}
-      ) sub
-      WHERE ${isMonthlyOnly ? 'monthly_due > 0' : 'total_due > 0'}
-      ${aging === 'mild' ? 'AND overdue_months <= 1' : aging === 'moderate' ? 'AND overdue_months = 2' : aging === 'critical' ? 'AND overdue_months >= 3' : ''}
-    `;
-    const totals = await db.queryOne(totalsSql, values);
+    // Group siblings by family_id
+    const familyMap = new Map();
+    const individualList = [];
 
-    const formattedStudents = students.map((s) => {
-      const mDue = Number(s.monthly_dues);
-      const aDue = Number(s.additional_dues);
+    rawStudents.forEach((r) => {
+      const mDue = Number(r.monthly_dues || 0);
+      const aDue = Number(r.additional_dues || 0);
       const tot = isMonthlyOnly ? mDue : mDue + aDue;
-      const months = Number(s.overdue_months || 0);
-      let tier = 'mild';
-      if (months >= 3 || tot >= 5000) tier = 'critical';
-      else if (months === 2 || tot >= 2000) tier = 'moderate';
+      const months = Number(r.overdue_months || 0);
+      const classLabel = `${r.class_name || ''}${r.section_name ? ` (${r.section_name})` : ''}`.trim() || '—';
 
-      return {
-        ...s,
+      const formatted = {
+        ...r,
         monthly_dues: mDue,
         additional_dues: aDue,
         total_dues: tot,
         overdue_months: months,
-        tier,
+        class_label: classLabel,
       };
+
+      if (r.family_id) {
+        if (!familyMap.has(r.family_id)) {
+          familyMap.set(r.family_id, []);
+        }
+        familyMap.get(r.family_id).push(formatted);
+      } else {
+        individualList.push(formatted);
+      }
     });
+
+    const aggregatedList = [];
+
+    // Process families
+    for (const [famId, siblings] of familyMap.entries()) {
+      if (siblings.length === 1) {
+        const s = siblings[0];
+        let tier = 'mild';
+        if (s.overdue_months >= 3 || s.total_dues >= 5000) tier = 'critical';
+        else if (s.overdue_months === 2 || s.total_dues >= 2000) tier = 'moderate';
+
+        aggregatedList.push({
+          ...s,
+          is_family: false,
+          sibling_count: 1,
+          sibling_ids: [s.id],
+          tier,
+        });
+      } else {
+        const primary = siblings[0];
+        const combinedNames = siblings.map((s) => `${s.full_name} (${s.class_label})`).join(' & ');
+        const rawNames = siblings.map((s) => s.full_name).join(' & ');
+        const combinedAdmNos = siblings.map((s) => s.admission_no).join(', ');
+        const combinedClasses = siblings.map((s) => s.class_label).join(', ');
+        const totalMonthly = siblings.reduce((sum, s) => sum + s.monthly_dues, 0);
+        const totalAdditional = siblings.reduce((sum, s) => sum + s.additional_dues, 0);
+        const totalOverall = totalMonthly + totalAdditional;
+        const maxMonths = Math.max(...siblings.map((s) => s.overdue_months));
+
+        let tier = 'mild';
+        if (maxMonths >= 3 || totalOverall >= 5000) tier = 'critical';
+        else if (maxMonths === 2 || totalOverall >= 2000) tier = 'moderate';
+
+        aggregatedList.push({
+          ...primary,
+          id: primary.id,
+          is_family: true,
+          family_id: famId,
+          sibling_count: siblings.length,
+          sibling_ids: siblings.map((s) => s.id),
+          full_name: combinedNames,
+          raw_names: rawNames,
+          admission_no: combinedAdmNos,
+          class_name: combinedClasses,
+          monthly_dues: totalMonthly,
+          additional_dues: totalAdditional,
+          total_dues: totalOverall,
+          overdue_months: maxMonths,
+          tier,
+          siblings_detail: siblings,
+        });
+      }
+    }
+
+    // Add individual students
+    individualList.forEach((s) => {
+      let tier = 'mild';
+      if (s.overdue_months >= 3 || s.total_dues >= 5000) tier = 'critical';
+      else if (s.overdue_months === 2 || s.total_dues >= 2000) tier = 'moderate';
+
+      aggregatedList.push({
+        ...s,
+        is_family: false,
+        sibling_count: 1,
+        sibling_ids: [s.id],
+        tier,
+      });
+    });
+
+    // Sort by total_dues DESC
+    aggregatedList.sort((a, b) => b.total_dues - a.total_dues);
+
+    // Calculate pagination slice
+    const totalItems = aggregatedList.length;
+    const paginatedStudents = aggregatedList.slice(numOffset, numOffset + numLimit);
+
+    const totalMonthlyDues = aggregatedList.reduce((sum, s) => sum + s.monthly_dues, 0);
+    const totalAdditionalDues = aggregatedList.reduce((sum, s) => sum + s.additional_dues, 0);
+    const totalOutstanding = totalMonthlyDues + totalAdditionalDues;
 
     return res.json({
       success: true,
-      students: formattedStudents,
+      students: paginatedStudents,
       summary: {
-        total_students_with_dues: totals?.total_students || 0,
-        total_monthly_dues: Number(totals?.total_monthly_dues || 0),
-        total_additional_dues: Number(totals?.total_additional_dues || 0),
-        total_outstanding: Number(totals?.total_outstanding || 0),
+        total_students_with_dues: totalItems,
+        total_monthly_dues: totalMonthlyDues,
+        total_additional_dues: totalAdditionalDues,
+        total_outstanding: totalOutstanding,
       },
       pagination: {
         page: numPage,
         limit: numLimit,
-        total: totals?.total_students || 0,
-        totalPages: Math.ceil((totals?.total_students || 0) / numLimit),
+        total: totalItems,
+        totalPages: Math.ceil(totalItems / numLimit),
       },
     });
   } catch (err) {
@@ -725,8 +777,220 @@ async function exportCollectionsExcel(req, res) {
 }
 
 /**
+ * GET /api/reports/pending-dues-list
+ * List active students/families with outstanding dues breakdown & aging tier
+ */
+async function getPendingDuesList(req, res) {
+  const { tab, type, search, class_id, category, aging, page = 1, limit = 50 } = req.query || {};
+  const isMonthlyOnly = (tab === 'monthly' || type === 'monthly');
+
+  try {
+    const conditions = ["s.`status` = 'active'"];
+    const values = [];
+
+    if (search) {
+      conditions.push('(s.`admission_no` LIKE ? OR s.`full_name` LIKE ? OR s.`phone` LIKE ? OR s.`father_name` LIKE ? OR s.`parent_name` LIKE ?)');
+      const term = `%${search}%`;
+      values.push(term, term, term, term, term);
+    }
+    if (class_id) {
+      conditions.push('s.`class_id` = ?');
+      values.push(Number(class_id));
+    }
+    if (category) {
+      conditions.push('s.`category` = ?');
+      values.push(category);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+    const numLimit = Math.max(1, Number(limit) || 50);
+    const numPage = Math.max(1, Number(page) || 1);
+    const numOffset = (numPage - 1) * numLimit;
+
+    let havingCondition = isMonthlyOnly ? 'HAVING monthly_dues > 0' : 'HAVING (monthly_dues + additional_dues) > 0';
+
+    if (aging === 'mild') {
+      havingCondition += ' AND overdue_months <= 1';
+    } else if (aging === 'moderate') {
+      havingCondition += ' AND overdue_months = 2';
+    } else if (aging === 'critical') {
+      havingCondition += ' AND overdue_months >= 3';
+    }
+
+    const orderClause = isMonthlyOnly ? 'ORDER BY monthly_dues DESC' : 'ORDER BY (monthly_dues + additional_dues) DESC';
+
+    const dataSql = `
+      SELECT
+        s.id,
+        s.admission_no,
+        s.full_name,
+        s.family_id,
+        COALESCE(NULLIF(s.father_name, ''), NULLIF(s.parent_name, ''), '—') as father_name,
+        s.parent_name,
+        s.phone,
+        s.whatsapp_number,
+        s.category,
+        c.name as class_name,
+        sec.name as section_name,
+        COALESCE(
+          (SELECT SUM(mf.due_amount)
+           FROM monthly_fees mf
+           WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')), 0
+        ) as monthly_dues,
+        COALESCE(
+          (SELECT COUNT(mf.id)
+           FROM monthly_fees mf
+           WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')), 0
+        ) as overdue_months,
+        COALESCE(
+          (SELECT SUM(GREATEST(0, saf.amount - saf.paid_amount - saf.discount_amount))
+           FROM student_additional_fees saf
+           WHERE saf.student_id = s.id AND saf.status IN ('DUE', 'PARTIAL')), 0
+        ) as additional_dues
+      FROM students s
+      LEFT JOIN classes c ON c.id = s.class_id
+      LEFT JOIN sections sec ON sec.id = s.section_id
+      ${whereClause}
+      ${havingCondition}
+      ${orderClause}
+    `;
+
+    const rawStudents = await db.query(dataSql, values);
+
+    // Group siblings by family_id
+    const familyMap = new Map();
+    const individualList = [];
+
+    rawStudents.forEach((r) => {
+      const mDue = Number(r.monthly_dues || 0);
+      const aDue = Number(r.additional_dues || 0);
+      const tot = isMonthlyOnly ? mDue : mDue + aDue;
+      const months = Number(r.overdue_months || 0);
+      const classLabel = `${r.class_name || ''}${r.section_name ? ` (${r.section_name})` : ''}`.trim() || '—';
+
+      const formatted = {
+        ...r,
+        monthly_dues: mDue,
+        additional_dues: aDue,
+        total_dues: tot,
+        overdue_months: months,
+        class_label: classLabel,
+      };
+
+      if (r.family_id) {
+        if (!familyMap.has(r.family_id)) {
+          familyMap.set(r.family_id, []);
+        }
+        familyMap.get(r.family_id).push(formatted);
+      } else {
+        individualList.push(formatted);
+      }
+    });
+
+    const aggregatedList = [];
+
+    // Process families
+    for (const [famId, siblings] of familyMap.entries()) {
+      if (siblings.length === 1) {
+        const s = siblings[0];
+        let tier = 'mild';
+        if (s.overdue_months >= 3 || s.total_dues >= 5000) tier = 'critical';
+        else if (s.overdue_months === 2 || s.total_dues >= 2000) tier = 'moderate';
+
+        aggregatedList.push({
+          ...s,
+          is_family: false,
+          sibling_count: 1,
+          sibling_ids: [s.id],
+          tier,
+        });
+      } else {
+        const primary = siblings[0];
+        const combinedNames = siblings.map((s) => `${s.full_name} (${s.class_label})`).join(' & ');
+        const rawNames = siblings.map((s) => s.full_name).join(' & ');
+        const combinedAdmNos = siblings.map((s) => s.admission_no).join(', ');
+        const combinedClasses = siblings.map((s) => s.class_label).join(', ');
+        const totalMonthly = siblings.reduce((sum, s) => sum + s.monthly_dues, 0);
+        const totalAdditional = siblings.reduce((sum, s) => sum + s.additional_dues, 0);
+        const totalOverall = totalMonthly + totalAdditional;
+        const maxMonths = Math.max(...siblings.map((s) => s.overdue_months));
+
+        let tier = 'mild';
+        if (maxMonths >= 3 || totalOverall >= 5000) tier = 'critical';
+        else if (maxMonths === 2 || totalOverall >= 2000) tier = 'moderate';
+
+        aggregatedList.push({
+          ...primary,
+          id: primary.id,
+          is_family: true,
+          family_id: famId,
+          sibling_count: siblings.length,
+          sibling_ids: siblings.map((s) => s.id),
+          full_name: combinedNames,
+          raw_names: rawNames,
+          admission_no: combinedAdmNos,
+          class_name: combinedClasses,
+          monthly_dues: totalMonthly,
+          additional_dues: totalAdditional,
+          total_dues: totalOverall,
+          overdue_months: maxMonths,
+          tier,
+          siblings_detail: siblings,
+        });
+      }
+    }
+
+    // Add individual students
+    individualList.forEach((s) => {
+      let tier = 'mild';
+      if (s.overdue_months >= 3 || s.total_dues >= 5000) tier = 'critical';
+      else if (s.overdue_months === 2 || s.total_dues >= 2000) tier = 'moderate';
+
+      aggregatedList.push({
+        ...s,
+        is_family: false,
+        sibling_count: 1,
+        sibling_ids: [s.id],
+        tier,
+      });
+    });
+
+    // Sort by total_dues DESC
+    aggregatedList.sort((a, b) => b.total_dues - a.total_dues);
+
+    // Calculate pagination slice
+    const totalItems = aggregatedList.length;
+    const paginatedStudents = aggregatedList.slice(numOffset, numOffset + numLimit);
+
+    const totalMonthlyDues = aggregatedList.reduce((sum, s) => sum + s.monthly_dues, 0);
+    const totalAdditionalDues = aggregatedList.reduce((sum, s) => sum + s.additional_dues, 0);
+    const totalOutstanding = totalMonthlyDues + totalAdditionalDues;
+
+    return res.json({
+      success: true,
+      students: paginatedStudents,
+      summary: {
+        total_students_with_dues: totalItems,
+        total_monthly_dues: totalMonthlyDues,
+        total_additional_dues: totalAdditionalDues,
+        total_outstanding: totalOutstanding,
+      },
+      pagination: {
+        page: numPage,
+        limit: numLimit,
+        total: totalItems,
+        totalPages: Math.ceil(totalItems / numLimit),
+      },
+    });
+  } catch (err) {
+    console.error('[reportController.getPendingDuesList]', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch pending dues list.' });
+  }
+}
+
+/**
  * GET /api/reports/export-dues-excel
- * Generate Clean, Compact, High-Contrast B&W Monochrome Outstanding Dues Excel
+ * Generate Clean, Compact, High-Contrast B&W Monochrome Outstanding Dues Excel with Sibling Unification
  */
 async function exportDuesExcel(req, res) {
   try {
@@ -761,6 +1025,7 @@ async function exportDuesExcel(req, res) {
         s.id,
         s.admission_no,
         s.full_name as student_name,
+        s.family_id,
         COALESCE(NULLIF(s.father_name, ''), NULLIF(s.parent_name, ''), '—') as father_name,
         COALESCE(NULLIF(s.phone, ''), NULLIF(s.whatsapp_number, ''), '—') as contact_number,
         c.name as class_name,
@@ -794,6 +1059,75 @@ async function exportDuesExcel(req, res) {
     `;
 
     const rows = await db.query(sql, values);
+
+    // Group by family_id
+    const famMap = new Map();
+    const singleList = [];
+
+    rows.forEach((r) => {
+      const classLabel = `${r.class_name || ''}${r.section_name ? ` (${r.section_name})` : ''}`.trim() || '—';
+      const item = {
+        ...r,
+        monthly_due: Number(r.monthly_due || 0),
+        add_due: Number(r.add_due || 0),
+        total_due: Number(r.total_due || 0),
+        overdue_months: Number(r.overdue_months || 0),
+        class_label: classLabel,
+      };
+
+      if (r.family_id) {
+        if (!famMap.has(r.family_id)) famMap.set(r.family_id, []);
+        famMap.get(r.family_id).push(item);
+      } else {
+        singleList.push(item);
+      }
+    });
+
+    const finalRows = [];
+    for (const [fId, siblings] of famMap.entries()) {
+      if (siblings.length === 1) {
+        const s = siblings[0];
+        let status = '1 Month Due';
+        if (s.overdue_months >= 3 || s.total_due >= 5000) status = 'Critical (3+ Mo)';
+        else if (s.overdue_months === 2 || s.total_due >= 2000) status = 'Moderate (2 Mo)';
+        finalRows.push({ ...s, status, is_family: false });
+      } else {
+        const combinedNames = siblings.map((s) => `${s.student_name} (${s.class_label})`).join(', ');
+        const combinedAdms = siblings.map((s) => s.admission_no).join(', ');
+        const combinedClasses = siblings.map((s) => s.class_label).join(', ');
+        const totM = siblings.reduce((sum, s) => sum + s.monthly_due, 0);
+        const totA = siblings.reduce((sum, s) => sum + s.add_due, 0);
+        const totO = totM + totA;
+        const maxM = Math.max(...siblings.map((s) => s.overdue_months));
+
+        let status = '1 Month Due';
+        if (maxM >= 3 || totO >= 5000) status = 'Critical (3+ Mo)';
+        else if (maxM === 2 || totO >= 2000) status = 'Moderate (2 Mo)';
+
+        finalRows.push({
+          ...siblings[0],
+          student_name: combinedNames,
+          admission_no: combinedAdms,
+          class_label: combinedClasses,
+          monthly_due: totM,
+          add_due: totA,
+          total_due: totO,
+          overdue_months: maxM,
+          status,
+          is_family: true,
+          sibling_count: siblings.length,
+        });
+      }
+    }
+
+    singleList.forEach((s) => {
+      let status = '1 Month Due';
+      if (s.overdue_months >= 3 || s.total_due >= 5000) status = 'Critical (3+ Mo)';
+      else if (s.overdue_months === 2 || s.total_due >= 2000) status = 'Moderate (2 Mo)';
+      finalRows.push({ ...s, status, is_family: false });
+    });
+
+    finalRows.sort((a, b) => b.total_due - a.total_due);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Aryavart (P.S.G) Shikshan Sansthan';
@@ -843,7 +1177,7 @@ async function exportDuesExcel(req, res) {
     headerRow.height = 24;
     headerRow.eachCell((cell) => {
       cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; // Light gray
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.border = {
         top: { style: 'medium', color: { argb: 'FF000000' } },
@@ -857,19 +1191,14 @@ async function exportDuesExcel(req, res) {
     let totalAdd = 0;
     let totalOutstanding = 0;
 
-    rows.forEach((r, idx) => {
+    finalRows.forEach((r, idx) => {
       const mDue = Number(r.monthly_due || 0);
       const aDue = Number(r.add_due || 0);
       const tot = Number(r.total_due || 0);
-      const months = Number(r.overdue_months || 0);
 
       totalMonthly += mDue;
       totalAdd += aDue;
       totalOutstanding += tot;
-
-      let status = '1 Month Due';
-      if (months >= 3 || tot >= 5000) status = 'Critical (3+ Mo)';
-      else if (months === 2 || tot >= 2000) status = 'Moderate (2 Mo)';
 
       const dataRow = sheet.addRow([
         idx + 1,
@@ -877,12 +1206,12 @@ async function exportDuesExcel(req, res) {
         r.student_name || '—',
         r.father_name || '—',
         r.contact_number || '—',
-        `${r.class_name || ''} ${r.section_name ? `(${r.section_name})` : ''}`.trim() || '—',
+        r.class_label || '—',
         r.category === 'hosteller' ? 'Hostel' : 'Day Scholar',
         mDue,
         aDue,
         tot,
-        status,
+        r.status,
       ]);
 
       dataRow.height = 20;
@@ -900,13 +1229,13 @@ async function exportDuesExcel(req, res) {
         };
 
         if (colNumber === 1 || colNumber === 2 || colNumber === 5 || colNumber === 6 || colNumber === 7 || colNumber === 11) {
-          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         } else if (colNumber === 8 || colNumber === 9 || colNumber === 10) {
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
           cell.numFmt = '#,##0.00';
           if (colNumber === 10) cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF000000' } };
         } else {
-          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
         }
       });
     });
@@ -923,7 +1252,7 @@ async function exportDuesExcel(req, res) {
       totalMonthly,
       totalAdd,
       totalOutstanding,
-      `${rows.length} Defaulters`,
+      `${finalRows.length} Defaulters`,
     ]);
     totalRow.height = 24;
     totalRow.eachCell((cell, colNumber) => {
@@ -945,10 +1274,15 @@ async function exportDuesExcel(req, res) {
       };
     });
 
-    // Exact Column Widths with generous padding to prevent ANY text clipping
-    const widths = [7, 16, 24, 22, 16, 15, 14, 22, 24, 26, 22];
+    // Dynamic Column Widths with padding and wrapping
+    const defaultDuesWidths = [7, 16, 26, 22, 16, 18, 14, 22, 24, 26, 22];
     sheet.columns.forEach((col, idx) => {
-      col.width = widths[idx] || 16;
+      let maxLen = defaultDuesWidths[idx] || 16;
+      col.eachCell({ includeEmpty: false }, (cell) => {
+        const len = cell.value ? String(cell.value).length : 0;
+        if (len > maxLen) maxLen = Math.min(len + 4, 55);
+      });
+      col.width = maxLen;
     });
 
     const filename = `Outstanding_Dues_${aging}_${new Date().toISOString().slice(0, 10)}.xlsx`;

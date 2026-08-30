@@ -427,18 +427,42 @@ async function sendReceiptWhatsApp(req, res) {
       return res.status(400).json({ success: false, message: 'No phone or WhatsApp number registered for student.' });
     }
 
-    const school = await db.queryOne('SELECT `school_name`, `phone` FROM `school_settings` WHERE `id` = 1') || { school_name: 'Aryavart Public School' };
+    const school = await db.queryOne('SELECT `school_name`, `phone` FROM `school_settings` WHERE `id` = 1') || { school_name: 'Aryavart (P.S.G) Shikshan Sansthan' };
+
+    // Check if family payment
+    const familyId = payment.family_id || (await db.queryOne('SELECT `family_id` FROM `students` WHERE `id` = ?', [payment.student_id]))?.family_id;
+    let siblings = [];
+    if (familyId) {
+      siblings = await db.query(`
+        SELECT s.id, s.admission_no, s.full_name, c.name as class_name, sec.name as section_name
+        FROM students s
+        LEFT JOIN classes c ON c.id = s.class_id
+        LEFT JOIN sections sec ON sec.id = s.section_id
+        WHERE s.family_id = ? AND s.status != 'deleted'
+        ORDER BY s.id ASC
+      `, [familyId]);
+    }
+
+    const isMultiSibling = siblings.length > 1;
 
     // Get outstanding
-    const monthlyDue = await db.queryOne(
-      `SELECT COALESCE(SUM(\`due_amount\`), 0) as total FROM \`monthly_fees\` WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
-      [payment.student_id]
-    );
-    const additionalDue = await db.queryOne(
-      `SELECT COALESCE(SUM(\`amount\`), 0) as total FROM \`student_additional_fees\` WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
-      [payment.student_id]
-    );
-    const totalOutstanding = Number(monthlyDue?.total || 0) + Number(additionalDue?.total || 0);
+    let totalOutstanding = 0;
+    if (isMultiSibling) {
+      const sibIds = siblings.map(s => s.id);
+      const mDues = await db.queryOne(`SELECT COALESCE(SUM(due_amount), 0) as total FROM monthly_fees WHERE student_id IN (?) AND status IN ('DUE', 'PARTIAL')`, [sibIds]);
+      const aDues = await db.queryOne(`SELECT COALESCE(SUM(amount), 0) as total FROM student_additional_fees WHERE student_id IN (?) AND status IN ('DUE', 'PARTIAL')`, [sibIds]);
+      totalOutstanding = Number(mDues?.total || 0) + Number(aDues?.total || 0);
+    } else {
+      const monthlyDue = await db.queryOne(
+        `SELECT COALESCE(SUM(\`due_amount\`), 0) as total FROM \`monthly_fees\` WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
+        [payment.student_id]
+      );
+      const additionalDue = await db.queryOne(
+        `SELECT COALESCE(SUM(\`amount\`), 0) as total FROM \`student_additional_fees\` WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
+        [payment.student_id]
+      );
+      totalOutstanding = Number(monthlyDue?.total || 0) + Number(additionalDue?.total || 0);
+    }
 
     const formattedDate = new Date(payment.payment_date).toLocaleDateString('en-IN', {
       day: '2-digit',
@@ -450,21 +474,24 @@ async function sendReceiptWhatsApp(req, res) {
     const amountStr = `₹${Number(payment.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
     const outstandingStr = `₹${totalOutstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
+    let studentHeader = `👤 *Student:* ${payment.full_name}\n🆔 *Adm No:* ${payment.admission_no || 'N/A'}\n🏫 *Class:* ${payment.class_name || 'N/A'}${payment.section_name ? ` (${payment.section_name})` : ''}`;
+    if (isMultiSibling) {
+      const sibList = siblings.map(s => `  • ${s.full_name} (${s.class_name || ''}${s.section_name ? ` ${s.section_name}` : ''}) — Adm No: ${s.admission_no || '—'}`).join('\n');
+      studentHeader = `👨‍👧‍👦 *Students (Family Account):*\n${sibList}`;
+    }
+
     const messageText = 
-`🧾 *${(school.school_name || 'ARYAVART PUBLIC SCHOOL').toUpperCase()}*
-*FEE PAYMENT RECEIPT*
+`🧾 *${(school.school_name || 'ARYAVART (P.S.G) SHIKSHAN SANSTHAN').toUpperCase()}*
+*${isMultiSibling ? 'FAMILY ' : ''}FEE PAYMENT RECEIPT*
 ━━━━━━━━━━━━━━━━━━━━
 📄 *Receipt No:* ${receiptNo}
 📅 *Payment Date:* ${formattedDate}
 
-👤 *Student:* ${payment.full_name}
-🆔 *Adm No:* ${payment.admission_no || 'N/A'}
-🏫 *Class:* ${payment.class_name || 'N/A'}${payment.section_name ? ` (${payment.section_name})` : ''}
+${studentHeader}
 
 💰 *Amount Paid:* ${amountStr}
-💳 *Payment Mode:* ${payment.payment_mode || 'Cash'}
-${payment.notes ? `📝 *Note:* ${payment.notes}\n` : ''}
-📊 *Current Balance Due:* ${outstandingStr}
+💳 *Payment Mode:* ${payment.payment_mode === 'IN_ACCOUNT' ? 'Bank / Online Transfer' : 'Cash'}
+${payment.notes ? `📝 *Note:* ${payment.notes}\n` : ''}📊 *Current Balance Due:* ${outstandingStr}
 ━━━━━━━━━━━━━━━━━━━━
 Thank you for your payment!
 _${school.school_name}_`;
@@ -490,7 +517,7 @@ _${school.school_name}_`;
 
 /**
  * POST /api/receipts/send-dues-whatsapp/:studentId
- * Dispatch itemized Dues Notice directly via WhatsApp in background
+ * Dispatch itemized Dues Notice directly via WhatsApp in background (with unified sibling support)
  */
 async function sendDuesNoticeWhatsApp(req, res) {
   const { studentId } = req.params;
@@ -514,25 +541,69 @@ async function sendDuesNoticeWhatsApp(req, res) {
       return res.status(400).json({ success: false, message: 'No phone or WhatsApp number registered for student.' });
     }
 
-    const school = await db.queryOne('SELECT `school_name`, `phone` FROM `school_settings` WHERE `id` = 1') || { school_name: 'Aryavart Public School' };
+    const school = await db.queryOne('SELECT `school_name`, `phone` FROM `school_settings` WHERE `id` = 1') || { school_name: 'Aryavart (P.S.G) Shikshan Sansthan' };
 
-    // Get itemized dues
-    const monthlyDue = await db.queryOne(
-      `SELECT COALESCE(SUM(\`due_amount\`), 0) as total FROM \`monthly_fees\` WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
-      [studentId]
-    );
-    const additionalDue = await db.queryOne(
-      `SELECT COALESCE(SUM(\`amount\`), 0) as total FROM \`student_additional_fees\` WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
-      [studentId]
-    );
-    const totalOutstanding = Number(monthlyDue?.total || 0) + Number(additionalDue?.total || 0);
+    // Check if family has multiple siblings
+    let siblings = [];
+    if (student.family_id) {
+      siblings = await db.query(`
+        SELECT s.id, s.admission_no, s.full_name, c.name as class_name, sec.name as section_name,
+               COALESCE((SELECT SUM(mf.due_amount) FROM monthly_fees mf WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')), 0) as monthly_dues,
+               COALESCE((SELECT SUM(GREATEST(0, saf.amount - saf.paid_amount - saf.discount_amount)) FROM student_additional_fees saf WHERE saf.student_id = s.id AND saf.status IN ('DUE', 'PARTIAL')), 0) as additional_dues
+        FROM students s
+        LEFT JOIN classes c ON c.id = s.class_id
+        LEFT JOIN sections sec ON sec.id = s.section_id
+        WHERE s.family_id = ? AND s.status = 'active'
+        ORDER BY s.id ASC
+      `, [student.family_id]);
+    }
 
-    const mStr = `₹${Number(monthlyDue?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-    const aStr = `₹${Number(additionalDue?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-    const totalStr = `₹${totalOutstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    const isMultiSibling = siblings.length > 1;
 
-    const messageText = 
-`⚠️ *${(school.school_name || 'ARYAVART PUBLIC SCHOOL').toUpperCase()}*
+    let messageText = '';
+    if (isMultiSibling) {
+      const totMonthly = siblings.reduce((sum, s) => sum + Number(s.monthly_dues || 0), 0);
+      const totAdditional = siblings.reduce((sum, s) => sum + Number(s.additional_dues || 0), 0);
+      const totCombined = totMonthly + totAdditional;
+
+      const sibLines = siblings.map(s => {
+        const d = Number(s.monthly_dues || 0) + Number(s.additional_dues || 0);
+        return `  • *${s.full_name}* (${s.class_name || ''}${s.section_name ? ` ${s.section_name}` : ''}) — Dues: ₹${d.toLocaleString('en-IN')}`;
+      }).join('\n');
+
+      messageText = 
+`⚠️ *${(school.school_name || 'ARYAVART (P.S.G) SHIKSHAN SANSTHAN').toUpperCase()}*
+*FAMILY FEE DUES NOTICE & DEMAND BILL*
+━━━━━━━━━━━━━━━━━━━━
+Dear Parent / Guardian,
+This is a gentle fee reminder regarding outstanding school fees for your children:
+
+👨‍👧‍👦 *Students & Classes:*
+${sibLines}
+
+📅 *Total Monthly Dues:* ₹${totMonthly.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+🏷️ *Additional Charges:* ₹${totAdditional.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+🔴 *COMBINED TOTAL OUTSTANDING:* ₹${totCombined.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+━━━━━━━━━━━━━━━━━━━━
+Kindly clear the pending dues at your earliest convenience to ensure uninterrupted academic facilities.
+_${school.school_name}_`;
+    } else {
+      const monthlyDue = await db.queryOne(
+        `SELECT COALESCE(SUM(\`due_amount\`), 0) as total FROM \`monthly_fees\` WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
+        [studentId]
+      );
+      const additionalDue = await db.queryOne(
+        `SELECT COALESCE(SUM(\`amount\`), 0) as total FROM \`student_additional_fees\` WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
+        [studentId]
+      );
+      const totalOutstanding = Number(monthlyDue?.total || 0) + Number(additionalDue?.total || 0);
+
+      const mStr = `₹${Number(monthlyDue?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      const aStr = `₹${Number(additionalDue?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      const totalStr = `₹${totalOutstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+      messageText = 
+`⚠️ *${(school.school_name || 'ARYAVART (P.S.G) SHIKSHAN SANSTHAN').toUpperCase()}*
 *FEE DUES NOTICE & DEMAND BILL*
 ━━━━━━━━━━━━━━━━━━━━
 Dear Parent / Guardian,
@@ -548,6 +619,7 @@ This is a gentle reminder regarding the outstanding school fees for your ward:
 ━━━━━━━━━━━━━━━━━━━━
 Kindly clear the pending dues at your earliest convenience to ensure uninterrupted academic facilities.
 _${school.school_name}_`;
+    }
 
     const { sendWhatsApp } = require('../services/whatsappService');
     const result = await sendWhatsApp(recipientPhone, messageText, {
