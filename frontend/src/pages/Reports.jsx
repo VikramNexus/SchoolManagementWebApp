@@ -1,14 +1,14 @@
 /**
  * Reports Page — School Management System (Frontend)
- * Professional 4-Pillar Executive Intelligence Suite
+ * Professional Executive Intelligence Suite
  *
  * 1. Executive Command Center & Today's Day-Book
  * 2. 3-Tier Defaulter Intelligence & Aging Recovery
  * 3. Student Demographics & Capacity Matrix
- * 4. Auditing, Master Excel & Printable Exports
+ * 4. Dynamic On-Demand Excel Report Generators (Collections & Dues)
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
@@ -21,20 +21,20 @@ import {
   RefreshCw,
   Search,
   CheckCircle2,
-  Clock,
   Send,
   Building2,
   DollarSign,
   Layers,
-  ArrowUpRight,
   ShieldCheck,
   ChevronRight,
   Filter,
-  UserCheck,
   Loader2,
-  ExternalLink,
   Receipt,
-  GraduationCap
+  GraduationCap,
+  Calendar,
+  X,
+  CreditCard,
+  Wallet
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -67,18 +67,33 @@ export default function Reports() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedAging, setSelectedAging] = useState('all'); // 'all' | 'mild' | 'moderate' | 'critical'
   const [duesPage, setDuesPage] = useState(1);
-  const [duesTotalPages, setDuesTotalPages] = useState(1);
   const [loadingDues, setLoadingDues] = useState(false);
 
   // Action states
   const [sendingWaId, setSendingWaId] = useState(null);
-  const [exportingZip, setExportingZip] = useState(false);
+
+  // Excel Modal States
+  const [showCollectionModal, setShowCollectionModal] = useState(false);
+  const [showDuesModal, setShowDuesModal] = useState(false);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
+
+  // Collection Export Form
+  const [collPreset, setCollPreset] = useState('today'); // 'today' | 'this_week' | 'this_month' | 'session' | 'custom'
+  const [collFromDate, setCollFromDate] = useState('');
+  const [collToDate, setCollToDate] = useState('');
+  const [collClassId, setCollClassId] = useState('');
+  const [collMode, setCollMode] = useState('');
+
+  // Dues Export Form
+  const [duesType, setDuesType] = useState('all'); // 'all' | 'monthly' | 'admission'
+  const [duesAging, setDuesAging] = useState('all'); // 'all' | 'mild' | 'moderate' | 'critical'
+  const [duesClassId, setDuesClassId] = useState('');
+  const [duesCategory, setDuesCategory] = useState('');
 
   const TABS = [
     { id: 'executive', label: 'Executive & Day-Book', icon: BarChart3, badge: 'Live Today' },
     { id: 'defaulters', label: 'Defaulters & Aging', icon: AlertTriangle, badge: 'Recovery' },
     { id: 'demographics', label: 'Student Demographics', icon: Users },
-    { id: 'audit-exports', label: 'Auditing & Exports', icon: FileSpreadsheet },
   ];
 
   // 1. Fetch Executive Overview Data
@@ -123,7 +138,6 @@ export default function Reports() {
       if (res.data.success) {
         setPendingStudents(res.data.students || []);
         setPendingSummary(res.data.summary || {});
-        setDuesTotalPages(res.data.pagination?.totalPages || 1);
       }
     } catch (err) {
       console.error('[fetchPendingDues]', err);
@@ -151,26 +165,83 @@ export default function Reports() {
     toast.success('✓ Reports data refreshed live!');
   };
 
-  // Export Class-Wise ZIP Archive
-  const handleExportZip = async () => {
+  // Download Collections Excel (.xlsx)
+  const handleDownloadCollectionsExcel = async (e) => {
+    if (e) e.preventDefault();
     try {
-      setExportingZip(true);
-      const res = await api.get('/backup/export-excel-archive', {
+      setDownloadingExcel(true);
+      const params = new URLSearchParams();
+      params.append('preset', collPreset);
+      if (collPreset === 'custom') {
+        if (!collFromDate || !collToDate) {
+          toast.error('Please select both From Date and To Date for custom range.');
+          setDownloadingExcel(false);
+          return;
+        }
+        params.append('from_date', collFromDate);
+        params.append('to_date', collToDate);
+      }
+      if (collClassId) params.append('class_id', collClassId);
+      if (collMode) params.append('payment_mode', collMode);
+
+      const res = await api.get(`/reports/export-collections-excel?${params.toString()}`, {
         responseType: 'arraybuffer',
       });
-      const filename = `Aryavart_ClassWise_Dossiers_${new Date().toISOString().slice(0, 10)}.zip`;
-      const blob = new Blob([res.data], { type: 'application/zip' });
+
+      const filename = `Collections_${collPreset}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
       await saveFileToDeviceStorage({
         data: blob,
         filename,
-        mimeType: 'application/zip',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
-      toast.success('✓ Class-Wise Student Excel Archive (.zip) downloaded successfully!');
+
+      toast.success(`✓ Collection Excel Report (${filename}) generated successfully!`);
+      setShowCollectionModal(false);
     } catch (err) {
-      console.error('[handleExportZip]', err);
-      toast.error('Failed to export Class-Wise ZIP archive.');
+      console.error('[handleDownloadCollectionsExcel]', err);
+      toast.error('Failed to generate collection Excel report.');
     } finally {
-      setExportingZip(false);
+      setDownloadingExcel(false);
+    }
+  };
+
+  // Download Dues Excel (.xlsx)
+  const handleDownloadDuesExcel = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      setDownloadingExcel(true);
+      const params = new URLSearchParams();
+      params.append('type', duesType);
+      params.append('aging', duesAging);
+      if (duesClassId) params.append('class_id', duesClassId);
+      if (duesCategory) params.append('category', duesCategory);
+
+      const res = await api.get(`/reports/export-dues-excel?${params.toString()}`, {
+        responseType: 'arraybuffer',
+      });
+
+      const filename = `Outstanding_Dues_${duesAging}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      await saveFileToDeviceStorage({
+        data: blob,
+        filename,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      toast.success(`✓ Outstanding Dues Excel (${filename}) generated successfully!`);
+      setShowDuesModal(false);
+    } catch (err) {
+      console.error('[handleDownloadDuesExcel]', err);
+      toast.error('Failed to generate outstanding dues Excel report.');
+    } finally {
+      setDownloadingExcel(false);
     }
   };
 
@@ -187,7 +258,6 @@ export default function Reports() {
 
     try {
       setSendingWaId(student.id);
-      // Attempt backend direct gateway dispatch first
       const res = await api.post('/messages/send-single', {
         student_id: student.id,
         phone: targetPhone,
@@ -197,7 +267,6 @@ export default function Reports() {
       if (res?.data?.success) {
         toast.success(`✓ Dues reminder sent to ${student.full_name}'s phone!`);
       } else {
-        // Fallback to WhatsApp Web Direct URL
         const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`;
         window.open(waUrl, '_blank');
         toast.info('Opened in WhatsApp Web.');
@@ -229,7 +298,6 @@ export default function Reports() {
     }
   };
 
-  // Helper formatting
   const formatRs = (num) => `₹${Number(num || 0).toLocaleString('en-IN')}`;
 
   const todayData = executiveData?.today || { total: 0, cash: 0, bank: 0, transactions: 0, recent_receipts: [] };
@@ -250,7 +318,7 @@ export default function Reports() {
           <div>
             <h1 className="reports-main-title">Reports &amp; Financial Intelligence</h1>
             <p className="reports-sub-title">
-              Aryavart (P.S.G) Shikshan Sansthan &bull; Academic Session 2025–2026 &bull; Real-time Analytics
+              Aryavart (P.S.G) Shikshan Sansthan &bull; Session 2025–2026 &bull; Real-time Accounting
             </p>
           </div>
         </div>
@@ -264,17 +332,26 @@ export default function Reports() {
             title="Refresh live data"
           >
             <RefreshCw size={16} className={refreshing ? 'spin' : ''} />
-            <span>{refreshing ? 'Refreshing…' : 'Sync Live Data'}</span>
+            <span>{refreshing ? 'Refreshing…' : 'Sync Live'}</span>
+          </button>
+
+          {/* Primary Excel Generator Buttons */}
+          <button
+            type="button"
+            className="btn-header-excel green"
+            onClick={() => setShowCollectionModal(true)}
+          >
+            <FileSpreadsheet size={16} />
+            <span>📊 Collection Excel</span>
           </button>
 
           <button
             type="button"
-            className="btn-header-export-zip"
-            onClick={handleExportZip}
-            disabled={exportingZip}
+            className="btn-header-excel red"
+            onClick={() => setShowDuesModal(true)}
           >
-            {exportingZip ? <Loader2 size={16} className="spin" /> : <FileSpreadsheet size={16} />}
-            <span>{exportingZip ? 'Packing ZIP…' : 'Class-Wise Excel Dossiers (.zip)'}</span>
+            <FileSpreadsheet size={16} />
+            <span>⚠️ Dues Excel</span>
           </button>
         </div>
       </div>
@@ -432,52 +509,91 @@ export default function Reports() {
                     )}
                   </div>
 
-                  {/* Right: Revenue Breakdown & Channel Split */}
+                  {/* Right: Revenue Breakdown & Channel Split — FULLY ENHANCED UI */}
                   <div className="card-panel">
                     <div className="panel-header">
                       <div className="panel-title-wrap">
                         <Layers size={18} className="text-indigo" />
                         <div>
                           <h3 className="panel-title">Revenue Composition &amp; Channels</h3>
-                          <span className="panel-sub">Payment methods and fee heads breakdown</span>
+                          <span className="panel-sub">Payment channels and fee heads breakdown</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="breakdown-cards-stack">
-                      {/* Payment Channels Card */}
-                      <div className="sub-stat-card">
-                        <h4 className="sub-stat-title">Payment Method Distribution</h4>
-                        <div className="channels-progress-grid">
-                          {modesData.map((m) => (
-                            <div key={m.mode} className="channel-box">
-                              <div className="channel-box-header">
-                                <span>{m.mode === 'IN_ACCOUNT' ? '🏦 Bank / UPI Transfer' : '💵 Cash Handover'}</span>
-                                <strong>{formatRs(m.amount)}</strong>
+                    <div className="revenue-composition-container">
+                      {/* Section 1: Payment Channels */}
+                      <div className="composition-block">
+                        <h4 className="composition-section-title">
+                          <Wallet size={15} />
+                          <span>Payment Method Distribution</span>
+                        </h4>
+
+                        <div className="payment-channels-tiles">
+                          {/* Cash Card */}
+                          <div className="channel-tile cash-tile">
+                            <div className="tile-top-row">
+                              <div className="tile-title-group">
+                                <span className="tile-emoji">💵</span>
+                                <div>
+                                  <div className="tile-label">Cash Handover</div>
+                                  <div className="tile-tx-count">{modesData.find(m => m.mode === 'CASH')?.count || 0} Total Transactions</div>
+                                </div>
                               </div>
-                              <div className="channel-box-bar">
-                                <div
-                                  className={`channel-bar-fill ${m.mode === 'IN_ACCOUNT' ? 'bank' : 'cash'}`}
-                                  style={{ width: `${fin.collected > 0 ? (m.amount / fin.collected) * 100 : 50}%` }}
-                                />
+                              <div className="tile-amount text-amber">
+                                {formatRs(modesData.find(m => m.mode === 'CASH')?.amount || 0)}
                               </div>
-                              <small className="channel-count-lbl">{m.count} Total Transactions</small>
                             </div>
-                          ))}
+                            <div className="tile-bar-bg">
+                              <div
+                                className="tile-bar-fill cash"
+                                style={{ width: `${fin.collected > 0 ? ((modesData.find(m => m.mode === 'CASH')?.amount || 0) / fin.collected) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Bank / UPI Card */}
+                          <div className="channel-tile bank-tile">
+                            <div className="tile-top-row">
+                              <div className="tile-title-group">
+                                <span className="tile-emoji">🏦</span>
+                                <div>
+                                  <div className="tile-label">Bank / UPI Transfer</div>
+                                  <div className="tile-tx-count">{modesData.find(m => m.mode === 'IN_ACCOUNT')?.count || 0} Total Transactions</div>
+                                </div>
+                              </div>
+                              <div className="tile-amount text-indigo">
+                                {formatRs(modesData.find(m => m.mode === 'IN_ACCOUNT')?.amount || 0)}
+                              </div>
+                            </div>
+                            <div className="tile-bar-bg">
+                              <div
+                                className="tile-bar-fill bank"
+                                style={{ width: `${fin.collected > 0 ? ((modesData.find(m => m.mode === 'IN_ACCOUNT')?.amount || 0) / fin.collected) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Fee Heads Card */}
-                      <div className="sub-stat-card">
-                        <h4 className="sub-stat-title">Fee Head Collections</h4>
-                        <div className="feeheads-split-grid">
-                          <div className="feehead-item">
-                            <span className="head-lbl">Monthly Tuition Fees</span>
-                            <span className="head-val text-blue">{formatRs(feeHeads.tuition)}</span>
+                      {/* Section 2: Fee Head Collections */}
+                      <div className="composition-block">
+                        <h4 className="composition-section-title">
+                          <CreditCard size={15} />
+                          <span>Fee Head Collections</span>
+                        </h4>
+
+                        <div className="feehead-tiles-grid">
+                          <div className="feehead-card tuition-card">
+                            <div className="feehead-card-lbl">Monthly Tuition Fees</div>
+                            <div className="feehead-card-val text-blue">{formatRs(feeHeads.tuition)}</div>
+                            <div className="feehead-card-sub">Academic tuition collections</div>
                           </div>
-                          <div className="feehead-item">
-                            <span className="head-lbl">Admission &amp; Term Fees</span>
-                            <span className="head-val text-green">{formatRs(feeHeads.admission)}</span>
+
+                          <div className="feehead-card admission-card">
+                            <div className="feehead-card-lbl">Admission &amp; Term Fees</div>
+                            <div className="feehead-card-val text-green">{formatRs(feeHeads.admission)}</div>
+                            <div className="feehead-card-sub">Enrollment &amp; charges</div>
                           </div>
                         </div>
                       </div>
@@ -630,6 +746,22 @@ export default function Reports() {
                       <option value="day_scholar">Day Scholar</option>
                       <option value="hosteller">Hosteller</option>
                     </select>
+
+                    {/* Quick Excel Export button inside Defaulters tab */}
+                    <button
+                      type="button"
+                      className="btn-quick-export-excel red"
+                      onClick={() => {
+                        setDuesAging(selectedAging);
+                        setDuesClassId(selectedClass);
+                        setDuesCategory(selectedCategory);
+                        setShowDuesModal(true);
+                      }}
+                      title="Export Dues as Excel"
+                    >
+                      <FileSpreadsheet size={15} />
+                      <span>Export Dues Excel</span>
+                    </button>
                   </div>
                 </div>
 
@@ -797,61 +929,343 @@ export default function Reports() {
                 </div>
               </div>
             )}
-
-            {/* ============================================================ */}
-            {/* TAB 4: AUDITING, EXCEL & PRINTABLE EXPORT CENTER             */}
-            {/* ============================================================ */}
-            {activeTab === 'audit-exports' && (
-              <div className="tab-pane-fade">
-                <div className="audit-export-grid">
-                  {/* Export Card 1: Class-Wise Student Excel Dossiers */}
-                  <div className="export-action-card">
-                    <div className="export-icon-box green">
-                      <FileSpreadsheet size={28} />
-                    </div>
-                    <div className="export-info">
-                      <h4 className="export-title">Class-Wise Student Excel Dossiers (.zip)</h4>
-                      <p className="export-desc">
-                        Generates a structured ZIP archive with separate folders for every class (I, II, X...). Each student receives an individualized Excel workbook containing their profile, running-balance ledger, and official signature block for offline CA auditing.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-export-action green"
-                      onClick={handleExportZip}
-                      disabled={exportingZip}
-                    >
-                      {exportingZip ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
-                      <span>{exportingZip ? 'Building ZIP Archive…' : 'Download Class-Wise ZIP'}</span>
-                    </button>
-                  </div>
-
-                  {/* Export Card 2: Full SQL Database Snapshot */}
-                  <div className="export-action-card">
-                    <div className="export-icon-box blue">
-                      <ShieldCheck size={28} />
-                    </div>
-                    <div className="export-info">
-                      <h4 className="export-title">Disaster Recovery SQL Database Snapshot</h4>
-                      <p className="export-desc">
-                        1-Click native database snapshot covering all 28 tables, fee structures, student archives, and payment logs for cloud safety and disaster recovery.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-export-action blue"
-                      onClick={() => navigate('/settings')}
-                    >
-                      <ExternalLink size={16} />
-                      <span>Go to Backup Vault</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         )}
       </div>
+
+      {/* ============================================================ */}
+      {/* MODAL 1: DYNAMIC COLLECTIONS EXCEL GENERATOR                 */}
+      {/* ============================================================ */}
+      {showCollectionModal && (
+        <div className="report-modal-overlay" onClick={() => setShowCollectionModal(false)}>
+          <div className="report-modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="report-modal-header">
+              <div className="modal-title-wrap">
+                <div className="modal-badge-icon green">
+                  <FileSpreadsheet size={20} />
+                </div>
+                <div>
+                  <h3 className="modal-title">Export Fee Collections Excel</h3>
+                  <p className="modal-sub">Generate formatted collection ledger spreadsheet (.xlsx)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-btn-close"
+                onClick={() => setShowCollectionModal(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleDownloadCollectionsExcel} className="report-modal-body">
+              {/* Preset Selector */}
+              <div className="form-field-group">
+                <label className="form-field-lbl">Collection Time Period:</label>
+                <div className="preset-radio-grid">
+                  <label className={`preset-pill ${collPreset === 'today' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="collPreset"
+                      value="today"
+                      checked={collPreset === 'today'}
+                      onChange={() => setCollPreset('today')}
+                    />
+                    <span>⚡ Today's Day-Book</span>
+                  </label>
+
+                  <label className={`preset-pill ${collPreset === 'this_week' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="collPreset"
+                      value="this_week"
+                      checked={collPreset === 'this_week'}
+                      onChange={() => setCollPreset('this_week')}
+                    />
+                    <span>📅 This Week</span>
+                  </label>
+
+                  <label className={`preset-pill ${collPreset === 'this_month' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="collPreset"
+                      value="this_month"
+                      checked={collPreset === 'this_month'}
+                      onChange={() => setCollPreset('this_month')}
+                    />
+                    <span>🗓️ Current Month</span>
+                  </label>
+
+                  <label className={`preset-pill ${collPreset === 'session' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="collPreset"
+                      value="session"
+                      checked={collPreset === 'session'}
+                      onChange={() => setCollPreset('session')}
+                    />
+                    <span>🏫 Full Session (2025–26)</span>
+                  </label>
+
+                  <label className={`preset-pill ${collPreset === 'custom' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="collPreset"
+                      value="custom"
+                      checked={collPreset === 'custom'}
+                      onChange={() => setCollPreset('custom')}
+                    />
+                    <span>🔍 Custom Date Range</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Custom Date Inputs if Custom Selected */}
+              {collPreset === 'custom' && (
+                <div className="custom-date-row">
+                  <div className="form-field-group">
+                    <label className="form-field-lbl">From Date:</label>
+                    <input
+                      type="date"
+                      className="modal-input-field"
+                      value={collFromDate}
+                      onChange={(e) => setCollFromDate(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="form-field-group">
+                    <label className="form-field-lbl">To Date:</label>
+                    <input
+                      type="date"
+                      className="modal-input-field"
+                      value={collToDate}
+                      onChange={(e) => setCollToDate(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Filter Options */}
+              <div className="modal-filters-2col">
+                <div className="form-field-group">
+                  <label className="form-field-lbl">Class Filter (Optional):</label>
+                  <select
+                    className="modal-select-field"
+                    value={collClassId}
+                    onChange={(e) => setCollClassId(e.target.value)}
+                  >
+                    <option value="">All Classes</option>
+                    {classesList.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-field-group">
+                  <label className="form-field-lbl">Payment Mode (Optional):</label>
+                  <select
+                    className="modal-select-field"
+                    value={collMode}
+                    onChange={(e) => setCollMode(e.target.value)}
+                  >
+                    <option value="">All Payment Modes</option>
+                    <option value="CASH">💵 Cash Only</option>
+                    <option value="IN_ACCOUNT">🏦 Bank / UPI Transfer Only</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Modal Footer Buttons */}
+              <div className="report-modal-footer">
+                <button
+                  type="button"
+                  className="btn-modal-cancel"
+                  onClick={() => setShowCollectionModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-submit green"
+                  disabled={downloadingExcel}
+                >
+                  {downloadingExcel ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
+                  <span>{downloadingExcel ? 'Building Excel…' : '📥 Download Collection Excel (.xlsx)'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL 2: DYNAMIC OUTSTANDING DUES EXCEL GENERATOR            */}
+      {/* ============================================================ */}
+      {showDuesModal && (
+        <div className="report-modal-overlay" onClick={() => setShowDuesModal(false)}>
+          <div className="report-modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="report-modal-header">
+              <div className="modal-title-wrap">
+                <div className="modal-badge-icon red">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="modal-title">Export Outstanding Dues Excel</h3>
+                  <p className="modal-sub">Generate customized defaulters workbook (.xlsx)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-btn-close"
+                onClick={() => setShowDuesModal(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleDownloadDuesExcel} className="report-modal-body">
+              {/* Dues Type Scope */}
+              <div className="form-field-group">
+                <label className="form-field-lbl">Dues Scope / Type:</label>
+                <div className="preset-radio-grid">
+                  <label className={`preset-pill ${duesType === 'all' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="duesType"
+                      value="all"
+                      checked={duesType === 'all'}
+                      onChange={() => setDuesType('all')}
+                    />
+                    <span>All Dues (Monthly + Admission)</span>
+                  </label>
+
+                  <label className={`preset-pill ${duesType === 'monthly' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="duesType"
+                      value="monthly"
+                      checked={duesType === 'monthly'}
+                      onChange={() => setDuesType('monthly')}
+                    />
+                    <span>Monthly Tuition Fees Only</span>
+                  </label>
+
+                  <label className={`preset-pill ${duesType === 'admission' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="duesType"
+                      value="admission"
+                      checked={duesType === 'admission'}
+                      onChange={() => setDuesType('admission')}
+                    />
+                    <span>Admission Charges Only</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Aging Urgency Filter */}
+              <div className="form-field-group">
+                <label className="form-field-lbl">Aging Defaulter Urgency:</label>
+                <div className="preset-radio-grid">
+                  <label className={`preset-pill ${duesAging === 'all' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="duesAging"
+                      value="all"
+                      checked={duesAging === 'all'}
+                      onChange={() => setDuesAging('all')}
+                    />
+                    <span>All Defaulters</span>
+                  </label>
+
+                  <label className={`preset-pill mild ${duesAging === 'mild' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="duesAging"
+                      value="mild"
+                      checked={duesAging === 'mild'}
+                      onChange={() => setDuesAging('mild')}
+                    />
+                    <span>🟢 1 Month Due (Mild)</span>
+                  </label>
+
+                  <label className={`preset-pill moderate ${duesAging === 'moderate' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="duesAging"
+                      value="moderate"
+                      checked={duesAging === 'moderate'}
+                      onChange={() => setDuesAging('moderate')}
+                    />
+                    <span>🟡 2 Months Due (Moderate)</span>
+                  </label>
+
+                  <label className={`preset-pill critical ${duesAging === 'critical' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="duesAging"
+                      value="critical"
+                      checked={duesAging === 'critical'}
+                      onChange={() => setDuesAging('critical')}
+                    />
+                    <span>🔴 3+ Months Due (Critical)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Filter Options */}
+              <div className="modal-filters-2col">
+                <div className="form-field-group">
+                  <label className="form-field-lbl">Class Filter (Optional):</label>
+                  <select
+                    className="modal-select-field"
+                    value={duesClassId}
+                    onChange={(e) => setDuesClassId(e.target.value)}
+                  >
+                    <option value="">All Classes</option>
+                    {classesList.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-field-group">
+                  <label className="form-field-lbl">Student Category (Optional):</label>
+                  <select
+                    className="modal-select-field"
+                    value={duesCategory}
+                    onChange={(e) => setDuesCategory(e.target.value)}
+                  >
+                    <option value="">All Categories</option>
+                    <option value="day_scholar">Day Scholar Only</option>
+                    <option value="hosteller">Hosteller Only</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Modal Footer Buttons */}
+              <div className="report-modal-footer">
+                <button
+                  type="button"
+                  className="btn-modal-cancel"
+                  onClick={() => setShowDuesModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-submit red"
+                  disabled={downloadingExcel}
+                >
+                  {downloadingExcel ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
+                  <span>{downloadingExcel ? 'Building Excel…' : '📥 Download Dues Excel (.xlsx)'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

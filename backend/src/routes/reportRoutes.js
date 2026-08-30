@@ -1,6 +1,6 @@
 /**
  * Report Routes — School Management System
- * Executive Intelligence, Day-Book, Defaulters, Demographics & Auditing
+ * Executive Intelligence, Day-Book, Defaulters, Demographics & Custom Excel Exports
  */
 
 const express = require('express');
@@ -10,6 +10,8 @@ const {
   getAdmissionDuesList,
   getDemographicsReport,
   getCollectionsReport,
+  exportCollectionsExcel,
+  exportDuesExcel,
 } = require('../controllers/reportController');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -22,5 +24,7 @@ router.get('/pending-dues-list', getPendingDuesList);
 router.get('/admission-dues-list', getAdmissionDuesList);
 router.get('/demographics', getDemographicsReport);
 router.get('/collections', getCollectionsReport);
+router.get('/export-collections-excel', exportCollectionsExcel);
+router.get('/export-dues-excel', exportDuesExcel);
 
 module.exports = router;

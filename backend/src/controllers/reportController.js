@@ -498,10 +498,454 @@ async function getCollectionsReport(req, res) {
   }
 }
 
+/**
+ * GET /api/reports/export-collections-excel
+ * Generate Custom Filtered Excel Sheet of Collections (Day-Book, Weekly, Monthly, Session, Custom Date)
+ */
+const ExcelJS = require('exceljs');
+
+async function exportCollectionsExcel(req, res) {
+  try {
+    const { preset = 'today', from_date, to_date, class_id, payment_mode } = req.query || {};
+
+    const conditions = [];
+    const values = [];
+
+    let dateDesc = '';
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    if (preset === 'today') {
+      conditions.push('DATE(p.payment_date) = CURDATE()');
+      dateDesc = `Today's Day-Book (${todayStr})`;
+    } else if (preset === 'this_week') {
+      conditions.push('YEARWEEK(p.payment_date, 1) = YEARWEEK(CURDATE(), 1)');
+      dateDesc = `This Week's Collections`;
+    } else if (preset === 'this_month') {
+      conditions.push('YEAR(p.payment_date) = YEAR(CURDATE()) AND MONTH(p.payment_date) = MONTH(CURDATE())');
+      dateDesc = `Current Month Collections (${new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })})`;
+    } else if (preset === 'session') {
+      dateDesc = `Session 2025–2026 Full Collections`;
+    } else if (preset === 'custom' && from_date && to_date) {
+      conditions.push('DATE(p.payment_date) >= ? AND DATE(p.payment_date) <= ?');
+      values.push(from_date, to_date);
+      dateDesc = `Collections from ${from_date} to ${to_date}`;
+    }
+
+    if (class_id) {
+      conditions.push('s.class_id = ?');
+      values.push(Number(class_id));
+    }
+    if (payment_mode) {
+      conditions.push('p.payment_mode = ?');
+      values.push(payment_mode);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const rows = await db.query(`
+      SELECT
+        p.id,
+        p.receipt_number,
+        p.payment_date,
+        p.amount,
+        p.payment_mode,
+        p.notes,
+        s.admission_no,
+        s.full_name as student_name,
+        COALESCE(NULLIF(s.father_name, ''), NULLIF(s.parent_name, ''), '—') as father_name,
+        c.name as class_name,
+        sec.name as section_name,
+        s.category
+      FROM payments p
+      LEFT JOIN students s ON s.id = p.student_id
+      LEFT JOIN classes c ON c.id = s.class_id
+      LEFT JOIN sections sec ON sec.id = s.section_id
+      ${whereClause}
+      ORDER BY p.payment_date DESC, p.id DESC
+    `, values);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Aryavart (P.S.G) Shikshan Sansthan';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Collection Register', {
+      views: [{ showGridLines: true }],
+    });
+
+    // 1. Title Banner
+    sheet.mergeCells('A1:J1');
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = 'ARYAVART (P.S.G) SHIKSHAN SANSTHAN';
+    titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(1).height = 32;
+
+    // 2. Subtitle Banner
+    sheet.mergeCells('A2:J2');
+    const subCell = sheet.getCell('A2');
+    subCell.value = `FEE COLLECTION REGISTER • ${dateDesc.toUpperCase()} • GENERATED ON ${new Date().toLocaleString('en-IN')}`;
+    subCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF475569' } };
+    subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(2).height = 22;
+
+    sheet.addRow([]);
+
+    // 3. Headers
+    const headers = [
+      'S.No',
+      'Receipt No',
+      'Payment Date',
+      'Adm No',
+      'Student Name',
+      'Class & Sec',
+      "Father's Name",
+      'Channel',
+      'Amount (Rs.)',
+      'Remarks / Note',
+    ];
+    const headerRow = sheet.addRow(headers);
+    headerRow.height = 24;
+    headerRow.eachCell((cell) => {
+      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      };
+    });
+
+    let totalAmount = 0;
+    rows.forEach((r, idx) => {
+      const amt = Number(r.amount || 0);
+      totalAmount += amt;
+      const dataRow = sheet.addRow([
+        idx + 1,
+        r.receipt_number || `RCP-${r.id}`,
+        r.payment_date ? new Date(r.payment_date).toLocaleDateString('en-IN') : '—',
+        r.admission_no || 'N/A',
+        r.student_name || '—',
+        `${r.class_name || ''} ${r.section_name ? `(${r.section_name})` : ''}`.trim(),
+        r.father_name || '—',
+        r.payment_mode === 'IN_ACCOUNT' ? 'Bank / UPI' : 'Cash',
+        amt,
+        r.notes || '—',
+      ]);
+
+      dataRow.height = 20;
+      dataRow.eachCell((cell, colNumber) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        };
+        if (colNumber === 1 || colNumber === 2 || colNumber === 3 || colNumber === 4 || colNumber === 8) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colNumber === 9) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '#,##0.00';
+        } else {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+      });
+    });
+
+    // 4. Grand Total Row
+    const totalRow = sheet.addRow([
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      'GRAND TOTAL:',
+      totalAmount,
+      `${rows.length} Transactions`,
+    ]);
+    totalRow.height = 24;
+    totalRow.eachCell((cell, colNumber) => {
+      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF0F172A' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      if (colNumber === 9) {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        cell.numFmt = '#,##0.00';
+      } else {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FF0F172A' } },
+        bottom: { style: 'double', color: { argb: 'FF0F172A' } },
+      };
+    });
+
+    sheet.columns.forEach((col) => {
+      let maxLen = 12;
+      col.eachCell({ includeEmpty: false }, (cell) => {
+        const len = cell.value ? String(cell.value).length : 0;
+        if (len > maxLen) maxLen = Math.min(len + 4, 38);
+      });
+      col.width = maxLen;
+    });
+
+    const filename = `Collections_${preset}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[reportController.exportCollectionsExcel]', err);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Failed to generate collections Excel: ' + err.message });
+    }
+  }
+}
+
+/**
+ * GET /api/reports/export-dues-excel
+ * Generate Custom Filtered Excel Sheet of Outstanding Dues & Defaulters
+ */
+async function exportDuesExcel(req, res) {
+  try {
+    const { type = 'all', aging = 'all', class_id, category } = req.query || {};
+
+    const conditions = ["s.status = 'active'"];
+    const values = [];
+
+    if (class_id) {
+      conditions.push('s.class_id = ?');
+      values.push(Number(class_id));
+    }
+    if (category) {
+      conditions.push('s.category = ?');
+      values.push(category);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+    const isMonthlyOnly = (type === 'monthly');
+    const isAdmissionOnly = (type === 'admission');
+
+    let havingCondition = 'HAVING total_due > 0';
+    if (isMonthlyOnly) havingCondition = 'HAVING monthly_due > 0';
+    if (isAdmissionOnly) havingCondition = 'HAVING add_due > 0';
+
+    if (aging === 'mild') havingCondition += ' AND overdue_months <= 1';
+    else if (aging === 'moderate') havingCondition += ' AND overdue_months = 2';
+    else if (aging === 'critical') havingCondition += ' AND overdue_months >= 3';
+
+    const sql = `
+      SELECT
+        s.id,
+        s.admission_no,
+        s.full_name as student_name,
+        COALESCE(NULLIF(s.father_name, ''), NULLIF(s.parent_name, ''), '—') as father_name,
+        COALESCE(NULLIF(s.phone, ''), NULLIF(s.whatsapp_number, ''), '—') as contact_number,
+        c.name as class_name,
+        sec.name as section_name,
+        s.category,
+        COALESCE(
+          (SELECT SUM(mf.due_amount)
+           FROM monthly_fees mf
+           WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')), 0
+        ) as monthly_due,
+        COALESCE(
+          (SELECT COUNT(mf.id)
+           FROM monthly_fees mf
+           WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')), 0
+        ) as overdue_months,
+        COALESCE(
+          (SELECT SUM(GREATEST(0, saf.amount - saf.paid_amount - saf.discount_amount))
+           FROM student_additional_fees saf
+           WHERE saf.student_id = s.id AND saf.status IN ('DUE', 'PARTIAL')), 0
+        ) as add_due,
+        (
+          COALESCE((SELECT SUM(mf.due_amount) FROM monthly_fees mf WHERE mf.student_id = s.id AND mf.status IN ('DUE', 'PARTIAL')), 0) +
+          COALESCE((SELECT SUM(GREATEST(0, saf.amount - saf.paid_amount - saf.discount_amount)) FROM student_additional_fees saf WHERE saf.student_id = s.id AND saf.status IN ('DUE', 'PARTIAL')), 0)
+        ) as total_due
+      FROM students s
+      LEFT JOIN classes c ON c.id = s.class_id
+      LEFT JOIN sections sec ON sec.id = s.section_id
+      ${whereClause}
+      ${havingCondition}
+      ORDER BY total_due DESC
+    `;
+
+    const rows = await db.query(sql, values);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Aryavart (P.S.G) Shikshan Sansthan';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Outstanding Dues', {
+      views: [{ showGridLines: true }],
+    });
+
+    // 1. Title Banner
+    sheet.mergeCells('A1:K1');
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = 'ARYAVART (P.S.G) SHIKSHAN SANSTHAN';
+    titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF991B1B' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(1).height = 32;
+
+    // 2. Subtitle Banner
+    sheet.mergeCells('A2:K2');
+    const subCell = sheet.getCell('A2');
+    subCell.value = `STUDENT OUTSTANDING DUES REPORT • ${aging.toUpperCase()} DEFAULTERS • GENERATED ON ${new Date().toLocaleString('en-IN')}`;
+    subCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF475569' } };
+    subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+    subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(2).height = 22;
+
+    sheet.addRow([]);
+
+    // 3. Headers
+    const headers = [
+      'S.No',
+      'Adm No',
+      'Student Name',
+      "Father's Name",
+      'Contact No',
+      'Class & Sec',
+      'Category',
+      'Monthly Due (Rs.)',
+      'Term/Adm Due (Rs.)',
+      'Total Outstanding (Rs.)',
+      'Overdue Status',
+    ];
+    const headerRow = sheet.addRow(headers);
+    headerRow.height = 24;
+    headerRow.eachCell((cell) => {
+      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      };
+    });
+
+    let totalMonthly = 0;
+    let totalAdd = 0;
+    let totalOutstanding = 0;
+
+    rows.forEach((r, idx) => {
+      const mDue = Number(r.monthly_due || 0);
+      const aDue = Number(r.add_due || 0);
+      const tot = Number(r.total_due || 0);
+      const months = Number(r.overdue_months || 0);
+
+      totalMonthly += mDue;
+      totalAdd += aDue;
+      totalOutstanding += tot;
+
+      let status = '1 Month Due';
+      if (months >= 3 || tot >= 5000) status = 'Critical Defaulter (3+ Mo)';
+      else if (months === 2 || tot >= 2000) status = 'Moderate (2 Months)';
+
+      const dataRow = sheet.addRow([
+        idx + 1,
+        r.admission_no || 'N/A',
+        r.student_name || '—',
+        r.father_name || '—',
+        r.contact_number || '—',
+        `${r.class_name || ''} ${r.section_name ? `(${r.section_name})` : ''}`.trim(),
+        r.category === 'hosteller' ? 'Hostel' : 'Day Scholar',
+        mDue,
+        aDue,
+        tot,
+        status,
+      ]);
+
+      dataRow.height = 20;
+      dataRow.eachCell((cell, colNumber) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        };
+        if (colNumber === 1 || colNumber === 2 || colNumber === 6 || colNumber === 7 || colNumber === 11) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colNumber === 8 || colNumber === 9 || colNumber === 10) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '#,##0.00';
+          if (colNumber === 10) cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFDC2626' } };
+        } else {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+      });
+    });
+
+    // 4. Grand Total Row
+    const totalRow = sheet.addRow([
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      'TOTAL OUTSTANDING:',
+      totalMonthly,
+      totalAdd,
+      totalOutstanding,
+      `${rows.length} Defaulters`,
+    ]);
+    totalRow.height = 24;
+    totalRow.eachCell((cell, colNumber) => {
+      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF0F172A' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+      if (colNumber >= 8 && colNumber <= 10) {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        cell.numFmt = '#,##0.00';
+        cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF991B1B' } };
+      } else {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FF991B1B' } },
+        bottom: { style: 'double', color: { argb: 'FF991B1B' } },
+      };
+    });
+
+    sheet.columns.forEach((col) => {
+      let maxLen = 12;
+      col.eachCell({ includeEmpty: false }, (cell) => {
+        const len = cell.value ? String(cell.value).length : 0;
+        if (len > maxLen) maxLen = Math.min(len + 4, 38);
+      });
+      col.width = maxLen;
+    });
+
+    const filename = `Outstanding_Dues_${aging}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[reportController.exportDuesExcel]', err);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Failed to generate dues Excel: ' + err.message });
+    }
+  }
+}
+
 module.exports = {
   getExecutiveOverview,
   getPendingDuesList,
   getAdmissionDuesList,
   getDemographicsReport,
   getCollectionsReport,
+  exportCollectionsExcel,
+  exportDuesExcel,
 };
