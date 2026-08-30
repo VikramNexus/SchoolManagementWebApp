@@ -648,14 +648,14 @@ async function generateReceiptPDF(paymentId) {
   doc.fillColor('#111827').fontSize(8.5).font('Helvetica-Bold').text('ITEMIZED FEE BREAKDOWN & ALLOCATIONS', startX, y);
   y += 12;
 
-  // Table Header
+  // Table Header (Solid Charcoal)
   doc.rect(startX, y, contentWidth, 18).fill('#1f2937');
   doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
   doc.text('#', startX + 8, y + 5);
-  doc.text('Fee Description / Head', startX + 35, y + 5);
-  doc.text('Period / Type', startX + 240, y + 5);
-  doc.text('Fee Amount', startX + 340, y + 5, { align: 'right', width: 80 });
-  doc.text('Amount Paid', startX + 430, y + 5, { align: 'right', width: 85 });
+  doc.text('Fee Description / Head', startX + 30, y + 5);
+  doc.text('Total Fee', startX + 280, y + 5, { align: 'right', width: 75 });
+  doc.text('Amount Paid', startX + 365, y + 5, { align: 'right', width: 75 });
+  doc.text('Status', startX + 455, y + 5, { align: 'center', width: 60 });
 
   y += 18;
 
@@ -669,41 +669,51 @@ async function generateReceiptPDF(paymentId) {
 
     doc.rect(startX, y, contentWidth, 18).fillAndStroke(rowBg, '#e5e7eb');
     doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica').text(`${idx + 1}`, startX + 8, y + 5);
-    doc.fillColor('#111827').font('Helvetica-Bold').text(item.description || 'Fee Payment', startX + 35, y + 5);
-    doc.fillColor('#374151').font('Helvetica').text(item.period || '—', startX + 240, y + 5);
-    doc.fillColor('#111827').text(formatCurrency(feeAmt), startX + 340, y + 5, { align: 'right', width: 80 });
-    doc.fillColor('#111827').font('Helvetica-Bold').text(formatCurrency(allocAmt), startX + 430, y + 5, { align: 'right', width: 85 });
+    doc.fillColor('#111827').font('Helvetica-Bold').text(item.description || 'Fee Payment', startX + 30, y + 5);
+    doc.fillColor('#111827').font('Helvetica').text(formatCurrency(feeAmt), startX + 280, y + 5, { align: 'right', width: 75 });
+    doc.fillColor('#111827').font('Helvetica-Bold').text(formatCurrency(allocAmt), startX + 365, y + 5, { align: 'right', width: 75 });
+
+    // Monochrome PAID Badge
+    doc.roundedRect(startX + 468, y + 3, 34, 12, 2).fillAndStroke('#111827', '#111827');
+    doc.fillColor('#ffffff').fontSize(6.5).font('Helvetica-Bold').text('PAID', startX + 468, y + 5, { align: 'center', width: 34 });
 
     y += 18;
   });
 
   y += 12;
 
-  // 6. Payment Summary Box (Clean 2-Column High-Contrast Card)
+  // 6. Payment Summary Box (Clean High-Contrast 2-Column Card)
   doc.roundedRect(startX, y, contentWidth, 68, 4).fillAndStroke('#f9fafb', '#1f2937');
 
-  // Left Details
-  doc.fillColor('#4b5563').fontSize(8).font('Helvetica-Bold').text('Payment Method:', startX + 12, y + 12);
-  doc.fillColor('#111827').font('Helvetica-Bold').text(payment.payment_mode === 'IN_ACCOUNT' ? 'Bank / Online Account Transfer' : 'Cash Handover at Counter', startX + 95, y + 12);
+  // Left Details (Payment mode & notes)
+  const modeText = payment.payment_mode === 'IN_ACCOUNT' ? 'Bank / Online Transfer (In Account)' : 'Cash Handover at Counter';
+  doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica-Bold').text('Payment Channel:', startX + 12, y + 10);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(modeText, startX + 95, y + 10);
 
-  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Transaction Ref:', startX + 12, y + 28);
-  doc.fillColor('#111827').font('Helvetica').text(payment.reference_number || 'Cash Verified', startX + 95, y + 28);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Transaction Ref:', startX + 12, y + 26);
+  doc.fillColor('#111827').font('Helvetica').text(payment.reference_number || 'Verified Financial Record', startX + 95, y + 26);
 
-  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Recorded By:', startX + 12, y + 44);
-  doc.fillColor('#111827').font('Helvetica').text('School Accounts Desk', startX + 95, y + 44);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Remarks:', startX + 12, y + 42);
+  doc.fillColor('#111827').font('Helvetica').text(payment.notes ? payment.notes.replace(/^\[.*?\]\s*/, '') : 'Valid Financial Collection', startX + 95, y + 42);
 
-  // Right Totals
-  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Total Paid Amount:', startX + 320, y + 12);
-  doc.fillColor('#111827').fontSize(11).font('Helvetica-Bold').text(formatCurrency(payment.amount), startX + 420, y + 10, { align: 'right', width: 95 });
+  doc.fillColor('#4b5563').fontSize(6.8).font('Helvetica').text(
+    '✓ Computer Generated Valid Financial Receipt. Keep safe for future reference.',
+    startX + 12,
+    y + 56
+  );
 
-  doc.fillColor('#4b5563').fontSize(8).font('Helvetica-Bold').text('Remaining Dues:', startX + 320, y + 30);
-  doc.fillColor('#111827').font('Helvetica-Bold').text(formatCurrency(totalOutstanding), startX + 420, y + 30, { align: 'right', width: 95 });
+  // Right Totals & Balances
+  doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica-Bold').text('Grand Total Paid:', startX + 320, y + 10);
+  doc.fillColor('#111827').fontSize(11).font('Helvetica-Bold').text(formatCurrency(payment.amount), startX + 410, y + 8, { align: 'right', width: 105 });
 
-  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Account Status:', startX + 320, y + 46);
+  doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica-Bold').text('Remaining Dues:', startX + 320, y + 26);
+  doc.fillColor('#111827').fontSize(8.5).font('Helvetica-Bold').text(formatCurrency(totalOutstanding), startX + 410, y + 26, { align: 'right', width: 105 });
+
+  doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica-Bold').text('Account Status:', startX + 320, y + 42);
   doc.fillColor('#111827').font('Helvetica-Bold').text(
     totalOutstanding > 0 ? 'PARTIAL BALANCE DUE' : 'ALL DUES CLEARED',
     startX + 400,
-    y + 46,
+    y + 42,
     { align: 'right', width: 115 }
   );
 
@@ -727,7 +737,7 @@ async function generateReceiptPDF(paymentId) {
     { align: 'right', width: 190 }
   );
   doc.fillColor('#374151').fontSize(7).font('Helvetica-Bold').text(
-    'Accounts Officer Signature',
+    'Authorized Signatory',
     startX + 320,
     y + 24,
     { align: 'right', width: 190 }

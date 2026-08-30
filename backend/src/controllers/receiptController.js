@@ -200,33 +200,23 @@ async function downloadReceipt(req, res) {
   const fs = require('fs');
 
   try {
-    let receipt = await db.queryOne(
-      `SELECT r.\`file_path\`, r.\`receipt_number\`, p.\`payment_date\`, s.\`full_name\`
+    const payment = await db.queryOne(
+      `SELECT p.*, r.\`file_path\`, r.\`receipt_number\`, s.\`full_name\`
        FROM \`payments\` p
        LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
        LEFT JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
-       WHERE p.\`id\` = ?`,
-      [paymentId]
+       WHERE p.\`id\` = ? OR r.\`id\` = ? OR r.\`receipt_number\` = ? OR p.\`receipt_number\` = ?`,
+      [paymentId, paymentId, paymentId, paymentId]
     );
 
-    if (!receipt) {
+    if (!payment) {
       return res.status(404).json({ success: false, message: 'Payment not found.' });
     }
 
-    let filePath = receipt.file_path ? path.join(__dirname, '../../', receipt.file_path) : null;
-
-    if (!filePath || !fs.existsSync(filePath)) {
-      const result = await generateAndSaveReceipt(paymentId);
-      filePath = result.filePath;
-      receipt = await db.queryOne(
-        `SELECT r.\`file_path\`, r.\`receipt_number\`
-         FROM \`receipts\` r WHERE r.\`payment_id\` = ?`,
-        [paymentId]
-      );
-    }
-
-    const filename = `Receipt_${receipt?.receipt_number || paymentId}.pdf`;
-    return res.download(filePath, filename);
+    // Always generate a fresh PDF so newest monochrome styling and allocations are rendered
+    const result = await generateAndSaveReceipt(payment.id);
+    const filename = `Receipt_${payment.receipt_number || payment.id}.pdf`;
+    return res.download(result.filePath, filename);
   } catch (err) {
     console.error('[receiptController.downloadReceipt]', err);
     return res.status(500).json({ success: false, message: 'Failed to download receipt: ' + err.message });
