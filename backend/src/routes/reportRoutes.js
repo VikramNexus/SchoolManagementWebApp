@@ -1,11 +1,11 @@
 /**
  * Report Routes — School Management System
- *
- * Day 9: Reminders, Messages & Financial Reports.
+ * Executive Intelligence, Day-Book, Defaulters, Demographics & Auditing
  */
 
 const express = require('express');
 const {
+  getExecutiveOverview,
   getPendingDuesList,
   getAdmissionDuesList,
   getDemographicsReport,
@@ -17,6 +17,7 @@ const router = express.Router();
 
 router.use(authenticateToken);
 
+router.get('/executive-overview', getExecutiveOverview);
 router.get('/pending-dues-list', getPendingDuesList);
 router.get('/admission-dues-list', getAdmissionDuesList);
 router.get('/demographics', getDemographicsReport);
