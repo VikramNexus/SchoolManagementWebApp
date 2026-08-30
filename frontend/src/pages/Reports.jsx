@@ -245,7 +245,7 @@ export default function Reports() {
     }
   };
 
-  // Send WhatsApp Reminder
+  // Send WhatsApp Reminder (Background via Whiskeysockets Baileys or 1-Tap Direct Link Fallback)
   const handleSendWhatsApp = async (student) => {
     const phone = student.whatsapp_number || student.phone;
     if (!phone) {
@@ -254,22 +254,31 @@ export default function Reports() {
     }
     const cleanPhone = String(phone).replace(/\D/g, '');
     const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const msg = `Dear Parent,\nThis is a gentle fee reminder from Aryavart (P.S.G) Shikshan Sansthan for ${student.full_name} (${student.class_name}). Outstanding dues: Rs. ${Number(student.total_dues || 0).toLocaleString('en-IN')}.\nPlease clear at the school counter.\nThank you.`;
+    const msg = `Dear Parent,\nThis is a fee dues reminder from Aryavart (P.S.G) Shikshan Sansthan for ${student.full_name} (${student.class_name}). Outstanding dues: Rs. ${Number(student.total_dues || 0).toLocaleString('en-IN')}.\nPlease clear at the school counter.\nThank you.`;
 
     try {
       setSendingWaId(student.id);
-      const res = await api.post('/messages/send-single', {
-        student_id: student.id,
-        phone: targetPhone,
-        message: msg,
-      }).catch(() => null);
+      const res = await api.post(`/receipts/send-dues-whatsapp/${student.id}`).catch(() => null);
 
-      if (res?.data?.success) {
-        toast.success(`✓ Dues reminder sent to ${student.full_name}'s phone!`);
+      if (res?.data?.mode === 'background') {
+        toast.success(`✓ Dues reminder sent directly to ${student.full_name}'s WhatsApp in background!`);
+      } else if (res?.data?.direct_link) {
+        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        if (isMobile) {
+          window.location.href = res.data.direct_link;
+        } else {
+          window.open(res.data.direct_link, '_blank');
+        }
+        toast.info('Opened WhatsApp with dues reminder.');
       } else {
         const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`;
-        window.open(waUrl, '_blank');
-        toast.info('Opened in WhatsApp Web.');
+        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        if (isMobile) {
+          window.location.href = waUrl;
+        } else {
+          window.open(waUrl, '_blank');
+        }
+        toast.info('Opened in WhatsApp.');
       }
     } catch (e) {
       const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`;

@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   Key,
   CheckCircle2,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth, api } from '../context/AuthContext';
 import './Topbar.css';
@@ -192,6 +193,17 @@ export default function Topbar() {
 
       {/* Right: Notifications, User menu */}
       <div className="topbar-right">
+        {/* Quick Reports Header Shortcut (Prominently visible on Mobile next to Notifications) */}
+        <button
+          type="button"
+          className={`icon-btn reports-header-shortcut-btn ${location.pathname === '/reports' ? 'active' : ''}`}
+          onClick={() => navigate('/reports')}
+          title="Executive Reports & Excel Analytics"
+          aria-label="Executive Reports"
+        >
+          <BarChart3 size={20} />
+        </button>
+
         {/* Notifications */}
         <div className="dropdown" ref={notificationsRef}>
           <button
