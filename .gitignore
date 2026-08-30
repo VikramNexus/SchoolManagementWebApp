@@ -35,3 +35,7 @@ jdk-21/
 *.apk
 frontend/android/app/build/
 frontend/android/.gradle/
+
+# WhatsApp Auth Session Tokens (Local Gateway)
+backend/data/wpp_auth/
+data/wpp_auth/

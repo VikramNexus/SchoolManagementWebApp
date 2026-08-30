@@ -142,15 +142,18 @@ async function initWhatsAppGateway() {
 
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        const isReplaced = statusCode === DisconnectReason.connectionReplaced || statusCode === 440;
+        const isBadSession = statusCode === DisconnectReason.badSession;
 
-        console.log(`[WhatsApp Gateway] Disconnected (code: ${statusCode || 'unknown'}). Should reconnect: ${shouldReconnect}`);
-        
+        const shouldReconnect = !isLoggedOut && !isReplaced && !isBadSession;
+
         qrCodeDataUrl = null;
         linkedUserPhone = null;
         destroySocket();
 
-        if (statusCode === DisconnectReason.loggedOut) {
+        if (isLoggedOut || isBadSession) {
+          console.log(`[WhatsApp Gateway] Session terminated (code: ${statusCode}). Clearing auth files.`);
           connectionStatus = 'disconnected';
           try {
             fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
@@ -160,14 +163,23 @@ async function initWhatsAppGateway() {
           reconnectTimer = setTimeout(() => {
             isInitializing = false;
             initWhatsAppGateway();
-          }, 2000);
+          }, 3000);
+        } else if (isReplaced) {
+          console.log(`[WhatsApp Gateway] Session active on another instance/device (code 440). Pausing auto-reconnect to avoid session conflict.`);
+          connectionStatus = 'disconnected';
+          // Relaxed backoff: do not loop aggressively
+          reconnectTimer = setTimeout(() => {
+            isInitializing = false;
+            initWhatsAppGateway();
+          }, 60000);
         } else {
+          console.log(`[WhatsApp Gateway] Disconnected (code: ${statusCode || 'unknown'}). Reconnecting in 5s...`);
           connectionStatus = 'connecting';
           if (shouldReconnect) {
             reconnectTimer = setTimeout(() => {
               isInitializing = false;
               initWhatsAppGateway();
-            }, 4000);
+            }, 5000);
           } else {
             connectionStatus = 'disconnected';
           }
