@@ -449,19 +449,87 @@ export function printReceiptElement(element, title = 'Official Fee Receipt') {
             margin: 8px 0 4px 0 !important;
           }
           .paid-tag.cleared { background: #dcfce7 !important; color: #15803d !important; border: 1px solid #86efac !important; }
-          .paid-tag.due { background: #ffedd5 !important; color: #c2410c !important; border: 1px solid #fdba74 !important; }
+          .paid-tag.due { background: #fee2e2 !important; color: #dc2626 !important; border: 1px solid #fca5a5 !important; }
           .paid-tag.neutral { background: #f1f5f9 !important; color: #64748b !important; border: 1px solid #cbd5e1 !important; }
-          .sig-line {
-            width: 85px;
-            height: 1px;
-            background: #0f172a;
-            margin-bottom: 2px;
-            display: inline-block;
+          .modern-table-container {
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            overflow: hidden !important;
+            margin-bottom: 10px !important;
           }
-          .sig-label {
-            font-size: 8.5px;
-            color: #64748b;
+          .modern-ledger-table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 9.5px !important;
           }
+          .modern-ledger-table thead tr {
+            background: #0f172a !important;
+            color: #ffffff !important;
+          }
+          .modern-ledger-table th {
+            padding: 6px 9px !important;
+            font-weight: 700 !important;
+            text-align: left !important;
+          }
+          .modern-ledger-table td {
+            padding: 6px 9px !important;
+            border-bottom: 1px solid #f1f5f9 !important;
+          }
+          .modern-ledger-table tbody tr:nth-child(even) td {
+            background: #f8fafc !important;
+          }
+          .receipt-mono-tag {
+            font-family: monospace !important;
+            font-weight: 700 !important;
+            color: #0284c7 !important;
+            background: #f0f9ff !important;
+            border: 1px solid #bae6fd !important;
+            border-radius: 3px !important;
+            padding: 1px 4px !important;
+            font-size: 8.5px !important;
+          }
+          .channel-pill {
+            display: inline-block !important;
+            padding: 1px 5px !important;
+            border-radius: 3px !important;
+            font-size: 8px !important;
+            font-weight: 600 !important;
+          }
+          .channel-pill.bank { background: #e0f2fe !important; color: #0369a1 !important; border: 1px solid #bae6fd !important; }
+          .channel-pill.cash { background: #dcfce7 !important; color: #15803d !important; border: 1px solid #bbf7d0 !important; }
+          .ledger-footer-section {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            margin-top: 14px !important;
+            padding: 10px 12px !important;
+            background: #f8fafc !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 6px !important;
+          }
+          .footer-auth-box {
+            display: flex !important;
+            align-items: center !important;
+            gap: 12px !important;
+          }
+          .seal-stamp-circle {
+            width: 48px !important;
+            height: 48px !important;
+            border: 2px double #0284c7 !important;
+            border-radius: 50% !important;
+            background: #f0f9ff !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            text-align: center !important;
+          }
+          .seal-top { font-size: 6px !important; font-weight: 900 !important; color: #0369a1 !important; }
+          .seal-mid { font-size: 5px !important; font-weight: 700 !important; color: #0284c7 !important; }
+          .seal-bot { font-size: 5.5px !important; font-weight: 800 !important; color: #15803d !important; }
+          .signature-block { text-align: right !important; }
+          .signature-block .sig-rule { width: 80px !important; height: 1px !important; background: #334155 !important; margin-bottom: 2px !important; }
+          .signature-block .sig-title { font-size: 8px !important; font-weight: 700 !important; color: #334155 !important; }
         </style>
       </head>
       <body>

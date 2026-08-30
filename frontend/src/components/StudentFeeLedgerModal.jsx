@@ -154,6 +154,18 @@ export default function StudentFeeLedgerModal({
     }
   };
 
+  // Deduplicate payment receipts by ID / receipt_number
+  const uniquePayments = React.useMemo(() => {
+    if (!paymentHistory || !Array.isArray(paymentHistory)) return [];
+    const seen = new Set();
+    return paymentHistory.filter((p) => {
+      const key = p.id || p.receipt_number || `${p.payment_date}_${p.amount}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [paymentHistory]);
+
   return (
     <div className="jpg-receipt-overlay" onClick={onClose}>
       <div className="jpg-receipt-modal-card ledger-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -209,22 +221,22 @@ export default function StudentFeeLedgerModal({
                     {isFamily ? 'Official Consolidated Family Financial Ledger & Statement' : 'Official Student Financial Ledger & Account Statement'}
                   </p>
                   <p className="school-contact-line">
-                    📍 Near Knowledge Hub, Main Campus &bull; 📞 +91-9876543210 &bull; Academic Session 2025–2026
+                    Shastri Nagar, Ward no-07, Bara chakia, East Champaran, Bihar &bull; Ph: +91-6201844773 &bull; Session 2025–2026
                   </p>
                 </div>
               </div>
 
               {/* Statement Header Strip */}
-              <div className="statement-header-strip" style={isFamily ? { background: '#eff6ff', borderColor: '#bfdbfe' } : {}}>
-                <div className="statement-title" style={isFamily ? { color: '#1d4ed8' } : {}}>
-                  {isFamily ? '👨‍👩‍👧‍👦 CONSOLIDATED FAMILY FEE LEDGER & PAYMENT STATEMENT' : 'STUDENT MONTHLY FEE LEDGER & PAYMENT STATEMENT'}
+              <div className={`statement-header-strip ${isFamily ? 'family' : ''}`}>
+                <div className="statement-title">
+                  {isFamily ? 'CONSOLIDATED FAMILY FEE LEDGER & PAYMENT STATEMENT' : 'STUDENT MONTHLY FEE LEDGER & PAYMENT STATEMENT'}
                 </div>
                 <div className="statement-meta-row">
                   <span><strong>Date:</strong> {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
                   {isFamily ? (
                     <>
-                      <span><strong>Family ID:</strong> {familyData.family_id || 'FAM-ACC'}</span>
-                      <span><strong>Linked Siblings:</strong> {familyData.siblings.length} Enrolled</span>
+                      <span><strong>Family ID:</strong> {familyData?.family_id || 'FAM-ACC'}</span>
+                      <span><strong>Linked Siblings:</strong> {familyData?.siblings?.length || 0} Enrolled</span>
                     </>
                   ) : (
                     <>
@@ -237,25 +249,25 @@ export default function StudentFeeLedgerModal({
 
               {/* Info Grid: Family vs Single Student */}
               {isFamily ? (
-                <div className="receipt-info-box" style={{ background: '#f8fafc', border: '1.5px solid #cbd5e1' }}>
+                <div className="receipt-info-box family-info-box">
                   <div style={{ width: '100%' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px dashed #cbd5e1', paddingBottom: '5px' }}>
-                      <span style={{ fontWeight: 800, color: '#1e293b', fontSize: '0.82rem' }}>👨‍👩‍👧‍👦 Enrolled Family Siblings:</span>
-                      <span style={{ fontWeight: 800, color: '#2563eb', fontSize: '0.82rem' }}>
+                    <div className="family-siblings-header">
+                      <span className="family-siblings-title">Enrolled Family Siblings:</span>
+                      <span className="family-combined-rate">
                         Combined Monthly Rate: ₹{Number(combinedRate).toLocaleString('en-IN')}/mo
                       </span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '6px' }}>
-                      {familyData.siblings.map((sib) => (
-                        <div key={sib.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 8px', fontSize: '0.78rem' }}>
-                          <strong style={{ color: '#0f172a' }}>{sib.full_name}</strong>
-                          <div style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                    <div className="family-siblings-grid">
+                      {familyData?.siblings?.map((sib) => (
+                        <div key={sib.id} className="sibling-pill-card">
+                          <strong className="sibling-name">{sib.full_name}</strong>
+                          <div className="sibling-meta">
                             {sib.class_name || 'Class —'} &bull; ₹{Number(sib.monthly_fee_rate || 0).toLocaleString('en-IN')}/mo
                           </div>
                         </div>
                       ))}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', marginTop: '6px', borderTop: '1px solid #e2e8f0', paddingTop: '4px' }}>
+                    <div className="family-guardian-row">
                       <span><strong>Parent / Guardian:</strong> {student.father_name || student.parent_name || 'Family Guardian'}</span>
                       <span><strong>Phone:</strong> {parentPhone || '—'}</span>
                     </div>
@@ -270,7 +282,7 @@ export default function StudentFeeLedgerModal({
                     </div>
                     <div className="info-row">
                       <span className="info-k">Father's Name:</span>
-                      <span className="info-v">{student.father_name || 'N/A'}</span>
+                      <span className="info-v font-bold">{student.father_name || 'N/A'}</span>
                     </div>
                   </div>
                   <div className="info-col">
@@ -306,15 +318,15 @@ export default function StudentFeeLedgerModal({
               <div className="ledger-section-heading">
                 {isFamily ? 'Consolidated Month-by-Month Schedule (Combined Sibling Rates)' : 'Month-by-Month Fee Schedule'}
               </div>
-              <div className="receipt-table-wrapper">
-                <table className="official-table compact">
+              <div className="receipt-table-wrapper modern-table-container">
+                <table className="official-table modern-ledger-table">
                   <thead>
                     <tr>
-                      <th>Month</th>
-                      <th className="text-right">{isFamily ? 'Combined Fee' : 'Assessed Fee'}</th>
-                      <th className="text-right">Paid Amount</th>
-                      <th className="text-right">Due Balance</th>
-                      <th className="text-center">Status</th>
+                      <th style={{ width: '38%' }}>Month / Period</th>
+                      <th className="text-right" style={{ width: '18%' }}>{isFamily ? 'Combined Fee' : 'Assessed Fee'}</th>
+                      <th className="text-right" style={{ width: '16%' }}>Paid Amount</th>
+                      <th className="text-right" style={{ width: '16%' }}>Due Balance</th>
+                      <th className="text-center" style={{ width: '12%' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -329,18 +341,18 @@ export default function StudentFeeLedgerModal({
                         return (
                           <tr key={idx}>
                             <td className="font-medium">
-                              <div>{row.month_name || `Month ${row.fee_month || idx + 1}`} {row.fee_year ? `(${row.fee_year})` : ''}</div>
+                              <div className="month-row-title">{row.month_name || `Month ${row.fee_month || idx + 1}`} {row.fee_year ? `(${row.fee_year})` : ''}</div>
                               {row.sibling_breakdown && row.sibling_breakdown.length > 1 && (
-                                <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
+                                <div className="sibling-sub-breakdown">
                                   {row.sibling_breakdown.map((s) => `${s.student_name ? s.student_name.split(' ')[0] : 'S'}: ₹${Number(s.fee_amount || 0).toLocaleString('en-IN')}`).join(' | ')}
                                 </div>
                               )}
                             </td>
-                            <td className="text-right font-semibold">₹{due.toLocaleString('en-IN')}</td>
+                            <td className="text-right font-semibold text-slate">₹{due.toLocaleString('en-IN')}</td>
                             <td className="text-right text-green font-bold">
                               {paid > 0 ? `₹${paid.toLocaleString('en-IN')}` : '—'}
                             </td>
-                            <td className="text-right font-bold" style={{ color: bal > 0 ? '#ea580c' : '#16a34a' }}>
+                            <td className="text-right font-bold" style={{ color: bal > 0 ? '#dc2626' : '#16a34a' }}>
                               ₹{bal.toLocaleString('en-IN')}
                             </td>
                             <td className="text-center">
@@ -353,7 +365,7 @@ export default function StudentFeeLedgerModal({
                       })
                     ) : (
                       <tr>
-                        <td colSpan={5} className="text-center" style={{ padding: '16px', color: '#64748b' }}>
+                        <td colSpan={5} className="text-center empty-ledger-msg">
                           No specific monthly ledger installments recorded yet.
                         </td>
                       </tr>
@@ -363,36 +375,40 @@ export default function StudentFeeLedgerModal({
               </div>
 
               {/* Payment Receipts History Table */}
-              {paymentHistory && paymentHistory.length > 0 && (
+              {uniquePayments && uniquePayments.length > 0 && (
                 <>
                   <div className="ledger-section-heading" style={{ marginTop: '14px' }}>
-                    Validated Payment Receipts Log ({paymentHistory.length})
+                    Validated Payment Receipts Log ({uniquePayments.length})
                   </div>
-                  <div className="receipt-table-wrapper">
-                    <table className="official-table compact">
+                  <div className="receipt-table-wrapper modern-table-container">
+                    <table className="official-table modern-ledger-table">
                       <thead>
                         <tr>
-                          <th>Receipt No</th>
-                          <th>Payment Date</th>
-                          <th>Channel</th>
-                          <th className="text-right">Amount Paid</th>
+                          <th style={{ width: '28%' }}>Receipt No</th>
+                          <th style={{ width: '24%' }}>Payment Date</th>
+                          <th style={{ width: '26%' }}>Channel</th>
+                          <th className="text-right" style={{ width: '22%' }}>Amount Paid</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {paymentHistory.map((p, i) => (
+                        {uniquePayments.map((p, i) => (
                           <tr key={i}>
-                            <td className="font-medium" style={{ fontFamily: 'monospace', color: '#0284c7' }}>
-                              {p.receipt_number || `RCP-${p.id}`}
-                            </td>
                             <td>
+                              <span className="receipt-mono-tag">
+                                {p.receipt_number || `RCP-${p.id}`}
+                              </span>
+                            </td>
+                            <td className="payment-date-cell">
                               {p.payment_date
                                 ? new Date(p.payment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                                 : '—'}
                             </td>
                             <td>
-                              {p.payment_mode === 'IN_ACCOUNT' ? '🏦 In Account' : '💵 Cash'}
+                              <span className={`channel-pill ${p.payment_mode === 'IN_ACCOUNT' ? 'bank' : 'cash'}`}>
+                                {p.payment_mode === 'IN_ACCOUNT' ? 'Bank / Online Transfer' : 'Cash Handover'}
+                              </span>
                             </td>
-                            <td className="text-right text-green font-bold">
+                            <td className="text-right text-green font-bold amount-cell">
                               ₹{Number(p.amount || 0).toLocaleString('en-IN')}
                             </td>
                           </tr>
@@ -404,23 +420,21 @@ export default function StudentFeeLedgerModal({
               )}
 
               {/* Official Stamp & Sign */}
-              <div className="receipt-footer-section" style={{ marginTop: '16px' }}>
-                <div className="payment-mode-box">
+              <div className="ledger-footer-section">
+                <div className="footer-disclaimer-box">
                   <div className="thank-you-msg">
-                    ✓ Official computer-generated statement issued by Aryavart Shikshan Sansthan Accounts Dept.
+                    Official computer-generated statement issued by Aryavart Shikshan Sansthan Accounts Dept.
                   </div>
                 </div>
-                <div className="total-and-signature-box">
-                  <div className="official-stamp-box">
-                    <div className="seal-stamp-circle">
-                      <span>ARYAVART</span>
-                      <small>ACCOUNTS SEAL</small>
-                      <span>✓ VERIFIED</span>
-                    </div>
-                    <div className="signature-line">
-                      <div className="sig-rule" />
-                      <span>Accounts Officer</span>
-                    </div>
+                <div className="footer-auth-box">
+                  <div className="seal-stamp-circle">
+                    <div className="seal-top">ARYAVART</div>
+                    <div className="seal-mid">ACCOUNTS SEAL</div>
+                    <div className="seal-bot">&#10003; VERIFIED</div>
+                  </div>
+                  <div className="signature-block">
+                    <div className="sig-rule" />
+                    <div className="sig-title">Accounts Officer</div>
                   </div>
                 </div>
               </div>

@@ -77,21 +77,35 @@ async function getStudentProfile(req, res) {
 
     // Get recent payments & attach installments by monthly_fee_id
     const payments = await db.query(
-      `SELECT p.*, COALESCE(r.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_number,
-              pa.\`monthly_fee_id\`, pa.\`allocated_amount\`
+      `SELECT p.*, COALESCE(r.\`receipt_number\`, CONCAT('RCP-', LPAD(p.\`id\`, 6, '0'))) as receipt_number
        FROM \`payments\` p
        LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
-       LEFT JOIN \`payment_allocations\` pa ON pa.\`payment_id\` = p.\`id\`
        WHERE p.\`student_id\` = ?
        ORDER BY p.\`payment_date\` DESC, p.\`created_at\` DESC`,
       [id]
     );
 
+    const paymentIds = payments.map(p => p.id);
+    const paymentAllocations = paymentIds.length > 0
+      ? await db.query(
+          `SELECT pa.\`payment_id\`, pa.\`monthly_fee_id\`, pa.\`allocated_amount\`
+           FROM \`payment_allocations\` pa
+           WHERE pa.\`payment_id\` IN (?)`,
+          [paymentIds]
+        )
+      : [];
+
     const allocationsByMonthlyFeeId = {};
-    for (const p of payments) {
-      if (p.monthly_fee_id) {
-        if (!allocationsByMonthlyFeeId[p.monthly_fee_id]) allocationsByMonthlyFeeId[p.monthly_fee_id] = [];
-        allocationsByMonthlyFeeId[p.monthly_fee_id].push(p);
+    for (const pa of paymentAllocations) {
+      if (pa.monthly_fee_id) {
+        if (!allocationsByMonthlyFeeId[pa.monthly_fee_id]) allocationsByMonthlyFeeId[pa.monthly_fee_id] = [];
+        const matchingPayment = payments.find(p => p.id === pa.payment_id);
+        if (matchingPayment) {
+          allocationsByMonthlyFeeId[pa.monthly_fee_id].push({
+            ...matchingPayment,
+            allocated_amount: pa.allocated_amount,
+          });
+        }
       }
     }
 
