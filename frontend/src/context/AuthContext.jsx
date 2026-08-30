@@ -31,7 +31,7 @@ export const CLOUD_SERVER_URL = 'https://schoolmanagementwebapp-pf7m.onrender.co
 
 export const DEFAULT_SERVER_URL = isLocalBrowser
   ? ''
-  : (import.meta.env.VITE_API_URL || LOCAL_WIFI_SERVER_URL || CLOUD_SERVER_URL);
+  : (import.meta.env.VITE_API_URL || CLOUD_SERVER_URL || LOCAL_WIFI_SERVER_URL);
 
 export function normalizeApiUrl(rawUrl) {
   if (!rawUrl) return isLocalBrowser ? '/api' : `${DEFAULT_SERVER_URL.replace(/\/+$/, '')}/api`;

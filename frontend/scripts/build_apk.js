@@ -101,8 +101,8 @@ if (fs.existsSync(debugApk)) {
   console.log(`📊 File Size:         ${sizeMB} MB`);
   console.log(`⏱️ Generated At:      ${new Date().toLocaleString()}`);
   console.log('\n✨ Features Active in this APK:');
-  console.log(' • Live Server URL: https://schoolmanagementwebapp.onrender.com');
-  console.log(' • Zero-Reinstall Updates: Future UI updates load in real-time');
+  console.log(' • Live Server URL: https://schoolmanagementwebapp-pf7m.onrender.com');
+  console.log(' • Embedded Local Assets: Instant offline launch with zero "Not Found" errors');
   console.log(' • Native Capabilities: WhatsApp Direct Sharing, Excel & SQL Downloads');
   console.log('====================================================\n');
 } else {
