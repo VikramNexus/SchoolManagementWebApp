@@ -506,7 +506,7 @@ const ExcelJS = require('exceljs');
 
 /**
  * GET /api/reports/export-collections-excel
- * Generate Clean, Compact, High-Contrast B&W Monochrome Collections Excel
+ * Generate Clean, Compact, High-Contrast B&W Monochrome Collections Excel with Student Details
  */
 async function exportCollectionsExcel(req, res) {
   try {
@@ -556,8 +556,10 @@ async function exportCollectionsExcel(req, res) {
         s.admission_no,
         s.full_name as student_name,
         COALESCE(NULLIF(s.father_name, ''), NULLIF(s.parent_name, ''), '—') as father_name,
+        COALESCE(NULLIF(s.phone, ''), NULLIF(s.whatsapp_number, ''), '—') as contact_number,
         c.name as class_name,
-        sec.name as section_name
+        sec.name as section_name,
+        s.category
       FROM payments p
       LEFT JOIN students s ON s.id = p.student_id
       LEFT JOIN classes c ON c.id = s.class_id
@@ -575,7 +577,7 @@ async function exportCollectionsExcel(req, res) {
       pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
     });
 
-    const endColLetter = 'I';
+    const endColLetter = 'K';
 
     // 1. School Header Banner (High-Contrast B&W)
     sheet.mergeCells(`A1:${endColLetter}1`);
@@ -603,13 +605,15 @@ async function exportCollectionsExcel(req, res) {
       'Adm No',
       'Student Name',
       "Father's Name",
+      'Contact No',
       'Class & Sec',
+      'Category',
       'Payment Received (Rs.)',
       'Mode (Cash/Bank)',
       'Remarks',
     ];
     const headerRow = sheet.addRow(headers);
-    headerRow.height = 22;
+    headerRow.height = 24;
     headerRow.eachCell((cell) => {
       cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; // Light gray 10%
@@ -632,13 +636,15 @@ async function exportCollectionsExcel(req, res) {
         r.admission_no || 'N/A',
         r.student_name || '—',
         r.father_name || '—',
+        r.contact_number || '—',
         `${r.class_name || ''} ${r.section_name ? `(${r.section_name})` : ''}`.trim() || '—',
+        r.category === 'hosteller' ? 'Hostel' : 'Day Scholar',
         amt,
         r.payment_mode === 'IN_ACCOUNT' ? 'Bank / UPI' : 'Cash',
         r.notes || '—',
       ]);
 
-      dataRow.height = 19;
+      dataRow.height = 20;
       const isEven = idx % 2 === 1;
       dataRow.eachCell((cell, colNumber) => {
         cell.font = { name: 'Arial', size: 9.5, color: { argb: 'FF000000' } };
@@ -652,9 +658,9 @@ async function exportCollectionsExcel(req, res) {
           right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
         };
 
-        if (colNumber === 1 || colNumber === 2 || colNumber === 3 || colNumber === 6 || colNumber === 8) {
+        if (colNumber === 1 || colNumber === 2 || colNumber === 3 || colNumber === 6 || colNumber === 7 || colNumber === 8 || colNumber === 10) {
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        } else if (colNumber === 7) {
+        } else if (colNumber === 9) {
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
           cell.numFmt = '#,##0.00';
           cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF000000' } };
@@ -671,16 +677,20 @@ async function exportCollectionsExcel(req, res) {
       '',
       '',
       '',
+      '',
+      '',
       'TOTAL RECEIVED:',
       totalAmount,
       `${rows.length} Txns`,
       '',
     ]);
-    totalRow.height = 22;
+    totalRow.height = 24;
     totalRow.eachCell((cell, colNumber) => {
       cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
-      if (colNumber === 7) {
+      if (colNumber === 8) {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      } else if (colNumber === 9) {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
         cell.numFmt = '#,##0.00';
       } else {
@@ -694,10 +704,10 @@ async function exportCollectionsExcel(req, res) {
       };
     });
 
-    // Exact Compact Column Widths (fits horizontally on page)
-    const widths = [6, 12, 14, 20, 18, 14, 18, 14, 22];
+    // Exact Column Widths with generous padding to prevent ANY text clipping
+    const widths = [7, 14, 16, 24, 22, 16, 15, 14, 25, 18, 42];
     sheet.columns.forEach((col, idx) => {
-      col.width = widths[idx] || 15;
+      col.width = widths[idx] || 16;
     });
 
     const filename = `Collections_${preset}_${new Date().toISOString().slice(0, 10)}.xlsx`;
@@ -830,7 +840,7 @@ async function exportDuesExcel(req, res) {
       'Overdue Status',
     ];
     const headerRow = sheet.addRow(headers);
-    headerRow.height = 22;
+    headerRow.height = 24;
     headerRow.eachCell((cell) => {
       cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; // Light gray
@@ -875,7 +885,7 @@ async function exportDuesExcel(req, res) {
         status,
       ]);
 
-      dataRow.height = 19;
+      dataRow.height = 20;
       const isEven = idx % 2 === 1;
       dataRow.eachCell((cell, colNumber) => {
         cell.font = { name: 'Arial', size: 9.5, color: { argb: 'FF000000' } };
@@ -915,11 +925,13 @@ async function exportDuesExcel(req, res) {
       totalOutstanding,
       `${rows.length} Defaulters`,
     ]);
-    totalRow.height = 22;
+    totalRow.height = 24;
     totalRow.eachCell((cell, colNumber) => {
       cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
-      if (colNumber >= 8 && colNumber <= 10) {
+      if (colNumber === 7) {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      } else if (colNumber >= 8 && colNumber <= 10) {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
         cell.numFmt = '#,##0.00';
       } else {
@@ -933,10 +945,10 @@ async function exportDuesExcel(req, res) {
       };
     });
 
-    // Exact Compact Column Widths (fits cleanly on screen & A4 paper)
-    const widths = [6, 14, 20, 18, 14, 14, 12, 16, 16, 18, 16];
+    // Exact Column Widths with generous padding to prevent ANY text clipping
+    const widths = [7, 16, 24, 22, 16, 15, 14, 22, 24, 26, 22];
     sheet.columns.forEach((col, idx) => {
-      col.width = widths[idx] || 15;
+      col.width = widths[idx] || 16;
     });
 
     const filename = `Outstanding_Dues_${aging}_${new Date().toISOString().slice(0, 10)}.xlsx`;
