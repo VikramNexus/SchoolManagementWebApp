@@ -545,14 +545,22 @@
 }
 
 .class-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
   background: #f1f5f9;
   color: #334155;
   border: 1px solid #e2e8f0;
-  padding: 3px 8px;
   border-radius: 6px;
   font-weight: 700;
   font-size: 0.8rem;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .amount-val-badge {
@@ -568,49 +576,83 @@
 }
 
 .pending-dues-tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
   background: #fee2e2;
   color: #dc2626;
   border: 1px solid #fca5a5;
   font-size: 0.75rem;
   font-weight: 800;
-  padding: 3px 8px;
   border-radius: 6px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .cleared-tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
   background: #dcfce7;
   color: #15803d;
   border: 1px solid #86efac;
   font-size: 0.75rem;
   font-weight: 800;
-  padding: 3px 8px;
   border-radius: 6px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .remark-cash {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
   background: #fef3c7;
   color: #b45309;
   border: 1px solid #fde68a;
   font-size: 0.725rem;
   font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: 6px;
   text-transform: uppercase;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
+  letter-spacing: 0.02em;
 }
 
 .remark-in-account {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
   background: #e0e7ff;
   color: #4338ca;
   border: 1px solid #c7d2fe;
   font-size: 0.725rem;
   font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: 6px;
   text-transform: uppercase;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
+  letter-spacing: 0.02em;
 }
 
 .notes-cell {

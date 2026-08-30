@@ -505,14 +505,30 @@
 
 /* Class Pill */
 .class-pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
   background: #f1f5f9;
   color: #334155;
   border: 1px solid #e2e8f0;
-  padding: 3px 9px;
   border-radius: 6px;
   font-weight: 700;
   font-size: 0.8rem;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
+}
+
+.class-pill.mini {
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+  font-size: 0.72rem;
+  padding: 0 6px;
 }
 
 /* Parent Text */
@@ -530,14 +546,22 @@
 }
 
 .total-due-badge.red {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
   background: #fee2e2;
   color: #dc2626;
   border: 1px solid #fca5a5;
   font-weight: 800;
-  font-size: 0.92rem;
-  padding: 4px 10px;
-  border-radius: 8px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .assessed-cell {

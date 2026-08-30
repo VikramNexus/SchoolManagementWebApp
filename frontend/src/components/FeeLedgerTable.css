@@ -264,25 +264,41 @@
 }
 
 .remark-in-account {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
   background: #dcfce7;
   color: #15803d;
   font-weight: 800;
   font-size: 0.75rem;
   border: 1px solid #bbf7d0;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .remark-cash {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
   background: #fef3c7;
   color: #b45309;
   font-weight: 800;
   font-size: 0.75rem;
   border: 1px solid #fde68a;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .remark-dash {

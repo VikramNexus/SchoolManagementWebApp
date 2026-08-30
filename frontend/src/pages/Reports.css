@@ -727,13 +727,22 @@
 }
 
 .mono-receipt-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
   font-family: monospace;
   font-weight: 700;
   color: #0284c7;
   background: #f0f9ff;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 0 8px;
+  border-radius: 6px;
   border: 1px solid #bae6fd;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .student-click-link {
@@ -759,21 +768,38 @@
 }
 
 .mono-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
   font-family: monospace;
   font-size: 10px;
   background: #f1f5f9;
   color: #475569;
-  padding: 1px 4px;
+  padding: 0 6px;
   border-radius: 4px;
-  margin-top: 2px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .channel-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
   font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .channel-pill.cash { background: #fef3c7; color: #92400e; }
@@ -908,14 +934,20 @@
 .class-badge-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px;
   background: #f0f9ff;
   color: #0369a1;
   border: 1px solid #bae6fd;
   font-size: 11.5px;
   font-weight: 700;
-  padding: 2px 7px;
   border-radius: 6px;
   white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .class-name-badge {
