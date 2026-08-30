@@ -396,6 +396,61 @@ export function printReceiptElement(element, title = 'Official Fee Receipt') {
           .signature-line-box {
             text-align: right;
           }
+          .statement-header-strip {
+            background: #f0f9ff !important;
+            border: 1px solid #bae6fd !important;
+            border-radius: 6px !important;
+            padding: 8px 12px !important;
+            margin-bottom: 10px !important;
+            text-align: center !important;
+          }
+          .statement-title {
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            color: #0369a1 !important;
+            letter-spacing: 0.5px !important;
+            margin-bottom: 4px !important;
+          }
+          .statement-meta-row {
+            display: flex !important;
+            justify-content: space-around !important;
+            font-size: 9.5px !important;
+            color: #475569 !important;
+            border-top: 1px dashed #cbd5e1 !important;
+            padding-top: 4px !important;
+          }
+          .ledger-kpi-grid {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr 1fr !important;
+            gap: 8px !important;
+            margin-bottom: 10px !important;
+          }
+          .kpi-box {
+            padding: 8px !important;
+            border-radius: 6px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            text-align: center !important;
+            border: 1px solid !important;
+          }
+          .kpi-box.blue { background: #f0f9ff !important; border-color: #bae6fd !important; color: #0369a1 !important; }
+          .kpi-box.green { background: #f0fdf4 !important; border-color: #bbf7d0 !important; color: #15803d !important; }
+          .kpi-box.orange { background: #fff7ed !important; border-color: #fed7aa !important; color: #c2410c !important; }
+          .kpi-box.teal { background: #f0fdfa !important; border-color: #99f6e4 !important; color: #0f766e !important; }
+          .kpi-lbl { font-size: 8px !important; font-weight: 800 !important; text-transform: uppercase !important; }
+          .kpi-val { font-size: 13px !important; font-weight: 900 !important; margin-top: 2px !important; }
+          .ledger-section-heading {
+            font-size: 10px !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            margin: 8px 0 4px 0 !important;
+          }
+          .paid-tag.cleared { background: #dcfce7 !important; color: #15803d !important; border: 1px solid #86efac !important; }
+          .paid-tag.due { background: #ffedd5 !important; color: #c2410c !important; border: 1px solid #fdba74 !important; }
+          .paid-tag.neutral { background: #f1f5f9 !important; color: #64748b !important; border: 1px solid #cbd5e1 !important; }
           .sig-line {
             width: 85px;
             height: 1px;

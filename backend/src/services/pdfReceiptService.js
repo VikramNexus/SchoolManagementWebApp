@@ -1,14 +1,12 @@
 /**
- * PDF Receipt Service — School Management System
+ * PDF Receipt & Statement Service — School Management System
  *
- * Day 8: Receipts & Messaging Foundation.
+ * Generates branded, high-fidelity PDF documents:
+ * 1. Single Payment Receipts (Admission & Fee Collection)
+ * 2. Student Monthly Fee Ledgers & Comprehensive Statements
+ * 3. Outstanding Dues Notices & Formal Statements
  *
- * Generates branded PDF receipts using PDFKit containing:
- * - School logo, name, address, phone, email
- * - Unique RECEIPT-YYYY-XXXXXX sequence
- * - Student information (name, admission no, class, section)
- * - Allocated-month breakdown with amounts
- * - Total paid, remaining due
+ * Formatted for standard A4 sheet printing with exact visual parity to the JPG/UI layout.
  */
 
 const PDFDocument = require('pdfkit');
@@ -17,7 +15,7 @@ const path = require('path');
 const db = require('../config/db');
 
 /**
- * Ensure the receipts directory exists
+ * Ensure receipts storage directory exists
  */
 function ensureReceiptsDir() {
   const dir = path.join(__dirname, '../../uploads/receipts');
@@ -28,8 +26,7 @@ function ensureReceiptsDir() {
 }
 
 /**
- * Get the next receipt sequence number for a given year
- * Format: REC-YYYY-XXXXXX (6 digits, zero-padded)
+ * Get next sequential receipt number: REC-YYYY-XXXXXX
  */
 async function getNextReceiptNumber(year) {
   const currentYear = year || new Date().getFullYear();
@@ -54,31 +51,56 @@ async function getNextReceiptNumber(year) {
 }
 
 /**
- * Get school settings for receipt header
+ * Get dynamic school settings
  */
 async function getSchoolSettings() {
-  return await db.queryOne(
-    `SELECT \`school_name\`, \`address\`, \`phone\`, \`email\`, \`logo_path\`, \`currency_symbol\`
+  const settings = await db.queryOne(
+    `SELECT \`school_name\`, \`address\`, \`phone\`, \`email\`, \`logo_path\`, \`currency_symbol\`, \`academic_year\`
      FROM \`school_settings\`
      WHERE \`id\` = 1`
   );
+
+  return settings || {
+    school_name: 'Aryavart (P.S.G) Shikshan Sansthan',
+    address: 'Shastri Nagar, Ward no-07, Bara chakia, East Champaran, Bihar',
+    phone: '+91-6201844773',
+    email: 'Aryavartshikshansansthan@gmail.com',
+    academic_year: '2025-2026',
+    currency_symbol: 'Rs.',
+  };
 }
 
 /**
- * Get payment details with student info and allocations
+ * Format currency cleanly without unicode font corruption
  */
+function formatCurrency(amount) {
+  const num = Number(amount || 0);
+  return `Rs. ${num.toLocaleString('en-IN')}`;
+}
+
 /**
- * Get payment details with student info and allocations
+ * Month names lookup
+ */
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+function formatMonth(monthNum) {
+  return MONTH_NAMES[monthNum - 1] || `Month ${monthNum}`;
+}
+
+/**
+ * Get payment details with student info
  */
 async function getPaymentDetailsForReceipt(paymentId) {
   return await db.queryOne(
     `SELECT p.*, s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`,
             COALESCE(NULLIF(s.\`father_name\`, ''), NULLIF(s.\`parent_name\`, ''), (SELECT NULLIF(s2.\`father_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`father_name\` IS NOT NULL LIMIT 1), '—') as father_name,
             COALESCE(NULLIF(s.\`mother_name\`, ''), (SELECT NULLIF(s2.\`mother_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`mother_name\` IS NOT NULL LIMIT 1), '') as mother_name,
-            COALESCE(NULLIF(s.\`parent_name\`, ''), NULLIF(s.\`father_name\`, ''), (SELECT COALESCE(NULLIF(s2.\`father_name\`, ''), NULLIF(s2.\`parent_name\`, '')) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND (s2.\`father_name\` IS NOT NULL OR s2.\`parent_name\` IS NOT NULL) LIMIT 1), '—') as parent_name,
-            COALESCE(NULLIF(s.\`phone\`, ''), NULLIF(s.\`whatsapp_number\`, ''), (SELECT NULLIF(s2.\`phone\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`phone\` IS NOT NULL LIMIT 1), '') as phone,
-            COALESCE(NULLIF(s.\`whatsapp_number\`, ''), NULLIF(s.\`phone\`, ''), (SELECT NULLIF(s2.\`whatsapp_number\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`whatsapp_number\` IS NOT NULL LIMIT 1), '') as whatsapp_number,
-            COALESCE(NULLIF(s.\`address\`, ''), (SELECT NULLIF(s2.\`address\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`address\` IS NOT NULL LIMIT 1), '—') as address,
+            COALESCE(NULLIF(s.\`phone\`, ''), NULLIF(s.\`whatsapp_number\`, ''), (SELECT NULLIF(s2.\`phone\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`phone\` IS NOT NULL LIMIT 1), '—') as phone,
+            COALESCE(NULLIF(s.\`whatsapp_number\`, ''), NULLIF(s.\`phone\`, ''), '—') as whatsapp_number,
+            COALESCE(NULLIF(s.\`address\`, ''), '—') as address,
             c.\`name\` as class_name, sec.\`name\` as section_name,
             r.\`receipt_number\`
      FROM \`payments\` p
@@ -92,7 +114,7 @@ async function getPaymentDetailsForReceipt(paymentId) {
 }
 
 /**
- * Get payment allocations with month and additional fee details
+ * Get payment allocations
  */
 async function getPaymentAllocations(paymentId) {
   const rows = await db.query(
@@ -148,9 +170,9 @@ async function getPaymentAllocations(paymentId) {
     });
   }
 
-  // Fallback: If no allocation records found, look up student's additional charges or monthly fees
+  // Fallback if no explicit allocations
   const payment = await db.queryOne(
-    'SELECT `student_id`, `amount`, `payment_category`, `notes`, `payment_date` FROM `payments` WHERE `id` = ?',
+    'SELECT `student_id`, `amount`, `payment_category`, `notes` FROM `payments` WHERE `id` = ?',
     [paymentId]
   );
 
@@ -179,9 +201,6 @@ async function getPaymentAllocations(paymentId) {
   return [];
 }
 
-/**
- * Get total outstanding for student after this payment
- */
 async function getStudentOutstanding(studentId) {
   const result = await db.queryOne(
     `SELECT COALESCE(SUM(\`due_amount\`), 0) as total
@@ -192,9 +211,6 @@ async function getStudentOutstanding(studentId) {
   return Number(result?.total || 0);
 }
 
-/**
- * Get additional fees outstanding
- */
 async function getStudentAdditionalOutstanding(studentId) {
   const result = await db.queryOne(
     `SELECT COALESCE(SUM(\`amount\`), 0) as total
@@ -205,46 +221,321 @@ async function getStudentAdditionalOutstanding(studentId) {
   return Number(result?.total || 0);
 }
 
-/**
- * Format month number to name
- */
-function formatMonth(monthNum) {
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-  return months[monthNum - 1] || String(monthNum);
-}
+// ============================================================================
+// 1. GENERATE OFFICIAL STUDENT FEE LEDGER & ACCOUNT STATEMENT PDF
+// ============================================================================
 
 /**
- * Format currency
+ * Generates an official, perfectly styled A4 PDF matching the JPEG Statement design.
  */
-function formatCurrency(amount, symbol = '₹') {
-  return `${symbol} ${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+async function generateStudentLedgerPDF(studentId) {
+  const student = await db.queryOne(
+    `SELECT s.*, c.\`name\` as class_name, sec.\`name\` as section_name
+     FROM \`students\` s
+     LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+     LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
+     WHERE s.\`id\` = ?`,
+    [studentId]
+  );
+
+  if (!student) {
+    throw new Error('Student not found for statement generation.');
+  }
+
+  const school = await getSchoolSettings();
+
+  const monthlyFees = await db.query(
+    `SELECT * FROM \`monthly_fees\`
+     WHERE \`student_id\` = ?
+     ORDER BY \`fee_year\` ASC, \`fee_month\` ASC`,
+    [studentId]
+  );
+
+  const additionalFees = await db.query(
+    `SELECT saf.*, ft.\`name\` as fee_type_name
+     FROM \`student_additional_fees\` saf
+     LEFT JOIN \`fee_types\` ft ON ft.\`id\` = saf.\`fee_type_id\`
+     WHERE saf.\`student_id\` = ?
+     ORDER BY saf.\`created_at\` ASC`,
+    [studentId]
+  );
+
+  const payments = await db.query(
+    `SELECT p.*, r.\`receipt_number\`
+     FROM \`payments\` p
+     LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
+     WHERE p.\`student_id\` = ?
+     ORDER BY p.\`payment_date\` DESC, p.\`id\` DESC`,
+    [studentId]
+  );
+
+  const totalAssessed =
+    monthlyFees.reduce((s, m) => s + Number(m.fee_amount || 0), 0) +
+    additionalFees.reduce((s, a) => s + Number(a.amount || 0), 0);
+  const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const outstandingBalance = Math.max(0, totalAssessed - totalPaid);
+
+  const receiptsDir = ensureReceiptsDir();
+  const filename = `Fee_Ledger_Statement_${student.admission_no || studentId}_${Date.now()}.pdf`;
+  const filePath = path.join(receiptsDir, filename);
+
+  // Standard A4 Page Setup: 595.28 x 841.89 pt with 36 pt (0.5 inch) margins
+  const doc = new PDFDocument({
+    size: 'A4',
+    margin: 36,
+    info: {
+      Title: `Fee Statement - ${student.full_name}`,
+      Author: school.school_name,
+      Subject: 'Official Student Financial Ledger & Account Statement',
+    },
+  });
+
+  const stream = fs.createWriteStream(filePath);
+  doc.pipe(stream);
+
+  const pageWidth = 595.28;
+  const contentWidth = pageWidth - 72; // 523.28 pt
+  const startX = 36;
+  let y = 36;
+
+  // 1. Top Decorative Brand Stripe
+  doc.rect(startX, y, contentWidth, 4).fill('#0284c7');
+  y += 10;
+
+  // 2. School Letterhead Header
+  // Logo placeholder badge
+  doc.roundedRect(startX, y, 42, 42, 6).fill('#0284c7');
+  doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold').text('A', startX + 13, y + 9);
+
+  // School Title & Contact Details
+  doc.fillColor('#0f172a').fontSize(16).font('Helvetica-Bold').text(school.school_name, startX + 52, y);
+  doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text('Official Student Financial Ledger & Account Statement', startX + 52, y + 18);
+  
+  const addressLine = `${school.address || 'Main Campus'}  |  Ph: ${school.phone || '+91-6201844773'}  |  Session ${school.academic_year || '2025-2026'}`;
+  doc.fillColor('#475569').fontSize(7.5).font('Helvetica').text(addressLine, startX + 52, y + 30);
+
+  y += 50;
+
+  // Divider
+  doc.moveTo(startX, y).lineTo(startX + contentWidth, y).strokeColor('#e2e8f0').lineWidth(1).stroke();
+  y += 8;
+
+  // 3. Statement Header Strip (Cyan / Themed Rounded Banner)
+  doc.roundedRect(startX, y, contentWidth, 34, 4).fillAndStroke('#f0f9ff', '#bae6fd');
+  doc.fillColor('#0369a1').fontSize(9.5).font('Helvetica-Bold').text(
+    'STUDENT MONTHLY FEE LEDGER & PAYMENT STATEMENT',
+    startX,
+    y + 5,
+    { align: 'center', width: contentWidth }
+  );
+
+  const statementDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+  const metaText = `Date: ${statementDate}       |       Adm No: ${student.admission_no || 'N/A'}       |       Class: ${student.class_name || 'N/A'}${student.section_name ? ` (${student.section_name})` : ''}`;
+  doc.fillColor('#0284c7').fontSize(8).font('Helvetica').text(metaText, startX, y + 19, { align: 'center', width: contentWidth });
+
+  y += 42;
+
+  // 4. Student Details Box (2 Columns, Clean Rounded Container)
+  doc.roundedRect(startX, y, contentWidth, 54, 4).fillAndStroke('#f8fafc', '#e2e8f0');
+  
+  const fatherName = student.father_name || student.parent_name || '—';
+  const categoryStr = student.category === 'hosteller' ? 'Hostel Resident' : 'Day Scholar';
+  const phoneStr = student.whatsapp_number || student.phone || student.father_phone || '—';
+
+  // Left Column
+  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Student Full Name:', startX + 12, y + 10);
+  doc.fillColor('#0f172a').font('Helvetica-Bold').text(student.full_name || '—', startX + 105, y + 10);
+
+  doc.fillColor('#475569').font('Helvetica-Bold').text("Father's Name:", startX + 12, y + 30);
+  doc.fillColor('#0f172a').font('Helvetica').text(fatherName, startX + 105, y + 30);
+
+  // Right Column
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Student Category:', startX + 280, y + 10);
+  doc.fillColor('#0f172a').font('Helvetica').text(categoryStr, startX + 370, y + 10);
+
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Contact Phone:', startX + 280, y + 30);
+  doc.fillColor('#0f172a').font('Helvetica').text(phoneStr, startX + 370, y + 30);
+
+  y += 62;
+
+  // 5. Financial Summary KPI Cards (3 Equal Side-by-Side Cards)
+  const cardW = (contentWidth - 16) / 3; // ~169 pt each
+
+  // Card 1: Total Assessed
+  doc.roundedRect(startX, y, cardW, 36, 4).fillAndStroke('#f0f9ff', '#bae6fd');
+  doc.fillColor('#0284c7').fontSize(7.5).font('Helvetica-Bold').text('TOTAL ASSESSED', startX, y + 6, { align: 'center', width: cardW });
+  doc.fillColor('#0369a1').fontSize(11).font('Helvetica-Bold').text(formatCurrency(totalAssessed), startX, y + 18, { align: 'center', width: cardW });
+
+  // Card 2: Total Paid
+  doc.roundedRect(startX + cardW + 8, y, cardW, 36, 4).fillAndStroke('#f0fdf4', '#bbf7d0');
+  doc.fillColor('#16a34a').fontSize(7.5).font('Helvetica-Bold').text('TOTAL PAID', startX + cardW + 8, y + 6, { align: 'center', width: cardW });
+  doc.fillColor('#15803d').fontSize(11).font('Helvetica-Bold').text(formatCurrency(totalPaid), startX + cardW + 8, y + 18, { align: 'center', width: cardW });
+
+  // Card 3: Outstanding Balance
+  const isDues = outstandingBalance > 0;
+  const card3Bg = isDues ? '#fff7ed' : '#f0fdfa';
+  const card3Border = isDues ? '#fed7aa' : '#99f6e4';
+  const card3Text = isDues ? '#c2410c' : '#0f766e';
+
+  doc.roundedRect(startX + (cardW + 8) * 2, y, cardW, 36, 4).fillAndStroke(card3Bg, card3Border);
+  doc.fillColor(card3Text).fontSize(7.5).font('Helvetica-Bold').text('OUTSTANDING BALANCE', startX + (cardW + 8) * 2, y + 6, { align: 'center', width: cardW });
+  doc.fillColor(card3Text).fontSize(11).font('Helvetica-Bold').text(formatCurrency(outstandingBalance), startX + (cardW + 8) * 2, y + 18, { align: 'center', width: cardW });
+
+  y += 46;
+
+  // 6. Section Table 1: Month-by-Month Fee Schedule
+  doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold').text('MONTH-BY-MONTH FEE SCHEDULE', startX, y);
+  y += 12;
+
+  // Table Header
+  doc.rect(startX, y, contentWidth, 18).fill('#0f172a');
+  doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
+  doc.text('Month / Fee Period', startX + 8, y + 5);
+  doc.text('Assessed Fee', startX + 190, y + 5, { align: 'right', width: 75 });
+  doc.text('Paid Amount', startX + 280, y + 5, { align: 'right', width: 75 });
+  doc.text('Due Balance', startX + 370, y + 5, { align: 'right', width: 75 });
+  doc.text('Status', startX + 465, y + 5, { align: 'center', width: 50 });
+
+  y += 18;
+
+  if (monthlyFees.length === 0) {
+    doc.rect(startX, y, contentWidth, 18).fillAndStroke('#ffffff', '#e2e8f0');
+    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text('No monthly fee schedules generated yet for this student.', startX + 8, y + 5);
+    y += 18;
+  } else {
+    monthlyFees.forEach((m, idx) => {
+      // Avoid overflow beyond A4 printable bottom
+      if (y > 720) {
+        doc.addPage();
+        y = 36;
+      }
+      const due = Number(m.fee_amount || 0);
+      const paid = Number(m.paid_amount || 0);
+      const bal = Math.max(0, due - paid);
+      const isPaid = bal === 0 && due > 0;
+      const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+
+      doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#f1f5f9');
+      doc.fillColor('#1e293b').fontSize(7.5).font('Helvetica');
+      doc.text(`${formatMonth(m.fee_month)} ${m.fee_year}`, startX + 8, y + 4);
+      doc.text(formatCurrency(due), startX + 190, y + 4, { align: 'right', width: 75 });
+      doc.fillColor('#15803d').text(formatCurrency(paid), startX + 280, y + 4, { align: 'right', width: 75 });
+      doc.fillColor(bal > 0 ? '#dc2626' : '#64748b').text(formatCurrency(bal), startX + 370, y + 4, { align: 'right', width: 75 });
+
+      // Status Pill
+      const statusBg = isPaid ? '#dcfce7' : bal > 0 ? '#fee2e2' : '#f1f5f9';
+      const statusTextColor = isPaid ? '#15803d' : bal > 0 ? '#b91c1c' : '#64748b';
+      const statusLabel = isPaid ? 'PAID' : bal > 0 ? 'DUE' : '—';
+
+      doc.roundedRect(startX + 472, y + 2, 36, 12, 3).fill(statusBg);
+      doc.fillColor(statusTextColor).fontSize(6.5).font('Helvetica-Bold').text(statusLabel, startX + 472, y + 4, { align: 'center', width: 36 });
+
+      y += 16;
+    });
+  }
+
+  y += 12;
+
+  // 7. Section Table 2: Validated Payment Receipts Log
+  if (payments.length > 0) {
+    if (y > 670) {
+      doc.addPage();
+      y = 36;
+    }
+
+    doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold').text(`VALIDATED PAYMENT RECEIPTS LOG (${payments.length})`, startX, y);
+    y += 12;
+
+    doc.rect(startX, y, contentWidth, 18).fill('#334155');
+    doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
+    doc.text('Receipt No', startX + 8, y + 5);
+    doc.text('Payment Date', startX + 150, y + 5);
+    doc.text('Channel', startX + 270, y + 5);
+    doc.text('Amount Paid', startX + 420, y + 5, { align: 'right', width: 95 });
+
+    y += 18;
+
+    payments.slice(0, 8).forEach((p, idx) => {
+      if (y > 730) {
+        doc.addPage();
+        y = 36;
+      }
+      const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+      const rNum = p.receipt_number || `ADM-${p.id}`;
+      const pDate = p.payment_date
+        ? new Date(p.payment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '—';
+      const channel = p.payment_mode === 'IN_ACCOUNT' ? 'In Account (Bank/UPI)' : 'Cash Handover';
+
+      doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#f1f5f9');
+      doc.fillColor('#0284c7').fontSize(7.5).font('Helvetica-Bold').text(rNum, startX + 8, y + 4);
+      doc.fillColor('#334155').font('Helvetica').text(pDate, startX + 150, y + 4);
+      doc.text(channel, startX + 270, y + 4);
+      doc.fillColor('#15803d').font('Helvetica-Bold').text(formatCurrency(p.amount), startX + 420, y + 4, { align: 'right', width: 95 });
+
+      y += 16;
+    });
+  }
+
+  // 8. Official Verification Footer & Seal
+  if (y > 730) {
+    doc.addPage();
+    y = 36;
+  } else {
+    y = Math.max(y + 16, 740); // Lock to bottom of A4 for consistent alignment
+  }
+
+  doc.roundedRect(startX, y, contentWidth, 42, 4).fillAndStroke('#f8fafc', '#e2e8f0');
+  
+  doc.fillColor('#64748b').fontSize(7).font('Helvetica').text(
+    `Official computer-generated statement issued by ${school.school_name} Accounts Dept.`,
+    startX + 12,
+    y + 16
+  );
+
+  doc.fillColor('#0369a1').fontSize(8).font('Helvetica-Bold').text(
+    'ARYAVART ACCOUNTS SEAL  [VERIFIED]',
+    startX + 320,
+    y + 10,
+    { align: 'right', width: 190 }
+  );
+  doc.fillColor('#64748b').fontSize(7).font('Helvetica').text(
+    'Accounts Officer Signature',
+    startX + 320,
+    y + 24,
+    { align: 'right', width: 190 }
+  );
+
+  doc.end();
+
+  return new Promise((resolve, reject) => {
+    stream.on('finish', () => resolve(filePath));
+    stream.on('error', reject);
+  });
 }
 
+// ============================================================================
+// 2. GENERATE OFFICIAL SINGLE PAYMENT / ADMISSION RECEIPT PDF
+// ============================================================================
+
 /**
- * Generate receipt PDF
- * @param {number} paymentId - Payment ID
- * @returns {Promise<string>} - Path to generated PDF file
+ * Generates an official payment receipt A4 PDF with exact parity to the modal JPG design.
  */
 async function generateReceiptPDF(paymentId) {
-  // Fetch all required data
   const [payment, school, rawAllocations] = await Promise.all([
     getPaymentDetailsForReceipt(paymentId),
     getSchoolSettings(),
-    getPaymentAllocations(paymentId)
+    getPaymentAllocations(paymentId),
   ]);
 
   if (!payment) {
-    throw new Error('Payment not found');
+    throw new Error('Payment not found for receipt generation.');
   }
 
-  // Ensure allocations array is non-empty for display
   let allocations = rawAllocations;
   if (!allocations || allocations.length === 0) {
     const fallbackDesc = payment.payment_category === 'ADMISSION_CHARGE'
-      ? 'Admission & Initial Enrollment Fees'
+      ? 'Admission & Enrollment Charges'
       : (payment.notes ? payment.notes.replace(/^\[.*?\]\s*/, '') : 'School Fee Collection');
     allocations = [{
       description: fallbackDesc,
@@ -258,381 +549,205 @@ async function generateReceiptPDF(paymentId) {
   const additionalOutstanding = await getStudentAdditionalOutstanding(payment.student_id);
   const totalOutstanding = studentOutstanding + additionalOutstanding;
 
-  // Generate receipt number if not exists
   let receiptNumber = payment.receipt_number;
   if (!receiptNumber) {
     receiptNumber = await getNextReceiptNumber(new Date(payment.payment_date).getFullYear());
-    // Update receipts table
     await db.query(
       `UPDATE \`receipts\` SET \`receipt_number\` = ? WHERE \`payment_id\` = ?`,
       [receiptNumber, paymentId]
     );
   }
 
-  // Create PDF document
-  const doc = new PDFDocument({
-    size: 'A4',
-    margin: 50,
-    info: {
-      Title: `Receipt ${receiptNumber}`,
-      Author: school?.school_name || 'School Management System',
-      Subject: `Fee Receipt for ${payment.full_name}`,
-      Keywords: 'receipt, school, fees, payment',
-    }
-  });
-
   const receiptsDir = ensureReceiptsDir();
   const fileName = `receipt_${receiptNumber.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
   const filePath = path.join(receiptsDir, fileName);
 
-  // Pipe to file
+  const doc = new PDFDocument({
+    size: 'A4',
+    margin: 36,
+    info: {
+      Title: `Receipt - ${receiptNumber}`,
+      Author: school.school_name,
+      Subject: `Official Fee Receipt for ${payment.full_name}`,
+    },
+  });
+
   const stream = fs.createWriteStream(filePath);
   doc.pipe(stream);
 
-  // ================================================================
-  // HEADER - School Info
-  // ================================================================
-  let y = 50;
+  const pageWidth = 595.28;
+  const contentWidth = pageWidth - 72; // 523.28 pt
+  const startX = 36;
+  let y = 36;
 
-  // School logo (if available)
-  if (school?.logo_path) {
-    try {
-      const logoPath = path.join(__dirname, '../../', school.logo_path);
-      if (fs.existsSync(logoPath)) {
-        doc.image(logoPath, 50, y, { width: 80 });
-      }
-    } catch (e) {
-      // Logo not found, continue without it
-    }
-  }
+  // 1. Top Decorative Brand Stripe
+  doc.rect(startX, y, contentWidth, 4).fill('#0284c7');
+  y += 10;
 
-  // School name
-  doc.fontSize(22)
-     .font('Helvetica-Bold')
-     .fillColor('#1a1a2e')
-     .text(school?.school_name || 'School Management System', 150, y);
+  // 2. School Letterhead Header
+  doc.roundedRect(startX, y, 42, 42, 6).fill('#0284c7');
+  doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold').text('A', startX + 13, y + 9);
 
-  y += 30;
+  doc.fillColor('#0f172a').fontSize(16).font('Helvetica-Bold').text(school.school_name, startX + 52, y);
+  doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text('Official Student Fee Payment & Receipt Record', startX + 52, y + 18);
+  
+  const addressLine = `${school.address || 'Main Campus'}  |  Ph: ${school.phone || '+91-6201844773'}  |  Session ${school.academic_year || '2025-2026'}`;
+  doc.fillColor('#475569').fontSize(7.5).font('Helvetica').text(addressLine, startX + 52, y + 30);
 
-  // School address
-  doc.fontSize(10)
-     .font('Helvetica')
-     .fillColor('#4a4a6a')
-     .text(school?.address || '', 150, y);
+  y += 50;
 
-  y += 15;
+  // Divider
+  doc.moveTo(startX, y).lineTo(startX + contentWidth, y).strokeColor('#e2e8f0').lineWidth(1).stroke();
+  y += 8;
 
-  // School contact
-  const contactParts = [];
-  if (school?.phone) contactParts.push(`Phone: ${school.phone}`);
-  if (school?.email) contactParts.push(`Email: ${school.email}`);
-  doc.text(contactParts.join('  |  '), 150, y);
-
-  // ================================================================
-  // RECEIPT TITLE & NUMBER
-  // ================================================================
-  y += 35;
-
-  // Divider line
-  doc.moveTo(50, y)
-     .lineTo(545, y)
-     .strokeColor('#e0e0e0')
-     .lineWidth(1)
-     .stroke();
-
-  y += 15;
-
-  // "FEE RECEIPT" title
-  const receiptTitle = payment.payment_category === 'ADMISSION_CHARGE'
+  // 3. Receipt Banner Title & Number Strip
+  const isAdmission = payment.payment_category === 'ADMISSION_CHARGE';
+  const receiptTitle = isAdmission
     ? 'OFFICIAL ADMISSION & ENROLLMENT RECEIPT'
-    : 'OFFICIAL FEE PAYMENT RECEIPT';
+    : 'OFFICIAL STUDENT FEE PAYMENT RECEIPT';
 
-  doc.fontSize(16)
-     .font('Helvetica-Bold')
-     .fillColor('#1a1a2e')
-     .text(receiptTitle, 50, y, { align: 'center' });
-
-  y += 25;
-
-  // Receipt number and date
-  doc.fontSize(10)
-     .font('Helvetica')
-     .fillColor('#4a4a6a');
+  doc.roundedRect(startX, y, contentWidth, 34, 4).fillAndStroke('#f0f9ff', '#bae6fd');
+  doc.fillColor('#0369a1').fontSize(9.5).font('Helvetica-Bold').text(
+    receiptTitle,
+    startX,
+    y + 5,
+    { align: 'center', width: contentWidth }
+  );
 
   const paymentDate = new Date(payment.payment_date).toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric'
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
   });
+  const metaText = `Receipt No: ${receiptNumber}       |       Payment Date: ${paymentDate}       |       Channel: ${payment.payment_mode === 'IN_ACCOUNT' ? 'In Account (Bank)' : 'Cash Handover'}`;
+  doc.fillColor('#0284c7').fontSize(8).font('Helvetica').text(metaText, startX, y + 19, { align: 'center', width: contentWidth });
 
-  doc.text(`Receipt No: ${receiptNumber}`, 50, y, { continued: true });
-  doc.text(`Date: ${paymentDate}`, 545, y, { align: 'right' });
+  y += 42;
 
-  y += 25;
+  // 4. Student & Parent Information Box
+  doc.roundedRect(startX, y, contentWidth, 54, 4).fillAndStroke('#f8fafc', '#e2e8f0');
 
-  // ================================================================
-  // STUDENT & PARENT INFORMATION
-  // ================================================================
-  doc.fontSize(11)
-     .font('Helvetica-Bold')
-     .fillColor('#1a1a2e')
-     .text('Student & Parent Information', 50, y);
+  const fatherName = payment.father_name || payment.parent_name || '—';
+  const categoryStr = payment.category === 'hosteller' ? 'Hostel Resident' : 'Day Scholar';
+  const phoneStr = payment.phone || payment.whatsapp_number || '—';
+
+  // Left Column
+  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Student Full Name:', startX + 12, y + 10);
+  doc.fillColor('#0f172a').font('Helvetica-Bold').text(payment.full_name || '—', startX + 105, y + 10);
+
+  doc.fillColor('#475569').font('Helvetica-Bold').text("Father's Name:", startX + 12, y + 30);
+  doc.fillColor('#0f172a').font('Helvetica').text(fatherName, startX + 105, y + 30);
+
+  // Right Column
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Admission No:', startX + 280, y + 10);
+  doc.fillColor('#0f172a').font('Helvetica-Bold').text(payment.admission_no || '—', startX + 360, y + 10);
+
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Class & Section:', startX + 280, y + 30);
+  doc.fillColor('#0f172a').font('Helvetica').text(`${payment.class_name || '—'}${payment.section_name ? ` (${payment.section_name})` : ''}`, startX + 360, y + 30);
+
+  y += 62;
+
+  // 5. Itemized Fee Breakdown Table
+  doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold').text('ITEMIZED FEE BREAKDOWN & ALLOCATIONS', startX, y);
+  y += 12;
+
+  // Table Header
+  doc.rect(startX, y, contentWidth, 18).fill('#0f172a');
+  doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
+  doc.text('#', startX + 8, y + 5);
+  doc.text('Fee Description / Head', startX + 35, y + 5);
+  doc.text('Period / Type', startX + 240, y + 5);
+  doc.text('Fee Amount', startX + 340, y + 5, { align: 'right', width: 80 });
+  doc.text('Amount Paid', startX + 430, y + 5, { align: 'right', width: 85 });
 
   y += 18;
 
-  const parentName = payment.father_name || payment.parent_name || payment.mother_name || '—';
-  const studentInfo = [
-    { label: 'Student Name', value: payment.full_name || '—' },
-    { label: 'Admission No', value: payment.admission_no || '—' },
-    { label: 'Father / Guardian', value: parentName },
-    { label: 'Class & Section', value: payment.class_name ? `${payment.class_name}${payment.section_name ? ' (' + payment.section_name + ')' : ''}` : '—' },
-    { label: 'Contact Phone', value: payment.phone || payment.whatsapp_number || '—' },
-    { label: 'Category', value: payment.category === 'hosteller' ? 'Hosteller (Hostel)' : 'Day Scholar' },
-  ];
-
-  const colWidth = 245;
-  studentInfo.forEach((item, index) => {
-    const col = index % 2;
-    const row = Math.floor(index / 2);
-    const x = 50 + col * colWidth;
-    const itemY = y + row * 20;
-
-    doc.fontSize(9)
-       .font('Helvetica-Bold')
-       .fillColor('#4a4a6a')
-       .text(`${item.label}:`, x, itemY, { continued: true });
-
-    doc.font('Helvetica')
-       .fillColor('#1a1a2e')
-       .text(` ${item.value}`, x + 95, itemY);
-  });
-
-  y += (Math.ceil(studentInfo.length / 2) * 20) + 15;
-
-  // ================================================================
-  // ITEMIZED PAYMENT BREAKDOWN TABLE
-  // ================================================================
-  doc.fontSize(11)
-     .font('Helvetica-Bold')
-     .fillColor('#1a1a2e')
-     .text('Itemized Fee Payment Breakdown', 50, y);
-
-  y += 15;
-
-  // Table header
-  const tableCols = [
-    { x: 50, width: 35, label: '#', align: 'center' },
-    { x: 85, width: 235, label: 'Fee Description / Head', align: 'left' },
-    { x: 320, width: 110, label: 'Fee Amount', align: 'right' },
-    { x: 430, width: 115, label: 'Amount Paid', align: 'right' },
-  ];
-
-  // Draw header background
-  doc.rect(50, y, 495, 20)
-     .fillColor('#1e293b')
-     .fill();
-
-  doc.fillColor('#ffffff')
-     .fontSize(9)
-     .font('Helvetica-Bold');
-
-  tableCols.forEach(col => {
-    doc.text(col.label, col.x + 5, y + 5, {
-      width: col.width - 10,
-      align: col.align
-    });
-  });
-
-  y += 20;
-
-  // Table rows
   let totalAllocated = 0;
 
-  doc.font('Helvetica')
-     .fillColor('#1a1a2e')
-     .fontSize(9);
-
-  allocations.forEach((alloc, index) => {
-    const rowY = y + index * 20;
-    const isEven = index % 2 === 0;
-
-    // Alternating row background
-    if (isEven) {
-      doc.rect(50, rowY, 495, 20)
-         .fillColor('#f8fafc')
-         .fill();
-    }
-
-    const feeAmt = Number(alloc.fee_amount || alloc.allocated_amount);
-    const allocAmt = Number(alloc.allocated_amount);
+  allocations.forEach((item, idx) => {
+    const feeAmt = Number(item.fee_amount || item.allocated_amount);
+    const allocAmt = Number(item.allocated_amount);
     totalAllocated += allocAmt;
+    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
 
-    const cells = [
-      { x: tableCols[0].x, width: tableCols[0].width, text: String(index + 1), align: 'center' },
-      { x: tableCols[1].x, width: tableCols[1].width, text: alloc.description || 'Fee Installment', align: 'left' },
-      { x: tableCols[2].x, width: tableCols[2].width, text: formatCurrency(feeAmt, school?.currency_symbol || '₹'), align: 'right' },
-      { x: tableCols[3].x, width: tableCols[3].width, text: formatCurrency(allocAmt, school?.currency_symbol || '₹'), align: 'right' },
-    ];
+    doc.rect(startX, y, contentWidth, 18).fillAndStroke(rowBg, '#f1f5f9');
+    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text(`${idx + 1}`, startX + 8, y + 5);
+    doc.fillColor('#0f172a').font('Helvetica-Bold').text(item.description || 'Fee Payment', startX + 35, y + 5);
+    doc.fillColor('#475569').font('Helvetica').text(item.period || '—', startX + 240, y + 5);
+    doc.fillColor('#0f172a').text(formatCurrency(feeAmt), startX + 340, y + 5, { align: 'right', width: 80 });
+    doc.fillColor('#15803d').font('Helvetica-Bold').text(formatCurrency(allocAmt), startX + 430, y + 5, { align: 'right', width: 85 });
 
-    cells.forEach(cell => {
-      doc.text(cell.text, cell.x + 5, rowY + 5, {
-        width: cell.width - 10,
-        align: cell.align
-      });
-    });
+    y += 18;
   });
 
-  y += allocations.length * 20;
+  y += 12;
 
-  // Table total row
-  doc.rect(50, y, 495, 22)
-     .fillColor('#1e293b')
-     .fill();
+  // 6. Payment Summary Box (Clean 2-Column Calculation Card)
+  doc.roundedRect(startX, y, contentWidth, 68, 4).fillAndStroke('#f8fafc', '#e2e8f0');
 
-  doc.fillColor('#ffffff')
-     .fontSize(9)
-     .font('Helvetica-Bold');
+  // Left Details
+  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Payment Method:', startX + 12, y + 12);
+  doc.fillColor('#0f172a').font('Helvetica').text(payment.payment_mode === 'IN_ACCOUNT' ? 'Bank / Online Account Transfer' : 'Cash Handover at Counter', startX + 95, y + 12);
 
-  doc.text('TOTAL AMOUNT PAID', 55, y + 6, { width: tableCols[0].width + tableCols[1].width + tableCols[2].width - 10, align: 'right' });
-  doc.text(formatCurrency(totalAllocated, school?.currency_symbol || '₹'), tableCols[3].x + 5, y + 6, {
-    width: tableCols[3].width - 10,
-    align: 'right'
-  });
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Transaction Ref:', startX + 12, y + 28);
+  doc.fillColor('#0f172a').font('Helvetica').text(payment.reference_number || 'Cash Verified', startX + 95, y + 28);
 
-  y += 32;
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Recorded By:', startX + 12, y + 44);
+  doc.fillColor('#0f172a').font('Helvetica').text('School Accounts Desk', startX + 95, y + 44);
 
-  // ================================================================
-  // SUMMARY SECTION
-  // ================================================================
-  const paymentAmount = Number(payment.amount);
-  const currencySymbol = school?.currency_symbol || '₹';
+  // Right Totals
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Total Paid Amount:', startX + 320, y + 12);
+  doc.fillColor('#15803d').fontSize(11).font('Helvetica-Bold').text(formatCurrency(payment.amount), startX + 420, y + 10, { align: 'right', width: 95 });
 
-  // Summary box
-  doc.rect(50, y, 495, 85)
-     .fillColor('#f8f8fc')
-     .strokeColor('#e0e0e0')
-     .lineWidth(0.5)
-     .fillAndStroke();
+  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Remaining Dues:', startX + 320, y + 30);
+  doc.fillColor(totalOutstanding > 0 ? '#c2410c' : '#15803d').font('Helvetica-Bold').text(formatCurrency(totalOutstanding), startX + 420, y + 30, { align: 'right', width: 95 });
 
-  let summaryY = y + 15;
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Account Status:', startX + 320, y + 46);
+  doc.fillColor(totalOutstanding > 0 ? '#c2410c' : '#15803d').font('Helvetica-Bold').text(
+    totalOutstanding > 0 ? 'PARTIAL BALANCE DUE' : 'ALL DUES CLEARED',
+    startX + 400,
+    y + 46,
+    { align: 'right', width: 115 }
+  );
 
-  // Payment mode
-  doc.fontSize(10)
-     .font('Helvetica')
-     .fillColor('#4a4a6a')
-     .text('Payment Mode:', 60, summaryY, { continued: true });
-  doc.font('Helvetica-Bold')
-     .fillColor('#1a1a2e')
-     .text(` ${payment.payment_mode || 'CASH'}`);
+  y += 82;
 
-  summaryY += 20;
+  // 7. Footer & Verification Stamp
+  y = Math.max(y, 740); // Lock to bottom of A4
 
-  // Amount paid
-  doc.fontSize(10)
-     .font('Helvetica')
-     .fillColor('#4a4a6a')
-     .text('Amount Paid:', 60, summaryY, { continued: true });
-  doc.fontSize(14)
-     .font('Helvetica-Bold')
-     .fillColor('#2e7d32')
-     .text(` ${formatCurrency(paymentAmount, currencySymbol)}`);
+  doc.roundedRect(startX, y, contentWidth, 42, 4).fillAndStroke('#f8fafc', '#e2e8f0');
+  
+  doc.fillColor('#64748b').fontSize(7).font('Helvetica').text(
+    `Official computer-generated receipt issued by ${school.school_name}. No physical signature required.`,
+    startX + 12,
+    y + 16
+  );
 
-  summaryY += 25;
+  doc.fillColor('#0369a1').fontSize(8).font('Helvetica-Bold').text(
+    'ARYAVART ACCOUNTS SEAL  [VERIFIED]',
+    startX + 320,
+    y + 10,
+    { align: 'right', width: 190 }
+  );
+  doc.fillColor('#64748b').fontSize(7).font('Helvetica').text(
+    'Accounts Officer Signature',
+    startX + 320,
+    y + 24,
+    { align: 'right', width: 190 }
+  );
 
-  // Total outstanding after payment
-  doc.fontSize(10)
-     .font('Helvetica')
-     .fillColor('#4a4a6a')
-     .text('Remaining Due:', 60, summaryY, { continued: true });
-  doc.fontSize(12)
-     .font('Helvetica-Bold')
-     .fillColor(totalOutstanding > 0 ? '#c62828' : '#2e7d32')
-     .text(` ${formatCurrency(totalOutstanding, currencySymbol)}`);
-
-  summaryY += 25;
-
-  // Status
-  const statusText = totalOutstanding > 0 ? 'PARTIAL PAYMENT' : 'FULLY PAID';
-  const statusColor = totalOutstanding > 0 ? '#f57c00' : '#2e7d32';
-  doc.fontSize(10)
-     .font('Helvetica')
-     .fillColor('#4a4a6a')
-     .text('Status:', 60, summaryY, { continued: true });
-  doc.font('Helvetica-Bold')
-     .fillColor(statusColor)
-     .text(` ${statusText}`);
-
-  y += 100;
-
-  // ================================================================
-  // FOOTER
-  // ================================================================
-  // Divider
-  doc.moveTo(50, y)
-     .lineTo(545, y)
-     .strokeColor('#e0e0e0')
-     .lineWidth(1)
-     .stroke();
-
-  y += 15;
-
-  // Thank you note
-  doc.fontSize(10)
-     .font('Helvetica')
-     .fillColor('#4a4a6a')
-     .text('Thank you for your payment!', 50, y, { align: 'center' });
-
-  y += 20;
-
-  // Terms / Note
-  doc.fontSize(8)
-     .fillColor('#888888')
-     .text('This is a computer-generated receipt. No signature required.', 50, y, { align: 'center' });
-  doc.text(`Generated on ${new Date().toLocaleDateString('en-IN')} at ${new Date().toLocaleTimeString('en-IN')}`, 50, y + 12, { align: 'center' });
-
-  // Finalize PDF
   doc.end();
 
-  // Wait for stream to finish
   return new Promise((resolve, reject) => {
     stream.on('finish', () => resolve(filePath));
     stream.on('error', reject);
   });
 }
 
-/**
- * Generate receipt and update database with file path
- */
-async function generateAndSaveReceipt(paymentId) {
-  const filePath = await generateReceiptPDF(paymentId);
+// ============================================================================
+// 3. GENERATE DUES NOTICE PDF
+// ============================================================================
 
-  // Update receipts table with file path
-  const relativePath = path.relative(path.join(__dirname, '../../'), filePath);
-  const existingReceipt = await db.queryOne(
-    `SELECT id FROM \`receipts\` WHERE \`payment_id\` = ?`,
-    [paymentId]
-  );
-
-  if (existingReceipt) {
-    await db.query(
-      `UPDATE \`receipts\` SET \`file_path\` = ? WHERE \`payment_id\` = ?`,
-      [relativePath, paymentId]
-    );
-  } else {
-    const payment = await db.queryOne(`SELECT \`receipt_number\` FROM \`payments\` WHERE \`id\` = ?`, [paymentId]);
-    const rNum = payment?.receipt_number || `REC-${String(paymentId).padStart(6, '0')}`;
-    await db.query(
-      `INSERT INTO \`receipts\` (\`payment_id\`, \`receipt_number\`, \`file_path\`) VALUES (?, ?, ?)`,
-      [paymentId, rNum, relativePath]
-    );
-  }
-
-  return { filePath, relativePath };
-}
-
-/**
- * Generate a PDF Dues Statement / Dues Notice for a student
- * @param {number} studentId
- * @returns {Promise<string>} File path to generated PDF
- */
 async function generateDuesNoticePDF(studentId) {
   const school = await getSchoolSettings();
 
@@ -649,7 +764,6 @@ async function generateDuesNoticePDF(studentId) {
     throw new Error('Student not found for Dues Notice generation.');
   }
 
-  // Fetch unpaid monthly fees
   const monthlyFees = await db.query(
     `SELECT * FROM monthly_fees
      WHERE student_id = ? AND status IN ('DUE', 'PARTIAL') AND due_amount > 0
@@ -657,7 +771,6 @@ async function generateDuesNoticePDF(studentId) {
     [studentId]
   );
 
-  // Fetch unpaid additional fees
   const additionalFees = await db.query(
     `SELECT saf.*, ft.name as fee_type_name
      FROM student_additional_fees saf
@@ -672,119 +785,98 @@ async function generateDuesNoticePDF(studentId) {
   const totalOutstanding = monthlyDueTotal + additionalDueTotal;
 
   const receiptsDir = ensureReceiptsDir();
-  const fileName = `Dues_Notice_${student.admission_no}_${Date.now()}.pdf`;
+  const fileName = `Dues_Notice_${student.admission_no || studentId}_${Date.now()}.pdf`;
   const filePath = path.join(receiptsDir, fileName);
 
-  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  const doc = new PDFDocument({ size: 'A4', margin: 36 });
   const stream = fs.createWriteStream(filePath);
   doc.pipe(stream);
 
-  let y = 50;
+  const pageWidth = 595.28;
+  const contentWidth = pageWidth - 72;
+  const startX = 36;
+  let y = 36;
 
   // Header Banner
-  doc.rect(50, y, 495, 75).fill('#1e293b');
-
-  doc.fillColor('#ffffff')
-     .fontSize(18)
-     .font('Helvetica-Bold')
-     .text(school.school_name || 'School Management System', 65, y + 15);
-
-  doc.fontSize(9)
-     .font('Helvetica')
-     .fillColor('#cbd5e1')
-     .text(`${school.address || ''} | Phone: ${school.phone || ''} | Email: ${school.email || ''}`, 65, y + 42);
-
-  y += 90;
-
-  // Notice Title
-  doc.rect(50, y, 495, 28).fill('#fee2e2');
-  doc.fillColor('#991b1b')
-     .fontSize(12)
-     .font('Helvetica-Bold')
-     .text('STATEMENT OF OUTSTANDING DUES / DUES NOTICE', 65, y + 8);
-
-  y += 40;
-
-  // Student Info Grid
-  doc.rect(50, y, 495, 65).stroke('#e2e8f0');
-
-  doc.fillColor('#475569').fontSize(9).font('Helvetica-Bold');
-  doc.text('Student Name:', 65, y + 12);
-  doc.text('Admission No:', 65, y + 30);
-  doc.text('Class & Section:', 65, y + 48);
-
-  doc.fillColor('#0f172a').font('Helvetica');
-  doc.text(student.full_name, 150, y + 12);
-  doc.text(student.admission_no, 150, y + 30);
-  doc.text(`${student.class_name || ''} ${student.section_name ? `(${student.section_name})` : ''}`, 150, y + 48);
-
-  doc.fillColor('#475569').font('Helvetica-Bold');
-  doc.text('Category:', 320, y + 12);
-  doc.text('Parent Name:', 320, y + 30);
-  doc.text('Notice Date:', 320, y + 48);
-
-  doc.fillColor('#0f172a').font('Helvetica');
-  doc.text(student.category === 'hosteller' ? 'Hosteller' : 'Day Scholar', 400, y + 12);
-  doc.text(student.parent_name || '—', 400, y + 30);
-  doc.text(new Date().toLocaleDateString('en-IN'), 400, y + 48);
-
-  y += 85;
-
-  // Itemized Dues Table Header
-  doc.rect(50, y, 495, 22).fill('#f1f5f9');
-  doc.fillColor('#334155').fontSize(9).font('Helvetica-Bold');
-  doc.text('#', 60, y + 6);
-  doc.text('Fee Description', 90, y + 6);
-  doc.text('Period / Type', 280, y + 6);
-  doc.text('Status', 400, y + 6);
-  doc.text('Due Amount (₹)', 460, y + 6, { align: 'right', width: 75 });
-
-  y += 22;
-
-  let index = 1;
-
-  // Monthly Dues Rows
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  for (const m of monthlyFees) {
-    doc.rect(50, y, 495, 20).stroke('#f1f5f9');
-    doc.fillColor('#0f172a').fontSize(9).font('Helvetica');
-    doc.text(`${index++}`, 60, y + 5);
-    doc.text(`Monthly Tuition & Base Fee`, 90, y + 5);
-    doc.text(`${monthNames[m.fee_month - 1]} ${m.fee_year}`, 280, y + 5);
-    doc.fillColor('#dc2626').font('Helvetica-Bold').text(m.status, 400, y + 5);
-    doc.fillColor('#0f172a').font('Helvetica').text(`₹${Number(m.due_amount).toLocaleString('en-IN')}`, 460, y + 5, { align: 'right', width: 75 });
-    y += 20;
-  }
-
-  // Additional Dues Rows
-  for (const a of additionalFees) {
-    doc.rect(50, y, 495, 20).stroke('#f1f5f9');
-    doc.fillColor('#0f172a').fontSize(9).font('Helvetica');
-    doc.text(`${index++}`, 60, y + 5);
-    doc.text(`${a.fee_type_name || a.description || 'Custom Fee'}`, 90, y + 5);
-    doc.text('Additional Charge', 280, y + 5);
-    doc.fillColor('#dc2626').font('Helvetica-Bold').text(a.status, 400, y + 5);
-    doc.fillColor('#0f172a').font('Helvetica').text(`₹${Number(a.amount).toLocaleString('en-IN')}`, 460, y + 5, { align: 'right', width: 75 });
-    y += 20;
-  }
-
+  doc.rect(startX, y, contentWidth, 4).fill('#dc2626');
   y += 10;
 
+  doc.fillColor('#0f172a').fontSize(16).font('Helvetica-Bold').text(school.school_name, startX, y);
+  doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text(`${school.address} | Ph: ${school.phone}`, startX, y + 18);
+  y += 35;
+
+  // Notice Title
+  doc.roundedRect(startX, y, contentWidth, 26, 4).fill('#fee2e2');
+  doc.fillColor('#991b1b').fontSize(9.5).font('Helvetica-Bold').text(
+    'OFFICIAL NOTICE: STATEMENT OF OUTSTANDING DUES',
+    startX,
+    y + 7,
+    { align: 'center', width: contentWidth }
+  );
+  y += 34;
+
+  // Student Info Box
+  doc.roundedRect(startX, y, contentWidth, 46, 4).fillAndStroke('#f8fafc', '#e2e8f0');
+  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Student Name:', startX + 12, y + 8);
+  doc.fillColor('#0f172a').font('Helvetica-Bold').text(student.full_name, startX + 85, y + 8);
+
+  doc.fillColor('#475569').font('Helvetica-Bold').text("Father's Name:", startX + 12, y + 26);
+  doc.fillColor('#0f172a').font('Helvetica').text(student.father_name || student.parent_name || '—', startX + 85, y + 26);
+
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Admission No:', startX + 280, y + 8);
+  doc.fillColor('#0f172a').font('Helvetica-Bold').text(student.admission_no || '—', startX + 355, y + 8);
+
+  doc.fillColor('#475569').font('Helvetica-Bold').text('Class:', startX + 280, y + 26);
+  doc.fillColor('#0f172a').font('Helvetica').text(`${student.class_name || '—'} ${student.section_name ? `(${student.section_name})` : ''}`, startX + 355, y + 26);
+  y += 54;
+
+  // Dues Table
+  doc.rect(startX, y, contentWidth, 18).fill('#0f172a');
+  doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
+  doc.text('#', startX + 8, y + 5);
+  doc.text('Fee Description', startX + 35, y + 5);
+  doc.text('Period / Head', startX + 240, y + 5);
+  doc.text('Status', startX + 360, y + 5);
+  doc.text('Due Amount', startX + 430, y + 5, { align: 'right', width: 85 });
+  y += 18;
+
+  let idx = 1;
+  for (const m of monthlyFees) {
+    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+    doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#f1f5f9');
+    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text(`${idx++}`, startX + 8, y + 4);
+    doc.fillColor('#0f172a').font('Helvetica-Bold').text('Monthly Tuition Fee', startX + 35, y + 4);
+    doc.fillColor('#475569').font('Helvetica').text(`${formatMonth(m.fee_month)} ${m.fee_year}`, startX + 240, y + 4);
+    doc.fillColor('#dc2626').font('Helvetica-Bold').text(m.status, startX + 360, y + 4);
+    doc.fillColor('#dc2626').font('Helvetica-Bold').text(formatCurrency(m.due_amount), startX + 430, y + 4, { align: 'right', width: 85 });
+    y += 16;
+  }
+
+  for (const a of additionalFees) {
+    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+    doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#f1f5f9');
+    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text(`${idx++}`, startX + 8, y + 4);
+    doc.fillColor('#0f172a').font('Helvetica-Bold').text(a.fee_type_name || a.description || 'Custom Fee', startX + 35, y + 4);
+    doc.fillColor('#475569').font('Helvetica').text('Additional Charge', startX + 240, y + 4);
+    doc.fillColor('#dc2626').font('Helvetica-Bold').text(a.status, startX + 360, y + 4);
+    doc.fillColor('#dc2626').font('Helvetica-Bold').text(formatCurrency(a.amount), startX + 430, y + 4, { align: 'right', width: 85 });
+    y += 16;
+  }
+
+  y += 12;
+
   // Total Outstanding Banner
-  doc.rect(50, y, 495, 30).fill('#0f172a');
-  doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold');
-  doc.text('TOTAL OUTSTANDING BALANCE DUE:', 65, y + 9);
-  doc.text(`₹${totalOutstanding.toLocaleString('en-IN')}`, 460, y + 9, { align: 'right', width: 75 });
+  doc.roundedRect(startX, y, contentWidth, 32, 4).fill('#0f172a');
+  doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold').text('TOTAL OUTSTANDING BALANCE DUE:', startX + 15, y + 10);
+  doc.fillColor('#f87171').fontSize(11).font('Helvetica-Bold').text(formatCurrency(totalOutstanding), startX + 400, y + 9, { align: 'right', width: 110 });
 
-  y += 45;
+  y += 42;
 
-  // Payment Instructions
-  doc.fillColor('#475569').fontSize(9).font('Helvetica-Bold');
-  doc.text('Payment Instructions:', 50, y);
-  doc.font('Helvetica').fontSize(8.5).fillColor('#64748b');
-  doc.text('1. Please deposit cash at the school accounts counter to receive an official stamped receipt.', 50, y + 15);
-  doc.text('2. Please clear outstanding dues by the due date to avoid administrative delays.', 50, y + 28);
-  doc.text('3. This statement reflects live ledger records recorded at the school office.', 50, y + 41);
+  // Instructions & Footer
+  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Payment Instructions:', startX, y);
+  doc.font('Helvetica').fontSize(7.5).fillColor('#64748b');
+  doc.text('1. Please clear outstanding dues at the school accounts counter to avoid administrative delays.', startX, y + 12);
+  doc.text('2. Computer-generated official notice issued by Aryavart Accounts Department.', startX, y + 24);
 
   doc.end();
 
@@ -794,244 +886,27 @@ async function generateDuesNoticePDF(studentId) {
   });
 }
 
-/**
- * Generate dues notice and return relative path
- */
+// Wrapper Helpers
+async function generateAndSaveReceipt(paymentId) {
+  const filePath = await generateReceiptPDF(paymentId);
+  const relativePath = path.relative(path.join(__dirname, '../../'), filePath);
+  const existingReceipt = await db.queryOne(`SELECT id FROM \`receipts\` WHERE \`payment_id\` = ?`, [paymentId]);
+
+  if (existingReceipt) {
+    await db.query(`UPDATE \`receipts\` SET \`file_path\` = ? WHERE \`payment_id\` = ?`, [relativePath, paymentId]);
+  } else {
+    const payment = await db.queryOne(`SELECT \`receipt_number\` FROM \`payments\` WHERE \`id\` = ?`, [paymentId]);
+    const rNum = payment?.receipt_number || `REC-${String(paymentId).padStart(6, '0')}`;
+    await db.query(`INSERT INTO \`receipts\` (\`payment_id\`, \`receipt_number\`, \`file_path\`) VALUES (?, ?, ?)`, [paymentId, rNum, relativePath]);
+  }
+
+  return { filePath, relativePath };
+}
+
 async function generateAndSaveDuesNotice(studentId) {
   const filePath = await generateDuesNoticePDF(studentId);
   const relativePath = path.relative(path.join(__dirname, '../../'), filePath);
   return { filePath, relativePath };
-}
-
-/**
- * Generate complete Student Fee Ledger Statement PDF
- */
-async function generateStudentLedgerPDF(studentId) {
-  const student = await db.queryOne(
-    `SELECT s.*, c.\`name\` as class_name, sec.\`name\` as section_name
-     FROM \`students\` s
-     LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
-     LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
-     WHERE s.\`id\` = ?`,
-    [studentId]
-  );
-
-  if (!student) {
-    throw new Error('Student not found');
-  }
-
-  const school = await getSchoolSettings() || {
-    school_name: 'Aryavart Shikshan Sansthan',
-    address: 'Near Knowledge Hub, Main Campus',
-    phone: '+91-9876543210',
-    email: 'info@aryavart.edu.in',
-  };
-
-  const monthlyFees = await db.query(
-    `SELECT * FROM \`monthly_fees\`
-     WHERE \`student_id\` = ?
-     ORDER BY \`fee_year\` ASC, \`fee_month\` ASC`,
-    [studentId]
-  );
-
-  const additionalFees = await db.query(
-    `SELECT * FROM \`student_additional_fees\`
-     WHERE \`student_id\` = ?
-     ORDER BY \`created_at\` ASC`,
-    [studentId]
-  );
-
-  const payments = await db.query(
-    `SELECT p.*, r.\`receipt_number\`
-     FROM \`payments\` p
-     LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
-     WHERE p.\`student_id\` = ?
-     ORDER BY p.\`payment_date\` DESC, p.\`id\` DESC`,
-    [studentId]
-  );
-
-  const totalAssessed = monthlyFees.reduce((s, m) => s + Number(m.fee_amount || 0), 0) +
-    additionalFees.reduce((s, a) => s + Number(a.amount || 0), 0);
-  const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const totalDue = Math.max(0, totalAssessed - totalPaid);
-
-  const receiptsDir = ensureReceiptsDir();
-  const filename = `ledger_${student.admission_no || studentId}_${Date.now()}.pdf`;
-  const filePath = path.join(receiptsDir, filename);
-
-  const doc = new PDFDocument({ margin: 40, size: 'A4' });
-  const stream = fs.createWriteStream(filePath);
-  doc.pipe(stream);
-
-  let y = 40;
-
-  // Header
-  doc.rect(40, y, 515, 60).fill('#0f172a');
-  doc.fillColor('#38bdf8').fontSize(16).font('Helvetica-Bold').text(school.school_name, 55, y + 12);
-  doc.fillColor('#94a3b8').fontSize(8.5).font('Helvetica').text(
-    `📍 ${school.address || 'Main Campus'}  •  📞 ${school.phone || '+91-9876543210'}  •  Academic Session 2025–2026`,
-    55,
-    y + 34
-  );
-
-  y += 75;
-
-  // Title Strip
-  doc.rect(40, y, 515, 24).fill('#f1f5f9');
-  doc.fillColor('#0369a1').fontSize(10).font('Helvetica-Bold').text(
-    'OFFICIAL STUDENT FEE LEDGER & ACCOUNT STATEMENT',
-    40,
-    y + 7,
-    { align: 'center', width: 515 }
-  );
-
-  y += 32;
-
-  // Student Info Box
-  doc.rect(40, y, 515, 60).stroke('#cbd5e1');
-  doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold');
-  doc.text('Student Name:', 55, y + 10);
-  doc.text('Admission No:', 55, y + 26);
-  doc.text('Class & Section:', 55, y + 42);
-
-  doc.fillColor('#0f172a').font('Helvetica');
-  doc.text(student.full_name || 'N/A', 140, y + 10);
-  doc.text(student.admission_no || 'N/A', 140, y + 26);
-  doc.text(`${student.class_name || 'N/A'} ${student.section_name ? `(${student.section_name})` : ''}`, 140, y + 42);
-
-  doc.fillColor('#475569').font('Helvetica-Bold');
-  doc.text('Father\'s Name:', 320, y + 10);
-  doc.text('Category:', 320, y + 26);
-  doc.text('Statement Date:', 320, y + 42);
-
-  doc.fillColor('#0f172a').font('Helvetica');
-  doc.text(student.father_name || 'N/A', 410, y + 10);
-  doc.text(student.category === 'hosteller' ? 'Hostel Resident' : 'Day Scholar', 410, y + 26);
-  doc.text(new Date().toLocaleDateString('en-IN'), 410, y + 42);
-
-  y += 72;
-
-  // Financial KPIs
-  const boxW = 165;
-  doc.rect(40, y, boxW, 36).fill('#f0f9ff').stroke('#bae6fd');
-  doc.fillColor('#0369a1').fontSize(7.5).font('Helvetica-Bold').text('TOTAL ASSESSED FEES', 45, y + 6);
-  doc.fillColor('#0369a1').fontSize(12).font('Helvetica-Bold').text(`₹${totalAssessed.toLocaleString('en-IN')}`, 45, y + 18);
-
-  doc.rect(215, y, boxW, 36).fill('#f0fdf4').stroke('#bbf7d0');
-  doc.fillColor('#15803d').fontSize(7.5).font('Helvetica-Bold').text('TOTAL FEES CLEARED', 220, y + 6);
-  doc.fillColor('#15803d').fontSize(12).font('Helvetica-Bold').text(`₹${totalPaid.toLocaleString('en-IN')}`, 220, y + 18);
-
-  doc.rect(390, y, boxW, 36).fill(totalDue > 0 ? '#fff7ed' : '#f0fdfa').stroke(totalDue > 0 ? '#fed7aa' : '#99f6e4');
-  doc.fillColor(totalDue > 0 ? '#c2410c' : '#0f766e').fontSize(7.5).font('Helvetica-Bold').text('OUTSTANDING DUES', 395, y + 6);
-  doc.fillColor(totalDue > 0 ? '#c2410c' : '#0f766e').fontSize(12).font('Helvetica-Bold').text(`₹${totalDue.toLocaleString('en-IN')}`, 395, y + 18);
-
-  y += 48;
-
-  // Monthly Table
-  doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold').text('Month-by-Month Fee Schedule', 40, y);
-  y += 14;
-
-  doc.rect(40, y, 515, 18).fill('#0f172a');
-  doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold');
-  doc.text('Month / Fee Period', 50, y + 5);
-  doc.text('Assessed Rate', 240, y + 5, { align: 'right', width: 70 });
-  doc.text('Amount Paid', 330, y + 5, { align: 'right', width: 70 });
-  doc.text('Balance Due', 420, y + 5, { align: 'right', width: 60 });
-  doc.text('Status', 500, y + 5, { align: 'center', width: 45 });
-
-  y += 18;
-
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-  if (monthlyFees.length === 0) {
-    doc.rect(40, y, 515, 18).stroke('#e2e8f0');
-    doc.fillColor('#64748b').fontSize(8).font('Helvetica').text('No monthly fee schedules generated yet.', 50, y + 5);
-    y += 18;
-  } else {
-    for (const m of monthlyFees) {
-      if (y > 720) {
-        doc.addPage();
-        y = 40;
-      }
-      const due = Number(m.fee_amount || 0);
-      const paid = Number(m.paid_amount || 0);
-      const bal = Math.max(0, due - paid);
-      const isPaid = bal === 0 && due > 0;
-
-      doc.rect(40, y, 515, 16).stroke('#f1f5f9');
-      doc.fillColor('#1e293b').fontSize(7.5).font('Helvetica');
-      doc.text(`${monthNames[m.fee_month - 1]} ${m.fee_year}`, 50, y + 4);
-      doc.text(`₹${due.toLocaleString('en-IN')}`, 240, y + 4, { align: 'right', width: 70 });
-      doc.fillColor('#15803d').text(`₹${paid.toLocaleString('en-IN')}`, 330, y + 4, { align: 'right', width: 70 });
-      doc.fillColor(bal > 0 ? '#dc2626' : '#64748b').text(`₹${bal.toLocaleString('en-IN')}`, 420, y + 4, { align: 'right', width: 60 });
-      doc.fillColor(isPaid ? '#15803d' : bal > 0 ? '#dc2626' : '#64748b').font('Helvetica-Bold').text(
-        isPaid ? 'PAID' : bal > 0 ? 'DUE' : '—',
-        500,
-        y + 4,
-        { align: 'center', width: 45 }
-      );
-      y += 16;
-    }
-  }
-
-  y += 14;
-
-  // Payments History Log (if any)
-  if (payments.length > 0) {
-    if (y > 660) {
-      doc.addPage();
-      y = 40;
-    }
-    doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold').text(`Validated Payment Receipts Log (${payments.length})`, 40, y);
-    y += 14;
-
-    doc.rect(40, y, 515, 18).fill('#334155');
-    doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold');
-    doc.text('Receipt No', 50, y + 5);
-    doc.text('Payment Date', 170, y + 5);
-    doc.text('Payment Channel', 280, y + 5);
-    doc.text('Amount Received', 440, y + 5, { align: 'right', width: 100 });
-
-    y += 18;
-
-    for (const p of payments.slice(0, 10)) {
-      if (y > 730) {
-        doc.addPage();
-        y = 40;
-      }
-      doc.rect(40, y, 515, 16).stroke('#f1f5f9');
-      doc.fillColor('#0284c7').fontSize(7.5).font('Helvetica-Bold').text(p.receipt_number || `RCP-${p.id}`, 50, y + 4);
-      doc.fillColor('#334155').font('Helvetica').text(
-        p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-IN') : '—',
-        170,
-        y + 4
-      );
-      doc.text(p.payment_mode === 'IN_ACCOUNT' ? '🏦 In Account (Bank)' : '💵 Cash Handover', 280, y + 4);
-      doc.fillColor('#15803d').font('Helvetica-Bold').text(`₹${Number(p.amount).toLocaleString('en-IN')}`, 440, y + 4, { align: 'right', width: 100 });
-      y += 16;
-    }
-  }
-
-  // Footer & Seal
-  if (y > 700) {
-    doc.addPage();
-    y = 40;
-  }
-  y += 20;
-  doc.rect(40, y, 515, 45).fill('#f8fafc').stroke('#e2e8f0');
-  doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text(
-    '✓ This is an official computer-generated fee ledger statement issued by Aryavart Shikshan Sansthan Accounts Department.',
-    50,
-    y + 16
-  );
-  doc.fillColor('#0369a1').font('Helvetica-Bold').text('Authorized Accounts Signatory', 390, y + 16);
-
-  doc.end();
-
-  return new Promise((resolve, reject) => {
-    stream.on('finish', () => resolve(filePath));
-    stream.on('error', reject);
-  });
 }
 
 async function generateAndSaveStudentLedger(studentId) {
