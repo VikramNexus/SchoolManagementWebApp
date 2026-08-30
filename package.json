@@ -1,0 +1,11 @@
+{
+  "name": "school-management-system-root",
+  "version": "1.0.0",
+  "description": "Aryavart School Management Web & Mobile Application",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix frontend run build",
+    "build:apk": "npm --prefix frontend run build:apk"
+  }
+}

@@ -24,10 +24,12 @@ console.log('====================================================\n');
 // 1. Find JDK 17 or 21
 function findJavaHome() {
   const candidateDirs = [
+    path.join(rootDir, 'jdk-21', 'jdk-21.0.6+7'),
     'C:\\Users\\vy305\\.jdks\\temurin-17\\jdk-17.0.20.1+1',
     'C:\\Users\\vy305\\.jdks\\temurin-21\\jdk-21.0.12.1+1',
     'C:\\Program Files\\Eclipse Adoptium\\jdk-17',
     'C:\\Program Files\\Java\\jdk-17',
+    'C:\\Program Files\\Java\\jdk-21',
   ];
 
   for (const c of candidateDirs) {
@@ -87,21 +89,24 @@ try {
   process.exit(1);
 }
 
-// 5. Copy Output APK to Root
+// 5. Copy Output APK to Root (Both names for convenience)
 const debugApk = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-const destApk = path.join(rootDir, 'Aryavart_School_Portal_Live.apk');
+const destApk1 = path.join(rootDir, 'Aryavart_School_Portal_Live.apk');
+const destApk2 = path.join(rootDir, 'AryavartPortal.apk');
 
 if (fs.existsSync(debugApk)) {
-  fs.copyFileSync(debugApk, destApk);
-  const stats = fs.statSync(destApk);
+  fs.copyFileSync(debugApk, destApk1);
+  fs.copyFileSync(debugApk, destApk2);
+  const stats = fs.statSync(destApk1);
   const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
 
   console.log('\n====================================================');
   console.log('🎉 LIVE-SYNC APK BUILT SUCCESSFULLY!');
   console.log('====================================================');
-  console.log(`📁 Output APK File: ${destApk}`);
-  console.log(`📊 File Size:       ${sizeMB} MB`);
-  console.log(`⏱️ Generated At:    ${new Date().toLocaleString()}`);
+  console.log(`📁 Primary APK File:  ${destApk1}`);
+  console.log(`📁 Alternative Name:  ${destApk2}`);
+  console.log(`📊 File Size:         ${sizeMB} MB`);
+  console.log(`⏱️ Generated At:      ${new Date().toLocaleString()}`);
   console.log('\n✨ Features Active in this APK:');
   console.log(' • Live Server URL: https://schoolmanagementwebapp.onrender.com');
   console.log(' • Zero-Reinstall Updates: Future UI updates load in real-time');
