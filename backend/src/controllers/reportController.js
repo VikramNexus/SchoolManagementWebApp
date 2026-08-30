@@ -22,27 +22,87 @@ async function getExecutiveOverview(req, res) {
       WHERE DATE(payment_date) = CURDATE()
     `);
 
-    // Today's Recent Receipts
-    const todayReceipts = await db.query(`
+    // Today's Recent Receipts (Grouped by Family for Siblings)
+    const rawReceipts = await db.query(`
       SELECT
         p.id,
         p.amount,
         p.payment_mode,
         p.payment_date,
         p.receipt_number,
+        p.family_id as pay_family_id,
         s.id as student_id,
         s.full_name as student_name,
         s.admission_no,
+        s.family_id as student_family_id,
         s.phone,
         s.whatsapp_number,
-        c.name as class_name
+        c.name as class_name,
+        sec.name as section_name
       FROM payments p
       LEFT JOIN students s ON s.id = p.student_id
       LEFT JOIN classes c ON c.id = s.class_id
+      LEFT JOIN sections sec ON sec.id = s.section_id
       WHERE DATE(p.payment_date) = CURDATE()
       ORDER BY p.id DESC
-      LIMIT 10
     `);
+
+    const groupMap = new Map();
+    const singleList = [];
+
+    rawReceipts.forEach((r) => {
+      const famId = r.pay_family_id || r.student_family_id;
+      const dateKey = r.payment_date ? new Date(r.payment_date).toISOString().slice(0, 10) : 'nodate';
+      const groupKey = famId ? `${famId}_${dateKey}_${r.payment_mode}` : `single_${r.id}`;
+
+      if (famId) {
+        if (!groupMap.has(groupKey)) groupMap.set(groupKey, []);
+        groupMap.get(groupKey).push(r);
+      } else {
+        singleList.push({
+          ...r,
+          amount: Number(r.amount || 0),
+          class_name: `${r.class_name || ''}${r.section_name ? ` (${r.section_name})` : ''}`.trim() || 'Class',
+          is_family: false,
+        });
+      }
+    });
+
+    const finalReceipts = [];
+    for (const [key, items] of groupMap.entries()) {
+      if (items.length === 1) {
+        finalReceipts.push({
+          ...items[0],
+          amount: Number(items[0].amount || 0),
+          class_name: `${items[0].class_name || ''}${items[0].section_name ? ` (${items[0].section_name})` : ''}`.trim() || 'Class',
+          is_family: false,
+        });
+      } else {
+        const first = items[0];
+        const combinedNames = items.map((it) => `${it.student_name} (${it.class_name || ''}${it.section_name ? ` ${it.section_name}` : ''})`.trim()).join(' & ');
+        const rawNames = items.map((it) => it.student_name).join(' & ');
+        const combinedAdms = items.map((it) => it.admission_no).join(', ');
+        const combinedClasses = items.map((it) => `${it.class_name || ''}${it.section_name ? ` (${it.section_name})` : ''}`.trim()).join(', ');
+        const totalAmt = items.reduce((sum, it) => sum + Number(it.amount || 0), 0);
+        const unifiedReceipt = first.pay_family_id || first.receipt_number?.replace(/-\d+$/, '') || first.receipt_number || `FAM-${first.id}`;
+
+        finalReceipts.push({
+          ...first,
+          receipt_number: unifiedReceipt,
+          student_name: combinedNames,
+          raw_names: rawNames,
+          admission_no: combinedAdms,
+          class_name: combinedClasses,
+          amount: totalAmt,
+          is_family: true,
+          sibling_count: items.length,
+        });
+      }
+    }
+
+    singleList.forEach((s) => finalReceipts.push(s));
+    finalReceipts.sort((a, b) => b.id - a.id);
+    const todayReceipts = finalReceipts.slice(0, 10);
 
     // 2. Overall Financial Snapshot
     const overallFinancials = await db.queryOne(`
@@ -135,7 +195,7 @@ async function getExecutiveOverview(req, res) {
           total: Number(todaySummary?.today_total || 0),
           cash: Number(todaySummary?.today_cash || 0),
           bank: Number(todaySummary?.today_bank || 0),
-          transactions: Number(todaySummary?.today_transactions || 0),
+          transactions: finalReceipts.length,
           recent_receipts: todayReceipts,
         },
         financials: {

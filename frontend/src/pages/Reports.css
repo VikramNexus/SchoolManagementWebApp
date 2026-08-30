@@ -603,6 +603,20 @@
 .channel-pill.cash { background: #fef3c7; color: #92400e; }
 .channel-pill.bank { background: #e0e7ff; color: #3730a3; }
 
+.family-pill-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  margin-bottom: 2px;
+}
+
 .class-name-badge {
   color: #0f172a;
   font-size: 14px;

@@ -493,6 +493,11 @@ export default function Reports() {
                                   <span className="mono-receipt-tag">{rcp.receipt_number || `RCP-${rcp.id}`}</span>
                                 </td>
                                 <td>
+                                  {rcp.is_family && (
+                                    <span className="family-pill-mini" title="Family payment for multiple siblings">
+                                      👨‍👧‍👦 Family ({rcp.sibling_count} Siblings)
+                                    </span>
+                                  )}
                                   <strong className="student-click-link" onClick={() => navigate(`/students/${rcp.student_id}`)}>
                                     {rcp.student_name}
                                   </strong>
