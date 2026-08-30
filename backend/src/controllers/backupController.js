@@ -151,7 +151,7 @@ function splitSqlStatements(sql) {
 }
 
 /**
- * Generate native SQL dump text of all database tables
+ * Generate native SQL dump text of all database tables (Ultra-Fast Parallel Extraction)
  */
 async function generateNativeSqlDump() {
   const tableRows = await db.query('SHOW TABLES');
@@ -162,49 +162,64 @@ async function generateNativeSqlDump() {
   const tableKey = Object.keys(tableRows[0])[0];
   const tableNames = tableRows.map((r) => r[tableKey]);
 
-  let sql = '';
-  sql += `-- ========================================================\n`;
-  sql += `-- School Management System — Full Database Snapshot Dump\n`;
-  sql += `-- Generated At: ${new Date().toISOString()}\n`;
-  sql += `-- Total Tables: ${tableNames.length}\n`;
-  sql += `-- ========================================================\n\n`;
-  sql += `SET FOREIGN_KEY_CHECKS = 0;\n`;
-  sql += `SET NAMES utf8mb4;\n\n`;
+  const chunks = [];
+  chunks.push(`-- ========================================================\n`);
+  chunks.push(`-- School Management System — High-Speed Database Snapshot\n`);
+  chunks.push(`-- Generated At: ${new Date().toISOString()}\n`);
+  chunks.push(`-- Total Tables: ${tableNames.length}\n`);
+  chunks.push(`-- ========================================================\n\n`);
+  chunks.push(`SET FOREIGN_KEY_CHECKS = 0;\n`);
+  chunks.push(`SET NAMES utf8mb4;\n\n`);
 
-  for (const table of tableNames) {
-    // 1. Get Table Schema
-    const createRes = await db.query(`SHOW CREATE TABLE \`${table}\``);
-    if (createRes && createRes[0]) {
-      const createSql = createRes[0]['Create Table'] || createRes[0]['Create View'];
-      sql += `-- --------------------------------------------------------\n`;
-      sql += `-- Table structure for table \`${table}\`\n`;
-      sql += `-- --------------------------------------------------------\n`;
-      sql += `${createSql.replace(/^CREATE TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ')};\n`;
-      sql += `DELETE FROM \`${table}\`;\n\n`;
-    }
+  // Parallel extraction in concurrency batches of 8 tables for high network throughput
+  const CONCURRENCY = 8;
+  const results = new Array(tableNames.length);
 
-    // 2. Get Table Rows
-    const rows = await db.query(`SELECT * FROM \`${table}\``);
-    if (rows && rows.length > 0) {
-      sql += `-- Dumping data for table \`${table}\` (${rows.length} rows)\n`;
-      const cols = Object.keys(rows[0]).map((c) => `\`${c}\``).join(', ');
-      
-      // Batch inserts (100 rows per batch)
-      const batchSize = 100;
-      for (let i = 0; i < rows.length; i += batchSize) {
-        const batch = rows.slice(i, i + batchSize);
-        const valuesList = batch
-          .map((row) => `(${Object.values(row).map(escapeSqlValue).join(', ')})`)
-          .join(',\n');
-        sql += `INSERT INTO \`${table}\` (${cols}) VALUES\n${valuesList};\n`;
+  for (let i = 0; i < tableNames.length; i += CONCURRENCY) {
+    const batch = tableNames.slice(i, i + CONCURRENCY);
+    const batchPromises = batch.map(async (table, bIdx) => {
+      const idx = i + bIdx;
+      const [createRes, rows] = await Promise.all([
+        db.query(`SHOW CREATE TABLE \`${table}\``).catch(() => null),
+        db.query(`SELECT * FROM \`${table}\``).catch(() => []),
+      ]);
+
+      let tableChunk = '';
+      if (createRes && createRes[0]) {
+        const createSql = createRes[0]['Create Table'] || createRes[0]['Create View'];
+        tableChunk += `-- --------------------------------------------------------\n`;
+        tableChunk += `-- Table structure for table \`${table}\`\n`;
+        tableChunk += `-- --------------------------------------------------------\n`;
+        tableChunk += `${createSql.replace(/^CREATE TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ')};\n`;
+        tableChunk += `DELETE FROM \`${table}\`;\n\n`;
       }
-      sql += `\n`;
-    }
+
+      if (rows && rows.length > 0) {
+        tableChunk += `-- Dumping data for table \`${table}\` (${rows.length} rows)\n`;
+        const cols = Object.keys(rows[0]).map((c) => `\`${c}\``).join(', ');
+
+        const batchSize = 100;
+        for (let j = 0; j < rows.length; j += batchSize) {
+          const rowBatch = rows.slice(j, j + batchSize);
+          const valuesList = rowBatch
+            .map((row) => `(${Object.values(row).map(escapeSqlValue).join(', ')})`)
+            .join(',\n');
+          tableChunk += `INSERT INTO \`${table}\` (${cols}) VALUES\n${valuesList};\n`;
+        }
+        tableChunk += `\n`;
+      }
+
+      results[idx] = tableChunk;
+    });
+
+    await Promise.all(batchPromises);
   }
 
-  sql += `SET FOREIGN_KEY_CHECKS = 1;\n`;
-  sql += `-- End of Snapshot Dump\n`;
-  return sql;
+  chunks.push(results.join(''));
+  chunks.push(`SET FOREIGN_KEY_CHECKS = 1;\n`);
+  chunks.push(`-- End of Snapshot Dump\n`);
+
+  return chunks.join('');
 }
 
 /**
@@ -580,12 +595,21 @@ async function sendCloudBackupEmail(req, res) {
   try {
     ensureBackupDir();
     const { target_email } = req.body || {};
-    // Get school email or configured cloud email or admin user email
+
     const settings = await db.queryOne('SELECT * FROM school_settings LIMIT 1') || {};
     const adminUser = await db.queryOne("SELECT email FROM users WHERE role = 'admin' LIMIT 1") || {};
     const emailTo = (target_email && target_email.trim()) || settings.backup_email || settings.email || adminUser.email || process.env.ADMIN_EMAIL || process.env.SMTP_USER || 'admin@school.com';
 
-    // 1. Generate fresh SQL backup
+    // Strict email format validation
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailTo || !emailRegex.test(emailTo.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email address. Please check your email and try again.',
+      });
+    }
+
+    // 1. Generate fast SQL backup
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const filename = `cloud-backup-${timestamp}.sql`;
     const filepath = path.join(BACKUP_DIR, filename);
@@ -600,7 +624,7 @@ async function sendCloudBackupEmail(req, res) {
       [filename, filepath, sqlDump.length, req.user?.id || null]
     );
 
-    // Audit log (use 'export' type to match schema)
+    // Audit log
     try {
       await db.query(
         `INSERT INTO \`backup_logs\` (\`type\`, \`file_name\`, \`file_size\`, \`performed_by\`, \`created_at\`)
@@ -611,19 +635,27 @@ async function sendCloudBackupEmail(req, res) {
       console.warn('[sendCloudBackupEmail] Log insert warning:', logErr.message);
     }
 
-    // 2. Dispatch email with attachment using high-speed Gmail / SMTP pool
-    await sendDatabaseBackupEmail(emailTo, filename, sqlDump);
+    // 2. Dispatch email with attachment
+    try {
+      await sendDatabaseBackupEmail(emailTo.trim(), filename, sqlDump);
+    } catch (emailErr) {
+      console.error('[sendCloudBackupEmail] Email dispatch failed:', emailErr.message);
+      return res.status(400).json({
+        success: false,
+        message: `Failed to send backup to "${emailTo}". Please check your email address and try again.`,
+      });
+    }
 
     return res.json({
       success: true,
-      message: `✓ Database snapshot successfully dispatched to ${emailTo}!`,
+      message: `✓ Database backup snapshot successfully dispatched to ${emailTo}!`,
       filename,
     });
   } catch (err) {
     console.error('[backupController.sendCloudBackupEmail] Error:', err);
     return res.status(500).json({
       success: false,
-      message: `Failed to dispatch cloud backup: ${err.message}`,
+      message: `Failed to dispatch cloud backup: ${err.message}. Please check your email and try again.`,
     });
   }
 }
