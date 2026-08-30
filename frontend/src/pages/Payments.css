@@ -520,10 +520,22 @@
   gap: 2px;
 }
 
-.student-name-block .student-name {
+.student-name-block .student-name,
+.student-name-block .student-name-link {
   font-weight: 800;
   color: #0f172a;
   font-size: 0.925rem;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.student-name-block .student-name-link:hover {
+  color: #0284c7;
+  text-decoration: underline;
 }
 
 .student-name-block .student-adm-no {
@@ -638,6 +650,18 @@
   background: #f8fafc;
   color: #0f172a;
   border-color: #94a3b8;
+}
+
+.btn-action.profile-btn {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border-color: #ddd6fe;
+}
+
+.btn-action.profile-btn:hover {
+  background: #7c3aed;
+  color: #ffffff;
+  border-color: #7c3aed;
 }
 
 .btn-action.receipt-btn,

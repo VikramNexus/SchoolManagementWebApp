@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   Loader2,
@@ -31,6 +32,7 @@ import {
   GraduationCap,
   Sparkles,
   Printer,
+  User,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -44,6 +46,7 @@ import './Payments.css';
 
 export default function Payments() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('monthly'); // 'monthly' | 'admissions'
   const [payments, setPayments] = useState([]);
   const [summaryData, setSummaryData] = useState(null);
@@ -532,7 +535,14 @@ export default function Payments() {
                         </td>
                         <td className="student-cell">
                           <div className="student-name-block">
-                            <span className="student-name font-bold">{p.full_name || '—'}</span>
+                            <button
+                              type="button"
+                              className="student-name-link font-bold"
+                              onClick={() => navigate(`/students/${p.student_id}`)}
+                              title="View student full profile & ledger"
+                            >
+                              {p.full_name || '—'}
+                            </button>
                             <span className="student-adm-no font-mono">{p.admission_no || '—'}</span>
                           </div>
                         </td>
@@ -574,6 +584,15 @@ export default function Payments() {
                         </td>
                         <td className="actions-cell text-center">
                           <div className="action-btns">
+                            <button
+                              type="button"
+                              className="btn-action profile-btn"
+                              onClick={() => navigate(`/students/${p.student_id}`)}
+                              title="View Student Profile & Dues Ledger"
+                            >
+                              <User size={13} />
+                              <span>Profile</span>
+                            </button>
                             <button
                               type="button"
                               className="btn-action receipt-btn"
