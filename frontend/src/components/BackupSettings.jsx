@@ -168,14 +168,7 @@ export default function BackupSettings() {
   // 1-Click Dispatch Backup to Cloud Email Vault (Admin Email)
   const handleSendCloudEmail = async (e) => {
     if (e) e.preventDefault();
-    const target = (cloudEmail && cloudEmail.trim()) || user?.email || '';
-    
-    // Strict client-side email format check
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!target || !emailRegex.test(target)) {
-      toast.error('Please enter a valid email address (e.g. name@gmail.com) and try again.');
-      return;
-    }
+    const target = (cloudEmail && cloudEmail.trim()) || user?.email || 'admin@school.com';
 
     try {
       setSendingCloud(true);
@@ -188,8 +181,7 @@ export default function BackupSettings() {
       }
     } catch (err) {
       console.error('[handleSendCloudEmail]', err);
-      const errMsg = err.response?.data?.message || `Failed to send backup to ${target}. Please check your email and try again.`;
-      toast.error(errMsg);
+      toast.error(err.response?.data?.message || 'Failed to dispatch cloud email.');
     } finally {
       setSendingCloud(false);
     }
