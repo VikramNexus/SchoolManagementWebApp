@@ -62,6 +62,7 @@ export default function PendingFees() {
   const [downloadingDuesId, setDownloadingDuesId] = useState(null);
   const [selectedDuesNoticeData, setSelectedDuesNoticeData] = useState(null);
   const [duesModalOpen, setDuesModalOpen] = useState(false);
+  const [expandedFamilies, setExpandedFamilies] = useState({});
 
   // Fetch classes
   useEffect(() => {
@@ -508,38 +509,51 @@ export default function PendingFees() {
                       <td className="student-name-cell">
                         {std.is_family ? (
                           <div className="family-student-cell-stack">
-                            <span className="family-account-badge" title="Combined Family Account for all siblings">
-                              <Users size={12} /> Family Account ({std.sibling_count || 2} Siblings)
-                            </span>
-                            <div className="family-siblings-list">
-                              {std.siblings_detail && std.siblings_detail.length > 0 ? (
-                                std.siblings_detail.map((sib, i) => (
-                                  <div key={i} className="family-sibling-row-item">
-                                    <span className="bullet">•</span>
-                                    <button
-                                      type="button"
-                                      className="student-name-link font-bold"
-                                      onClick={() => navigate(`/students/${sib.student_id}`)}
-                                      title={`Open ${sib.student_name}'s Profile`}
-                                    >
-                                      {sib.student_name}
-                                    </button>
-                                    <span className="student-adm-tag">{sib.admission_no}</span>
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="family-sibling-row-item">
-                                  <button
-                                    type="button"
-                                    className="student-name-link font-bold"
-                                    onClick={() => navigate(`/students/${std.id}`)}
-                                  >
-                                    {std.full_name}
-                                  </button>
-                                  <span className="student-adm-tag">{std.admission_no || 'ADM-—'}</span>
-                                </div>
-                              )}
+                            <div className="family-badge-toggle-row">
+                              <span className="family-account-badge" title="Combined Family Account for all siblings">
+                                <Users size={12} /> Family ({std.sibling_count || 2} Siblings)
+                              </span>
+                              <button
+                                type="button"
+                                className="btn-sibling-toggle"
+                                onClick={() => setExpandedFamilies(prev => ({ ...prev, [std.id]: !prev[std.id] }))}
+                                title={expandedFamilies[std.id] ? 'Hide sibling breakdown' : 'View individual siblings'}
+                              >
+                                {expandedFamilies[std.id] ? 'Hide' : '👁️ View'}
+                              </button>
                             </div>
+                            <div className="family-main-name">
+                              <button
+                                type="button"
+                                className="student-name-link font-bold"
+                                onClick={() => navigate(`/students/${std.id}`)}
+                                title="Open Student Profile & Fee Ledger"
+                              >
+                                {std.full_name}
+                              </button>
+                            </div>
+                            {expandedFamilies[std.id] && (
+                              <div className="sibling-drawer-content">
+                                {std.siblings_detail && std.siblings_detail.length > 0 ? (
+                                  std.siblings_detail.map((sib, i) => (
+                                    <div key={i} className="sibling-drawer-item">
+                                      <span className="bullet">•</span>
+                                      <button
+                                        type="button"
+                                        className="sibling-drawer-name font-bold"
+                                        onClick={() => navigate(`/students/${sib.student_id}`)}
+                                        title={`Open ${sib.student_name}'s Profile`}
+                                      >
+                                        {sib.student_name}
+                                      </button>
+                                      <span className="sibling-meta-chip">{sib.class_name} · {sib.admission_no}</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className="student-adm-tag">{std.admission_no || 'ADM-—'}</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="student-info-block">

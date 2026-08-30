@@ -749,25 +749,85 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 180px;
 }
 
-.family-siblings-list {
+.family-badge-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+
+.btn-sibling-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #f0f9ff;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-sibling-toggle:hover {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.sibling-drawer-content {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  margin-top: 4px;
+  animation: fadeInPending 0.15s ease-in-out;
 }
 
-.family-sibling-row-item {
+.sibling-drawer-item {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-.family-sibling-row-item .bullet {
+.sibling-drawer-item .bullet {
   color: #f59e0b;
   font-weight: 900;
-  font-size: 12px;
+  font-size: 11px;
+}
+
+.sibling-drawer-name {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #0f172a;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sibling-drawer-name:hover {
+  color: #0284c7;
+  text-decoration: underline;
+}
+
+.sibling-meta-chip {
+  display: inline-block;
+  font-size: 10.5px;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: monospace;
 }
 
 .family-classes-stack {
@@ -781,6 +841,11 @@
   padding: 2px 6px;
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+.pending-table {
+  width: 100%;
+  min-width: 620px;
 }
 
 

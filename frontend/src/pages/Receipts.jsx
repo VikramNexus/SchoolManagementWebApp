@@ -74,6 +74,7 @@ export default function Receipts() {
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [expandedReceipts, setExpandedReceipts] = useState({});
 
   // Fetch classes
   useEffect(() => {
@@ -505,10 +506,35 @@ export default function Receipts() {
                           </button>
                         </td>
                         <td className="student-cell">
-                          <div className="student-name-block">
-                            <span className="student-name font-bold">{r.full_name || r.student_name || '—'}</span>
-                            <span className="student-adm-no font-mono">{r.admission_no || '—'}</span>
-                          </div>
+                          {(r.is_family || rNo.startsWith('FAM') || (r.notes && r.notes.includes('Family Receipt'))) ? (
+                            <div className="family-student-cell-stack">
+                              <div className="family-badge-toggle-row">
+                                <span className="family-pill-mini">👨‍👧‍👦 Family Receipt</span>
+                                {r.notes && (
+                                  <button
+                                    type="button"
+                                    className="btn-sibling-toggle"
+                                    onClick={() => setExpandedReceipts(prev => ({ ...prev, [r.id]: !prev[r.id] }))}
+                                    title={expandedReceipts[r.id] ? 'Hide note' : 'View receipt details'}
+                                  >
+                                    {expandedReceipts[r.id] ? 'Hide' : '👁️ View'}
+                                  </button>
+                                )}
+                              </div>
+                              <span className="student-name font-bold">{r.full_name || r.student_name || '—'}</span>
+                              <span className="student-adm-no font-mono">{r.admission_no || '—'}</span>
+                              {expandedReceipts[r.id] && r.notes && (
+                                <div className="sibling-drawer-content">
+                                  <span className="sibling-meta-chip">{r.notes}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="student-name-block">
+                              <span className="student-name font-bold">{r.full_name || r.student_name || '—'}</span>
+                              <span className="student-adm-no font-mono">{r.admission_no || '—'}</span>
+                            </div>
+                          )}
                         </td>
                         <td className="class-cell">
                           <span className="class-badge">

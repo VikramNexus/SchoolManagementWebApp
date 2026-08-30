@@ -88,6 +88,7 @@ export default function Payments() {
 
   // Delete Confirmation Modal state
   const [deletingPayment, setDeletingPayment] = useState(null);
+  const [expandedPayments, setExpandedPayments] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch classes for dropdown filter
@@ -534,17 +535,49 @@ export default function Payments() {
                           </button>
                         </td>
                         <td className="student-cell">
-                          <div className="student-name-block">
-                            <button
-                              type="button"
-                              className="student-name-link font-bold"
-                              onClick={() => navigate(`/students/${p.student_id}`)}
-                              title="View student full profile & ledger"
-                            >
-                              {p.full_name || '—'}
-                            </button>
-                            <span className="student-adm-no font-mono">{p.admission_no || '—'}</span>
-                          </div>
+                          {(p.is_family || p.receipt_number?.startsWith('FAM') || (p.notes && p.notes.includes('Family Receipt'))) ? (
+                            <div className="family-student-cell-stack">
+                              <div className="family-badge-toggle-row">
+                                <span className="family-pill-mini">👨‍👧‍👦 Family Payment</span>
+                                {p.notes && (
+                                  <button
+                                    type="button"
+                                    className="btn-sibling-toggle"
+                                    onClick={() => setExpandedPayments(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                                    title={expandedPayments[p.id] ? 'Hide note' : 'View receipt note'}
+                                  >
+                                    {expandedPayments[p.id] ? 'Hide' : '👁️ View'}
+                                  </button>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                className="student-name-link font-bold"
+                                onClick={() => navigate(`/students/${p.student_id}`)}
+                                title="View student full profile & ledger"
+                              >
+                                {p.full_name || '—'}
+                              </button>
+                              <span className="student-adm-no font-mono">{p.admission_no || '—'}</span>
+                              {expandedPayments[p.id] && p.notes && (
+                                <div className="sibling-drawer-content">
+                                  <span className="sibling-meta-chip">{p.notes}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="student-name-block">
+                              <button
+                                type="button"
+                                className="student-name-link font-bold"
+                                onClick={() => navigate(`/students/${p.student_id}`)}
+                                title="View student full profile & ledger"
+                              >
+                                {p.full_name || '—'}
+                              </button>
+                              <span className="student-adm-no font-mono">{p.admission_no || '—'}</span>
+                            </div>
+                          )}
                         </td>
                         <td className="class-cell">
                           <span className="class-badge">
