@@ -53,9 +53,9 @@ export default function JpgReceiptModal({
     summary = {},
   } = data || {};
 
-  const schoolName = school?.school_name || data?.school_name || 'Aryavart Shikshan Sansthan';
-  const schoolAddress = school?.address || data?.address || 'Near Knowledge Hub, Main Campus';
-  const schoolPhone = school?.phone || data?.phone || '+91-9876543210';
+  const schoolName = school?.school_name || data?.school_name || 'Aryavart (P.S.G) Shikshan Sansthan';
+  const schoolAddress = school?.address || data?.address || 'Shastri Nagar, Ward no-07, Bara chakia, East Champaran, Bihar';
+  const schoolPhone = school?.phone || data?.phone || '+91-6201844773';
   const schoolLogoUrl = school?.logo_url || data?.logo_url;
 
   // Auto-calculate scale on window resize or when modal opens to fit narrow screens with zero clipping

@@ -1,12 +1,12 @@
 /**
  * PDF Receipt & Statement Service — School Management System
  *
- * Generates branded, high-fidelity PDF documents:
+ * Generates official, high-contrast, black-and-white printer-friendly PDF documents:
  * 1. Single Payment Receipts (Admission & Fee Collection)
  * 2. Student Monthly Fee Ledgers & Comprehensive Statements
  * 3. Outstanding Dues Notices & Formal Statements
  *
- * Formatted for standard A4 sheet printing with exact visual parity to the JPG/UI layout.
+ * Fully calibrated for monochrome laser & thermal A4 printing with zero gray smudges or unreadable pastel colors.
  */
 
 const PDFDocument = require('pdfkit');
@@ -71,7 +71,7 @@ async function getSchoolSettings() {
 }
 
 /**
- * Format currency cleanly without unicode font corruption
+ * Format currency cleanly in standard Indian numbering without unicode font corruption
  */
 function formatCurrency(amount) {
   const num = Number(amount || 0);
@@ -222,11 +222,11 @@ async function getStudentAdditionalOutstanding(studentId) {
 }
 
 // ============================================================================
-// 1. GENERATE OFFICIAL STUDENT FEE LEDGER & ACCOUNT STATEMENT PDF
+// 1. GENERATE OFFICIAL STUDENT FEE LEDGER & ACCOUNT STATEMENT PDF (B&W Friendly)
 // ============================================================================
 
 /**
- * Generates an official, perfectly styled A4 PDF matching the JPEG Statement design.
+ * Generates an official, high-contrast monochrome A4 PDF matching the B&W printer layout.
  */
 async function generateStudentLedgerPDF(studentId) {
   const student = await db.queryOne(
@@ -260,6 +260,7 @@ async function generateStudentLedgerPDF(studentId) {
     [studentId]
   );
 
+  // Distinct payments query to prevent payment triplication
   const payments = await db.query(
     `SELECT p.*, r.\`receipt_number\`
      FROM \`payments\` p
@@ -279,7 +280,6 @@ async function generateStudentLedgerPDF(studentId) {
   const filename = `Fee_Ledger_Statement_${student.admission_no || studentId}_${Date.now()}.pdf`;
   const filePath = path.join(receiptsDir, filename);
 
-  // Standard A4 Page Setup: 595.28 x 841.89 pt with 36 pt (0.5 inch) margins
   const doc = new PDFDocument({
     size: 'A4',
     margin: 36,
@@ -298,31 +298,30 @@ async function generateStudentLedgerPDF(studentId) {
   const startX = 36;
   let y = 36;
 
-  // 1. Top Decorative Brand Stripe
-  doc.rect(startX, y, contentWidth, 4).fill('#0284c7');
-  y += 10;
+  // 1. Top Solid Charcoal Rule
+  doc.rect(startX, y, contentWidth, 3).fill('#1f2937');
+  y += 9;
 
   // 2. School Letterhead Header
-  // Logo placeholder badge
-  doc.roundedRect(startX, y, 42, 42, 6).fill('#0284c7');
-  doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold').text('A', startX + 13, y + 9);
+  doc.roundedRect(startX, y, 42, 42, 4).fillAndStroke('#f3f4f6', '#1f2937');
+  doc.fillColor('#111827').fontSize(19).font('Helvetica-Bold').text('A', startX + 14, y + 10);
 
-  // School Title & Contact Details
-  doc.fillColor('#0f172a').fontSize(16).font('Helvetica-Bold').text(school.school_name, startX + 52, y);
-  doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text('Official Student Financial Ledger & Account Statement', startX + 52, y + 18);
+  // School Name & Details (Pure Black / Charcoal for High Contrast)
+  doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold').text(school.school_name, startX + 50, y);
+  doc.fillColor('#4b5563').fontSize(8.5).font('Helvetica-Bold').text('Official Student Financial Ledger & Account Statement', startX + 50, y + 18);
   
   const addressLine = `${school.address || 'Main Campus'}  |  Ph: ${school.phone || '+91-6201844773'}  |  Session ${school.academic_year || '2025-2026'}`;
-  doc.fillColor('#475569').fontSize(7.5).font('Helvetica').text(addressLine, startX + 52, y + 30);
+  doc.fillColor('#374151').fontSize(7.5).font('Helvetica').text(addressLine, startX + 50, y + 30);
 
-  y += 50;
+  y += 48;
 
   // Divider
-  doc.moveTo(startX, y).lineTo(startX + contentWidth, y).strokeColor('#e2e8f0').lineWidth(1).stroke();
+  doc.moveTo(startX, y).lineTo(startX + contentWidth, y).strokeColor('#1f2937').lineWidth(1.5).stroke();
   y += 8;
 
-  // 3. Statement Header Strip (Cyan / Themed Rounded Banner)
-  doc.roundedRect(startX, y, contentWidth, 34, 4).fillAndStroke('#f0f9ff', '#bae6fd');
-  doc.fillColor('#0369a1').fontSize(9.5).font('Helvetica-Bold').text(
+  // 3. Statement Header Strip (High Contrast Monochrome Banner)
+  doc.roundedRect(startX, y, contentWidth, 34, 4).fillAndStroke('#f3f4f6', '#1f2937');
+  doc.fillColor('#111827').fontSize(9.5).font('Helvetica-Bold').text(
     'STUDENT MONTHLY FEE LEDGER & PAYMENT STATEMENT',
     startX,
     y + 5,
@@ -331,64 +330,59 @@ async function generateStudentLedgerPDF(studentId) {
 
   const statementDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
   const metaText = `Date: ${statementDate}       |       Adm No: ${student.admission_no || 'N/A'}       |       Class: ${student.class_name || 'N/A'}${student.section_name ? ` (${student.section_name})` : ''}`;
-  doc.fillColor('#0284c7').fontSize(8).font('Helvetica').text(metaText, startX, y + 19, { align: 'center', width: contentWidth });
+  doc.fillColor('#374151').fontSize(8).font('Helvetica').text(metaText, startX, y + 19, { align: 'center', width: contentWidth });
 
   y += 42;
 
-  // 4. Student Details Box (2 Columns, Clean Rounded Container)
-  doc.roundedRect(startX, y, contentWidth, 54, 4).fillAndStroke('#f8fafc', '#e2e8f0');
+  // 4. Student Details Box (High Contrast 2-Column Container)
+  doc.roundedRect(startX, y, contentWidth, 54, 4).fillAndStroke('#f9fafb', '#374151');
   
   const fatherName = student.father_name || student.parent_name || '—';
   const categoryStr = student.category === 'hosteller' ? 'Hostel Resident' : 'Day Scholar';
   const phoneStr = student.whatsapp_number || student.phone || student.father_phone || '—';
 
   // Left Column
-  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Student Full Name:', startX + 12, y + 10);
-  doc.fillColor('#0f172a').font('Helvetica-Bold').text(student.full_name || '—', startX + 105, y + 10);
+  doc.fillColor('#4b5563').fontSize(8).font('Helvetica-Bold').text('Student Full Name:', startX + 12, y + 10);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(student.full_name || '—', startX + 105, y + 10);
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text("Father's Name:", startX + 12, y + 30);
-  doc.fillColor('#0f172a').font('Helvetica').text(fatherName, startX + 105, y + 30);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text("Father's Name:", startX + 12, y + 30);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(fatherName, startX + 105, y + 30);
 
   // Right Column
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Student Category:', startX + 280, y + 10);
-  doc.fillColor('#0f172a').font('Helvetica').text(categoryStr, startX + 370, y + 10);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Student Category:', startX + 280, y + 10);
+  doc.fillColor('#111827').font('Helvetica').text(categoryStr, startX + 370, y + 10);
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Contact Phone:', startX + 280, y + 30);
-  doc.fillColor('#0f172a').font('Helvetica').text(phoneStr, startX + 370, y + 30);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Contact Phone:', startX + 280, y + 30);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(phoneStr, startX + 370, y + 30);
 
   y += 62;
 
-  // 5. Financial Summary KPI Cards (3 Equal Side-by-Side Cards)
-  const cardW = (contentWidth - 16) / 3; // ~169 pt each
+  // 5. Financial Summary KPI Cards (3 Crisp White Cards with Solid Dark Border)
+  const cardW = (contentWidth - 16) / 3;
 
   // Card 1: Total Assessed
-  doc.roundedRect(startX, y, cardW, 36, 4).fillAndStroke('#f0f9ff', '#bae6fd');
-  doc.fillColor('#0284c7').fontSize(7.5).font('Helvetica-Bold').text('TOTAL ASSESSED', startX, y + 6, { align: 'center', width: cardW });
-  doc.fillColor('#0369a1').fontSize(11).font('Helvetica-Bold').text(formatCurrency(totalAssessed), startX, y + 18, { align: 'center', width: cardW });
+  doc.roundedRect(startX, y, cardW, 36, 4).fillAndStroke('#ffffff', '#1f2937');
+  doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica-Bold').text('TOTAL ASSESSED', startX, y + 6, { align: 'center', width: cardW });
+  doc.fillColor('#111827').fontSize(11).font('Helvetica-Bold').text(formatCurrency(totalAssessed), startX, y + 18, { align: 'center', width: cardW });
 
   // Card 2: Total Paid
-  doc.roundedRect(startX + cardW + 8, y, cardW, 36, 4).fillAndStroke('#f0fdf4', '#bbf7d0');
-  doc.fillColor('#16a34a').fontSize(7.5).font('Helvetica-Bold').text('TOTAL PAID', startX + cardW + 8, y + 6, { align: 'center', width: cardW });
-  doc.fillColor('#15803d').fontSize(11).font('Helvetica-Bold').text(formatCurrency(totalPaid), startX + cardW + 8, y + 18, { align: 'center', width: cardW });
+  doc.roundedRect(startX + cardW + 8, y, cardW, 36, 4).fillAndStroke('#ffffff', '#1f2937');
+  doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica-Bold').text('TOTAL PAID', startX + cardW + 8, y + 6, { align: 'center', width: cardW });
+  doc.fillColor('#111827').fontSize(11).font('Helvetica-Bold').text(formatCurrency(totalPaid), startX + cardW + 8, y + 18, { align: 'center', width: cardW });
 
   // Card 3: Outstanding Balance
-  const isDues = outstandingBalance > 0;
-  const card3Bg = isDues ? '#fff7ed' : '#f0fdfa';
-  const card3Border = isDues ? '#fed7aa' : '#99f6e4';
-  const card3Text = isDues ? '#c2410c' : '#0f766e';
-
-  doc.roundedRect(startX + (cardW + 8) * 2, y, cardW, 36, 4).fillAndStroke(card3Bg, card3Border);
-  doc.fillColor(card3Text).fontSize(7.5).font('Helvetica-Bold').text('OUTSTANDING BALANCE', startX + (cardW + 8) * 2, y + 6, { align: 'center', width: cardW });
-  doc.fillColor(card3Text).fontSize(11).font('Helvetica-Bold').text(formatCurrency(outstandingBalance), startX + (cardW + 8) * 2, y + 18, { align: 'center', width: cardW });
+  doc.roundedRect(startX + (cardW + 8) * 2, y, cardW, 36, 4).fillAndStroke('#ffffff', '#1f2937');
+  doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica-Bold').text('OUTSTANDING BALANCE', startX + (cardW + 8) * 2, y + 6, { align: 'center', width: cardW });
+  doc.fillColor('#111827').fontSize(11).font('Helvetica-Bold').text(formatCurrency(outstandingBalance), startX + (cardW + 8) * 2, y + 18, { align: 'center', width: cardW });
 
   y += 46;
 
   // 6. Section Table 1: Month-by-Month Fee Schedule
-  doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold').text('MONTH-BY-MONTH FEE SCHEDULE', startX, y);
+  doc.fillColor('#111827').fontSize(8.5).font('Helvetica-Bold').text('MONTH-BY-MONTH FEE SCHEDULE', startX, y);
   y += 12;
 
-  // Table Header
-  doc.rect(startX, y, contentWidth, 18).fill('#0f172a');
+  // Table Header (Solid Charcoal Background for Razor Sharp Contrast)
+  doc.rect(startX, y, contentWidth, 18).fill('#1f2937');
   doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
   doc.text('Month / Fee Period', startX + 8, y + 5);
   doc.text('Assessed Fee', startX + 190, y + 5, { align: 'right', width: 75 });
@@ -399,12 +393,11 @@ async function generateStudentLedgerPDF(studentId) {
   y += 18;
 
   if (monthlyFees.length === 0) {
-    doc.rect(startX, y, contentWidth, 18).fillAndStroke('#ffffff', '#e2e8f0');
-    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text('No monthly fee schedules generated yet for this student.', startX + 8, y + 5);
+    doc.rect(startX, y, contentWidth, 18).fillAndStroke('#ffffff', '#d1d5db');
+    doc.fillColor('#6b7280').fontSize(7.5).font('Helvetica').text('No monthly fee schedules generated yet for this student.', startX + 8, y + 5);
     y += 18;
   } else {
     monthlyFees.forEach((m, idx) => {
-      // Avoid overflow beyond A4 printable bottom
       if (y > 720) {
         doc.addPage();
         y = 36;
@@ -413,22 +406,26 @@ async function generateStudentLedgerPDF(studentId) {
       const paid = Number(m.paid_amount || 0);
       const bal = Math.max(0, due - paid);
       const isPaid = bal === 0 && due > 0;
-      const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+      const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
 
-      doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#f1f5f9');
-      doc.fillColor('#1e293b').fontSize(7.5).font('Helvetica');
+      doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#e5e7eb');
+      doc.fillColor('#111827').fontSize(7.5).font('Helvetica');
       doc.text(`${formatMonth(m.fee_month)} ${m.fee_year}`, startX + 8, y + 4);
       doc.text(formatCurrency(due), startX + 190, y + 4, { align: 'right', width: 75 });
-      doc.fillColor('#15803d').text(formatCurrency(paid), startX + 280, y + 4, { align: 'right', width: 75 });
-      doc.fillColor(bal > 0 ? '#dc2626' : '#64748b').text(formatCurrency(bal), startX + 370, y + 4, { align: 'right', width: 75 });
+      doc.font('Helvetica-Bold').text(formatCurrency(paid), startX + 280, y + 4, { align: 'right', width: 75 });
+      doc.text(formatCurrency(bal), startX + 370, y + 4, { align: 'right', width: 75 });
 
-      // Status Pill
-      const statusBg = isPaid ? '#dcfce7' : bal > 0 ? '#fee2e2' : '#f1f5f9';
-      const statusTextColor = isPaid ? '#15803d' : bal > 0 ? '#b91c1c' : '#64748b';
-      const statusLabel = isPaid ? 'PAID' : bal > 0 ? 'DUE' : '—';
-
-      doc.roundedRect(startX + 472, y + 2, 36, 12, 3).fill(statusBg);
-      doc.fillColor(statusTextColor).fontSize(6.5).font('Helvetica-Bold').text(statusLabel, startX + 472, y + 4, { align: 'center', width: 36 });
+      // Monochrome Status Pill (Sharp borders)
+      if (isPaid) {
+        doc.roundedRect(startX + 472, y + 2, 36, 12, 2).fillAndStroke('#111827', '#111827');
+        doc.fillColor('#ffffff').fontSize(6.5).font('Helvetica-Bold').text('PAID', startX + 472, y + 4, { align: 'center', width: 36 });
+      } else if (bal > 0) {
+        doc.roundedRect(startX + 472, y + 2, 36, 12, 2).fillAndStroke('#ffffff', '#111827');
+        doc.fillColor('#111827').fontSize(6.5).font('Helvetica-Bold').text('DUE', startX + 472, y + 4, { align: 'center', width: 36 });
+      } else {
+        doc.roundedRect(startX + 472, y + 2, 36, 12, 2).fillAndStroke('#f3f4f6', '#9ca3af');
+        doc.fillColor('#4b5563').fontSize(6.5).font('Helvetica-Bold').text('—', startX + 472, y + 4, { align: 'center', width: 36 });
+      }
 
       y += 16;
     });
@@ -443,10 +440,10 @@ async function generateStudentLedgerPDF(studentId) {
       y = 36;
     }
 
-    doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold').text(`VALIDATED PAYMENT RECEIPTS LOG (${payments.length})`, startX, y);
+    doc.fillColor('#111827').fontSize(8.5).font('Helvetica-Bold').text(`VALIDATED PAYMENT RECEIPTS LOG (${payments.length})`, startX, y);
     y += 12;
 
-    doc.rect(startX, y, contentWidth, 18).fill('#334155');
+    doc.rect(startX, y, contentWidth, 18).fill('#1f2937');
     doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
     doc.text('Receipt No', startX + 8, y + 5);
     doc.text('Payment Date', startX + 150, y + 5);
@@ -460,46 +457,46 @@ async function generateStudentLedgerPDF(studentId) {
         doc.addPage();
         y = 36;
       }
-      const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+      const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
       const rNum = p.receipt_number || `ADM-${p.id}`;
       const pDate = p.payment_date
         ? new Date(p.payment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
         : '—';
       const channel = p.payment_mode === 'IN_ACCOUNT' ? 'In Account (Bank/UPI)' : 'Cash Handover';
 
-      doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#f1f5f9');
-      doc.fillColor('#0284c7').fontSize(7.5).font('Helvetica-Bold').text(rNum, startX + 8, y + 4);
-      doc.fillColor('#334155').font('Helvetica').text(pDate, startX + 150, y + 4);
+      doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#e5e7eb');
+      doc.fillColor('#111827').fontSize(7.5).font('Helvetica-Bold').text(rNum, startX + 8, y + 4);
+      doc.fillColor('#374151').font('Helvetica').text(pDate, startX + 150, y + 4);
       doc.text(channel, startX + 270, y + 4);
-      doc.fillColor('#15803d').font('Helvetica-Bold').text(formatCurrency(p.amount), startX + 420, y + 4, { align: 'right', width: 95 });
+      doc.fillColor('#111827').font('Helvetica-Bold').text(formatCurrency(p.amount), startX + 420, y + 4, { align: 'right', width: 95 });
 
       y += 16;
     });
   }
 
-  // 8. Official Verification Footer & Seal
+  // 8. Official Verification Footer & Seal (Monochrome)
   if (y > 730) {
     doc.addPage();
     y = 36;
   } else {
-    y = Math.max(y + 16, 740); // Lock to bottom of A4 for consistent alignment
+    y = Math.max(y + 16, 740);
   }
 
-  doc.roundedRect(startX, y, contentWidth, 42, 4).fillAndStroke('#f8fafc', '#e2e8f0');
+  doc.roundedRect(startX, y, contentWidth, 42, 4).fillAndStroke('#f9fafb', '#1f2937');
   
-  doc.fillColor('#64748b').fontSize(7).font('Helvetica').text(
+  doc.fillColor('#4b5563').fontSize(7).font('Helvetica').text(
     `Official computer-generated statement issued by ${school.school_name} Accounts Dept.`,
     startX + 12,
     y + 16
   );
 
-  doc.fillColor('#0369a1').fontSize(8).font('Helvetica-Bold').text(
+  doc.fillColor('#111827').fontSize(8).font('Helvetica-Bold').text(
     'ARYAVART ACCOUNTS SEAL  [VERIFIED]',
     startX + 320,
     y + 10,
     { align: 'right', width: 190 }
   );
-  doc.fillColor('#64748b').fontSize(7).font('Helvetica').text(
+  doc.fillColor('#374151').fontSize(7).font('Helvetica-Bold').text(
     'Accounts Officer Signature',
     startX + 320,
     y + 24,
@@ -515,11 +512,11 @@ async function generateStudentLedgerPDF(studentId) {
 }
 
 // ============================================================================
-// 2. GENERATE OFFICIAL SINGLE PAYMENT / ADMISSION RECEIPT PDF
+// 2. GENERATE OFFICIAL SINGLE PAYMENT / ADMISSION RECEIPT PDF (B&W Friendly)
 // ============================================================================
 
 /**
- * Generates an official payment receipt A4 PDF with exact parity to the modal JPG design.
+ * Generates an official payment receipt A4 PDF with exact high-contrast monochrome design.
  */
 async function generateReceiptPDF(paymentId) {
   const [payment, school, rawAllocations] = await Promise.all([
@@ -580,24 +577,24 @@ async function generateReceiptPDF(paymentId) {
   const startX = 36;
   let y = 36;
 
-  // 1. Top Decorative Brand Stripe
-  doc.rect(startX, y, contentWidth, 4).fill('#0284c7');
-  y += 10;
+  // 1. Top Solid Charcoal Rule
+  doc.rect(startX, y, contentWidth, 3).fill('#1f2937');
+  y += 9;
 
   // 2. School Letterhead Header
-  doc.roundedRect(startX, y, 42, 42, 6).fill('#0284c7');
-  doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold').text('A', startX + 13, y + 9);
+  doc.roundedRect(startX, y, 42, 42, 4).fillAndStroke('#f3f4f6', '#1f2937');
+  doc.fillColor('#111827').fontSize(19).font('Helvetica-Bold').text('A', startX + 14, y + 10);
 
-  doc.fillColor('#0f172a').fontSize(16).font('Helvetica-Bold').text(school.school_name, startX + 52, y);
-  doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text('Official Student Fee Payment & Receipt Record', startX + 52, y + 18);
+  doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold').text(school.school_name, startX + 50, y);
+  doc.fillColor('#4b5563').fontSize(8.5).font('Helvetica-Bold').text('Official Student Fee Payment & Receipt Record', startX + 50, y + 18);
   
   const addressLine = `${school.address || 'Main Campus'}  |  Ph: ${school.phone || '+91-6201844773'}  |  Session ${school.academic_year || '2025-2026'}`;
-  doc.fillColor('#475569').fontSize(7.5).font('Helvetica').text(addressLine, startX + 52, y + 30);
+  doc.fillColor('#374151').fontSize(7.5).font('Helvetica').text(addressLine, startX + 50, y + 30);
 
-  y += 50;
+  y += 48;
 
   // Divider
-  doc.moveTo(startX, y).lineTo(startX + contentWidth, y).strokeColor('#e2e8f0').lineWidth(1).stroke();
+  doc.moveTo(startX, y).lineTo(startX + contentWidth, y).strokeColor('#1f2937').lineWidth(1.5).stroke();
   y += 8;
 
   // 3. Receipt Banner Title & Number Strip
@@ -606,8 +603,8 @@ async function generateReceiptPDF(paymentId) {
     ? 'OFFICIAL ADMISSION & ENROLLMENT RECEIPT'
     : 'OFFICIAL STUDENT FEE PAYMENT RECEIPT';
 
-  doc.roundedRect(startX, y, contentWidth, 34, 4).fillAndStroke('#f0f9ff', '#bae6fd');
-  doc.fillColor('#0369a1').fontSize(9.5).font('Helvetica-Bold').text(
+  doc.roundedRect(startX, y, contentWidth, 34, 4).fillAndStroke('#f3f4f6', '#1f2937');
+  doc.fillColor('#111827').fontSize(9.5).font('Helvetica-Bold').text(
     receiptTitle,
     startX,
     y + 5,
@@ -620,39 +617,39 @@ async function generateReceiptPDF(paymentId) {
     year: 'numeric',
   });
   const metaText = `Receipt No: ${receiptNumber}       |       Payment Date: ${paymentDate}       |       Channel: ${payment.payment_mode === 'IN_ACCOUNT' ? 'In Account (Bank)' : 'Cash Handover'}`;
-  doc.fillColor('#0284c7').fontSize(8).font('Helvetica').text(metaText, startX, y + 19, { align: 'center', width: contentWidth });
+  doc.fillColor('#374151').fontSize(8).font('Helvetica').text(metaText, startX, y + 19, { align: 'center', width: contentWidth });
 
   y += 42;
 
   // 4. Student & Parent Information Box
-  doc.roundedRect(startX, y, contentWidth, 54, 4).fillAndStroke('#f8fafc', '#e2e8f0');
+  doc.roundedRect(startX, y, contentWidth, 54, 4).fillAndStroke('#f9fafb', '#374151');
 
   const fatherName = payment.father_name || payment.parent_name || '—';
   const categoryStr = payment.category === 'hosteller' ? 'Hostel Resident' : 'Day Scholar';
   const phoneStr = payment.phone || payment.whatsapp_number || '—';
 
   // Left Column
-  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Student Full Name:', startX + 12, y + 10);
-  doc.fillColor('#0f172a').font('Helvetica-Bold').text(payment.full_name || '—', startX + 105, y + 10);
+  doc.fillColor('#4b5563').fontSize(8).font('Helvetica-Bold').text('Student Full Name:', startX + 12, y + 10);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(payment.full_name || '—', startX + 105, y + 10);
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text("Father's Name:", startX + 12, y + 30);
-  doc.fillColor('#0f172a').font('Helvetica').text(fatherName, startX + 105, y + 30);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text("Father's Name:", startX + 12, y + 30);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(fatherName, startX + 105, y + 30);
 
   // Right Column
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Admission No:', startX + 280, y + 10);
-  doc.fillColor('#0f172a').font('Helvetica-Bold').text(payment.admission_no || '—', startX + 360, y + 10);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Admission No:', startX + 280, y + 10);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(payment.admission_no || '—', startX + 360, y + 10);
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Class & Section:', startX + 280, y + 30);
-  doc.fillColor('#0f172a').font('Helvetica').text(`${payment.class_name || '—'}${payment.section_name ? ` (${payment.section_name})` : ''}`, startX + 360, y + 30);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Class & Section:', startX + 280, y + 30);
+  doc.fillColor('#111827').font('Helvetica').text(`${payment.class_name || '—'}${payment.section_name ? ` (${payment.section_name})` : ''}`, startX + 360, y + 30);
 
   y += 62;
 
   // 5. Itemized Fee Breakdown Table
-  doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold').text('ITEMIZED FEE BREAKDOWN & ALLOCATIONS', startX, y);
+  doc.fillColor('#111827').fontSize(8.5).font('Helvetica-Bold').text('ITEMIZED FEE BREAKDOWN & ALLOCATIONS', startX, y);
   y += 12;
 
   // Table Header
-  doc.rect(startX, y, contentWidth, 18).fill('#0f172a');
+  doc.rect(startX, y, contentWidth, 18).fill('#1f2937');
   doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
   doc.text('#', startX + 8, y + 5);
   doc.text('Fee Description / Head', startX + 35, y + 5);
@@ -668,42 +665,42 @@ async function generateReceiptPDF(paymentId) {
     const feeAmt = Number(item.fee_amount || item.allocated_amount);
     const allocAmt = Number(item.allocated_amount);
     totalAllocated += allocAmt;
-    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
 
-    doc.rect(startX, y, contentWidth, 18).fillAndStroke(rowBg, '#f1f5f9');
-    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text(`${idx + 1}`, startX + 8, y + 5);
-    doc.fillColor('#0f172a').font('Helvetica-Bold').text(item.description || 'Fee Payment', startX + 35, y + 5);
-    doc.fillColor('#475569').font('Helvetica').text(item.period || '—', startX + 240, y + 5);
-    doc.fillColor('#0f172a').text(formatCurrency(feeAmt), startX + 340, y + 5, { align: 'right', width: 80 });
-    doc.fillColor('#15803d').font('Helvetica-Bold').text(formatCurrency(allocAmt), startX + 430, y + 5, { align: 'right', width: 85 });
+    doc.rect(startX, y, contentWidth, 18).fillAndStroke(rowBg, '#e5e7eb');
+    doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica').text(`${idx + 1}`, startX + 8, y + 5);
+    doc.fillColor('#111827').font('Helvetica-Bold').text(item.description || 'Fee Payment', startX + 35, y + 5);
+    doc.fillColor('#374151').font('Helvetica').text(item.period || '—', startX + 240, y + 5);
+    doc.fillColor('#111827').text(formatCurrency(feeAmt), startX + 340, y + 5, { align: 'right', width: 80 });
+    doc.fillColor('#111827').font('Helvetica-Bold').text(formatCurrency(allocAmt), startX + 430, y + 5, { align: 'right', width: 85 });
 
     y += 18;
   });
 
   y += 12;
 
-  // 6. Payment Summary Box (Clean 2-Column Calculation Card)
-  doc.roundedRect(startX, y, contentWidth, 68, 4).fillAndStroke('#f8fafc', '#e2e8f0');
+  // 6. Payment Summary Box (Clean 2-Column High-Contrast Card)
+  doc.roundedRect(startX, y, contentWidth, 68, 4).fillAndStroke('#f9fafb', '#1f2937');
 
   // Left Details
-  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Payment Method:', startX + 12, y + 12);
-  doc.fillColor('#0f172a').font('Helvetica').text(payment.payment_mode === 'IN_ACCOUNT' ? 'Bank / Online Account Transfer' : 'Cash Handover at Counter', startX + 95, y + 12);
+  doc.fillColor('#4b5563').fontSize(8).font('Helvetica-Bold').text('Payment Method:', startX + 12, y + 12);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(payment.payment_mode === 'IN_ACCOUNT' ? 'Bank / Online Account Transfer' : 'Cash Handover at Counter', startX + 95, y + 12);
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Transaction Ref:', startX + 12, y + 28);
-  doc.fillColor('#0f172a').font('Helvetica').text(payment.reference_number || 'Cash Verified', startX + 95, y + 28);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Transaction Ref:', startX + 12, y + 28);
+  doc.fillColor('#111827').font('Helvetica').text(payment.reference_number || 'Cash Verified', startX + 95, y + 28);
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Recorded By:', startX + 12, y + 44);
-  doc.fillColor('#0f172a').font('Helvetica').text('School Accounts Desk', startX + 95, y + 44);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Recorded By:', startX + 12, y + 44);
+  doc.fillColor('#111827').font('Helvetica').text('School Accounts Desk', startX + 95, y + 44);
 
   // Right Totals
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Total Paid Amount:', startX + 320, y + 12);
-  doc.fillColor('#15803d').fontSize(11).font('Helvetica-Bold').text(formatCurrency(payment.amount), startX + 420, y + 10, { align: 'right', width: 95 });
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Total Paid Amount:', startX + 320, y + 12);
+  doc.fillColor('#111827').fontSize(11).font('Helvetica-Bold').text(formatCurrency(payment.amount), startX + 420, y + 10, { align: 'right', width: 95 });
 
-  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Remaining Dues:', startX + 320, y + 30);
-  doc.fillColor(totalOutstanding > 0 ? '#c2410c' : '#15803d').font('Helvetica-Bold').text(formatCurrency(totalOutstanding), startX + 420, y + 30, { align: 'right', width: 95 });
+  doc.fillColor('#4b5563').fontSize(8).font('Helvetica-Bold').text('Remaining Dues:', startX + 320, y + 30);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(formatCurrency(totalOutstanding), startX + 420, y + 30, { align: 'right', width: 95 });
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Account Status:', startX + 320, y + 46);
-  doc.fillColor(totalOutstanding > 0 ? '#c2410c' : '#15803d').font('Helvetica-Bold').text(
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Account Status:', startX + 320, y + 46);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(
     totalOutstanding > 0 ? 'PARTIAL BALANCE DUE' : 'ALL DUES CLEARED',
     startX + 400,
     y + 46,
@@ -713,23 +710,23 @@ async function generateReceiptPDF(paymentId) {
   y += 82;
 
   // 7. Footer & Verification Stamp
-  y = Math.max(y, 740); // Lock to bottom of A4
+  y = Math.max(y, 740);
 
-  doc.roundedRect(startX, y, contentWidth, 42, 4).fillAndStroke('#f8fafc', '#e2e8f0');
+  doc.roundedRect(startX, y, contentWidth, 42, 4).fillAndStroke('#f9fafb', '#1f2937');
   
-  doc.fillColor('#64748b').fontSize(7).font('Helvetica').text(
+  doc.fillColor('#4b5563').fontSize(7).font('Helvetica').text(
     `Official computer-generated receipt issued by ${school.school_name}. No physical signature required.`,
     startX + 12,
     y + 16
   );
 
-  doc.fillColor('#0369a1').fontSize(8).font('Helvetica-Bold').text(
+  doc.fillColor('#111827').fontSize(8).font('Helvetica-Bold').text(
     'ARYAVART ACCOUNTS SEAL  [VERIFIED]',
     startX + 320,
     y + 10,
     { align: 'right', width: 190 }
   );
-  doc.fillColor('#64748b').fontSize(7).font('Helvetica').text(
+  doc.fillColor('#374151').fontSize(7).font('Helvetica-Bold').text(
     'Accounts Officer Signature',
     startX + 320,
     y + 24,
@@ -745,7 +742,7 @@ async function generateReceiptPDF(paymentId) {
 }
 
 // ============================================================================
-// 3. GENERATE DUES NOTICE PDF
+// 3. GENERATE DUES NOTICE PDF (B&W Friendly)
 // ============================================================================
 
 async function generateDuesNoticePDF(studentId) {
@@ -798,16 +795,16 @@ async function generateDuesNoticePDF(studentId) {
   let y = 36;
 
   // Header Banner
-  doc.rect(startX, y, contentWidth, 4).fill('#dc2626');
-  y += 10;
+  doc.rect(startX, y, contentWidth, 3).fill('#1f2937');
+  y += 9;
 
-  doc.fillColor('#0f172a').fontSize(16).font('Helvetica-Bold').text(school.school_name, startX, y);
-  doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text(`${school.address} | Ph: ${school.phone}`, startX, y + 18);
+  doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold').text(school.school_name, startX, y);
+  doc.fillColor('#4b5563').fontSize(8.5).font('Helvetica').text(`${school.address} | Ph: ${school.phone}`, startX, y + 18);
   y += 35;
 
   // Notice Title
-  doc.roundedRect(startX, y, contentWidth, 26, 4).fill('#fee2e2');
-  doc.fillColor('#991b1b').fontSize(9.5).font('Helvetica-Bold').text(
+  doc.roundedRect(startX, y, contentWidth, 26, 4).fillAndStroke('#f3f4f6', '#1f2937');
+  doc.fillColor('#111827').fontSize(9.5).font('Helvetica-Bold').text(
     'OFFICIAL NOTICE: STATEMENT OF OUTSTANDING DUES',
     startX,
     y + 7,
@@ -816,22 +813,22 @@ async function generateDuesNoticePDF(studentId) {
   y += 34;
 
   // Student Info Box
-  doc.roundedRect(startX, y, contentWidth, 46, 4).fillAndStroke('#f8fafc', '#e2e8f0');
-  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Student Name:', startX + 12, y + 8);
-  doc.fillColor('#0f172a').font('Helvetica-Bold').text(student.full_name, startX + 85, y + 8);
+  doc.roundedRect(startX, y, contentWidth, 46, 4).fillAndStroke('#f9fafb', '#374151');
+  doc.fillColor('#4b5563').fontSize(8).font('Helvetica-Bold').text('Student Name:', startX + 12, y + 8);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(student.full_name, startX + 85, y + 8);
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text("Father's Name:", startX + 12, y + 26);
-  doc.fillColor('#0f172a').font('Helvetica').text(student.father_name || student.parent_name || '—', startX + 85, y + 26);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text("Father's Name:", startX + 12, y + 26);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(student.father_name || student.parent_name || '—', startX + 85, y + 26);
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Admission No:', startX + 280, y + 8);
-  doc.fillColor('#0f172a').font('Helvetica-Bold').text(student.admission_no || '—', startX + 355, y + 8);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Admission No:', startX + 280, y + 8);
+  doc.fillColor('#111827').font('Helvetica-Bold').text(student.admission_no || '—', startX + 355, y + 8);
 
-  doc.fillColor('#475569').font('Helvetica-Bold').text('Class:', startX + 280, y + 26);
-  doc.fillColor('#0f172a').font('Helvetica').text(`${student.class_name || '—'} ${student.section_name ? `(${student.section_name})` : ''}`, startX + 355, y + 26);
+  doc.fillColor('#4b5563').font('Helvetica-Bold').text('Class:', startX + 280, y + 26);
+  doc.fillColor('#111827').font('Helvetica').text(`${student.class_name || '—'} ${student.section_name ? `(${student.section_name})` : ''}`, startX + 355, y + 26);
   y += 54;
 
   // Dues Table
-  doc.rect(startX, y, contentWidth, 18).fill('#0f172a');
+  doc.rect(startX, y, contentWidth, 18).fill('#1f2937');
   doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
   doc.text('#', startX + 8, y + 5);
   doc.text('Fee Description', startX + 35, y + 5);
@@ -842,39 +839,39 @@ async function generateDuesNoticePDF(studentId) {
 
   let idx = 1;
   for (const m of monthlyFees) {
-    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
-    doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#f1f5f9');
-    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text(`${idx++}`, startX + 8, y + 4);
-    doc.fillColor('#0f172a').font('Helvetica-Bold').text('Monthly Tuition Fee', startX + 35, y + 4);
-    doc.fillColor('#475569').font('Helvetica').text(`${formatMonth(m.fee_month)} ${m.fee_year}`, startX + 240, y + 4);
-    doc.fillColor('#dc2626').font('Helvetica-Bold').text(m.status, startX + 360, y + 4);
-    doc.fillColor('#dc2626').font('Helvetica-Bold').text(formatCurrency(m.due_amount), startX + 430, y + 4, { align: 'right', width: 85 });
+    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
+    doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#e5e7eb');
+    doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica').text(`${idx++}`, startX + 8, y + 4);
+    doc.fillColor('#111827').font('Helvetica-Bold').text('Monthly Tuition Fee', startX + 35, y + 4);
+    doc.fillColor('#374151').font('Helvetica').text(`${formatMonth(m.fee_month)} ${m.fee_year}`, startX + 240, y + 4);
+    doc.fillColor('#111827').font('Helvetica-Bold').text(m.status, startX + 360, y + 4);
+    doc.fillColor('#111827').font('Helvetica-Bold').text(formatCurrency(m.due_amount), startX + 430, y + 4, { align: 'right', width: 85 });
     y += 16;
   }
 
   for (const a of additionalFees) {
-    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
-    doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#f1f5f9');
-    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text(`${idx++}`, startX + 8, y + 4);
-    doc.fillColor('#0f172a').font('Helvetica-Bold').text(a.fee_type_name || a.description || 'Custom Fee', startX + 35, y + 4);
-    doc.fillColor('#475569').font('Helvetica').text('Additional Charge', startX + 240, y + 4);
-    doc.fillColor('#dc2626').font('Helvetica-Bold').text(a.status, startX + 360, y + 4);
-    doc.fillColor('#dc2626').font('Helvetica-Bold').text(formatCurrency(a.amount), startX + 430, y + 4, { align: 'right', width: 85 });
+    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
+    doc.rect(startX, y, contentWidth, 16).fillAndStroke(rowBg, '#e5e7eb');
+    doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica').text(`${idx++}`, startX + 8, y + 4);
+    doc.fillColor('#111827').font('Helvetica-Bold').text(a.fee_type_name || a.description || 'Custom Fee', startX + 35, y + 4);
+    doc.fillColor('#374151').font('Helvetica').text('Additional Charge', startX + 240, y + 4);
+    doc.fillColor('#111827').font('Helvetica-Bold').text(a.status, startX + 360, y + 4);
+    doc.fillColor('#111827').font('Helvetica-Bold').text(formatCurrency(a.amount), startX + 430, y + 4, { align: 'right', width: 85 });
     y += 16;
   }
 
   y += 12;
 
   // Total Outstanding Banner
-  doc.roundedRect(startX, y, contentWidth, 32, 4).fill('#0f172a');
-  doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold').text('TOTAL OUTSTANDING BALANCE DUE:', startX + 15, y + 10);
-  doc.fillColor('#f87171').fontSize(11).font('Helvetica-Bold').text(formatCurrency(totalOutstanding), startX + 400, y + 9, { align: 'right', width: 110 });
+  doc.roundedRect(startX, y, contentWidth, 32, 4).fillAndStroke('#f3f4f6', '#1f2937');
+  doc.fillColor('#111827').fontSize(9).font('Helvetica-Bold').text('TOTAL OUTSTANDING BALANCE DUE:', startX + 15, y + 10);
+  doc.fillColor('#111827').fontSize(11).font('Helvetica-Bold').text(formatCurrency(totalOutstanding), startX + 400, y + 9, { align: 'right', width: 110 });
 
   y += 42;
 
   // Instructions & Footer
-  doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('Payment Instructions:', startX, y);
-  doc.font('Helvetica').fontSize(7.5).fillColor('#64748b');
+  doc.fillColor('#111827').fontSize(8).font('Helvetica-Bold').text('Payment Instructions:', startX, y);
+  doc.font('Helvetica').fontSize(7.5).fillColor('#4b5563');
   doc.text('1. Please clear outstanding dues at the school accounts counter to avoid administrative delays.', startX, y + 12);
   doc.text('2. Computer-generated official notice issued by Aryavart Accounts Department.', startX, y + 24);
 

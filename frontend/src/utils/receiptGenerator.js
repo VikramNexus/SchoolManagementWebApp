@@ -170,7 +170,7 @@ export function printReceiptElement(element, title = 'Official Fee Receipt') {
           }
           body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            color: #1e293b;
+            color: #111827;
             background: #ffffff;
             margin: 0;
             padding: 0;
@@ -178,32 +178,36 @@ export function printReceiptElement(element, title = 'Official Fee Receipt') {
           .official-receipt-sheet {
             width: 100% !important;
             max-width: 100% !important;
-            border: 1px solid #cbd5e1 !important;
-            border-radius: 6px !important;
-            padding: 18px !important;
+            border: 1.5px solid #1f2937 !important;
+            border-radius: 4px !important;
+            padding: 16px !important;
             background: #ffffff !important;
             box-shadow: none !important;
           }
           .receipt-sheet-top-stripe {
             height: 4px;
-            background: linear-gradient(90deg, #1e3a8a, #0284c7, #38bdf8);
-            margin: -18px -18px 14px -18px;
-            border-radius: 6px 6px 0 0;
+            background: #1f2937;
+            margin: -16px -16px 12px -16px;
+            border-radius: 4px 4px 0 0;
           }
           .receipt-letterhead {
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #e2e8f0;
+            gap: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #1f2937;
             margin-bottom: 10px;
           }
           .letterhead-logo {
-            width: 55px;
-            height: 55px;
+            width: 46px;
+            height: 46px;
+            border: 2px solid #1f2937;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
+            background: #f3f4f6;
+            color: #111827;
           }
           .school-logo-img {
             max-width: 100%;
@@ -211,325 +215,241 @@ export function printReceiptElement(element, title = 'Official Fee Receipt') {
             object-fit: contain;
           }
           .school-title {
-            font-size: 19px;
-            font-weight: 800;
-            color: #0f172a;
+            font-size: 18px;
+            font-weight: 900;
+            color: #111827;
             margin: 0 0 2px 0;
             letter-spacing: -0.3px;
-          }
-          .school-tagline {
-            font-size: 10.5px;
-            color: #64748b;
-            margin: 0 0 3px 0;
-          }
-          .school-contact-line {
-            font-size: 9.5px;
-            color: #475569;
-            margin: 0;
-          }
-          .receipt-banner-strip {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 7px 10px;
-            margin-bottom: 10px;
-          }
-          .receipt-badge-title {
-            font-size: 10.5px;
-            font-weight: 700;
-            color: #0284c7;
-            letter-spacing: 0.5px;
             text-transform: uppercase;
           }
-          .receipt-meta-grid {
-            display: flex;
-            gap: 14px;
-            font-size: 10.5px;
-          }
-          .meta-lbl {
-            color: #64748b;
-            margin-right: 4px;
-          }
-          .meta-val {
-            font-weight: 600;
-            color: #0f172a;
-          }
-          .meta-val.highlight {
-            color: #0284c7;
-            font-family: monospace;
-          }
-          .receipt-student-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 9px 12px;
-            margin-bottom: 12px;
-          }
-          .detail-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 10.5px;
-            padding: 2px 0;
-          }
-          .detail-row .lbl {
-            color: #64748b;
-            font-weight: 500;
-          }
-          .detail-row .val {
-            color: #0f172a;
+          .school-tagline {
+            font-size: 10px;
+            color: #4b5563;
+            margin: 0 0 2px 0;
             font-weight: 600;
           }
-          .receipt-table-wrapper {
-            margin-bottom: 12px;
+          .school-contact-line {
+            font-size: 9px;
+            color: #374151;
+            margin: 0;
           }
-          .receipt-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10.5px;
-          }
-          .receipt-table th {
-            background: #0f172a !important;
-            color: #ffffff !important;
-            font-weight: 600;
-            text-align: left;
-            padding: 6px 9px;
-          }
-          .receipt-table td {
-            padding: 6px 9px;
-            border-bottom: 1px solid #e2e8f0;
-            color: #1e293b;
-          }
-          .receipt-table tr:nth-child(even) td {
-            background: #f8fafc;
-          }
-          .text-right {
-            text-align: right;
-          }
-          .text-center {
-            text-align: center;
-          }
-          .text-green {
-            color: #16a34a !important;
-          }
-          .font-bold {
-            font-weight: 700;
-          }
-          .paid-tag {
-            display: inline-block;
-            background: #dcfce7;
-            color: #15803d;
-            font-size: 8.5px;
-            font-weight: 700;
-            padding: 1.5px 5px;
-            border-radius: 4px;
-          }
-          .receipt-footer-section {
-            display: grid;
-            grid-template-columns: 1.2fr 1fr;
-            gap: 12px;
-            padding-top: 9px;
-            border-top: 2px solid #e2e8f0;
-          }
-          .payment-mode-box {
-            font-size: 9.5px;
-            color: #475569;
-          }
-          .pm-label {
-            color: #64748b;
-            margin-right: 4px;
-          }
-          .pm-badge {
-            font-weight: 600;
-            color: #0f172a;
-          }
-          .thank-you-msg {
-            margin-top: 6px;
-            font-size: 8.5px;
-            color: #64748b;
-            font-style: italic;
-          }
-          .total-summary-card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 8px;
-          }
-          .grand-total-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            font-weight: 700;
-            color: #0f172a;
-            padding-bottom: 6px;
-            border-bottom: 1px solid #e2e8f0;
-            margin-bottom: 6px;
-          }
-          .grand-total-val {
-            color: #16a34a;
-            font-size: 13px;
-          }
-          .stamp-signature-grid {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-top: 8px;
-          }
-          .official-stamp-circle {
-            width: 44px;
-            height: 44px;
-            border: 2px dashed #94a3b8;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 7.5px;
-            font-weight: 700;
-            color: #64748b;
-            text-align: center;
-          }
-          .signature-line-box {
-            text-align: right;
-          }
-          .statement-header-strip {
-            background: #f0f9ff !important;
-            border: 1px solid #bae6fd !important;
-            border-radius: 6px !important;
-            padding: 8px 12px !important;
+          .receipt-banner-strip, .statement-header-strip {
+            background: #f3f4f6 !important;
+            border: 1.5px solid #1f2937 !important;
+            border-radius: 4px !important;
+            padding: 6px 10px !important;
             margin-bottom: 10px !important;
             text-align: center !important;
           }
-          .statement-title {
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            color: #0369a1 !important;
+          .receipt-badge-title, .statement-title {
+            font-size: 10.5px !important;
+            font-weight: 900 !important;
+            color: #111827 !important;
             letter-spacing: 0.5px !important;
+            text-transform: uppercase !important;
             margin-bottom: 4px !important;
           }
-          .statement-meta-row {
+          .receipt-meta-grid, .statement-meta-row {
             display: flex !important;
             justify-content: space-around !important;
-            font-size: 9.5px !important;
-            color: #475569 !important;
-            border-top: 1px dashed #cbd5e1 !important;
+            font-size: 9px !important;
+            color: #374151 !important;
+            border-top: 1px dashed #9ca3af !important;
             padding-top: 4px !important;
+          }
+          .meta-lbl {
+            color: #4b5563;
+            margin-right: 4px;
+            font-weight: 600;
+          }
+          .meta-val {
+            font-weight: 700;
+            color: #111827;
+          }
+          .meta-val.highlight {
+            color: #111827;
+            font-family: monospace;
+          }
+          .receipt-student-details, .receipt-info-box {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+            background: #f9fafb !important;
+            border: 1px solid #374151 !important;
+            border-radius: 4px !important;
+            padding: 8px 10px !important;
+            margin-bottom: 10px !important;
+          }
+          .detail-row, .info-row {
+            display: flex !important;
+            justify-content: space-between !important;
+            font-size: 9.5px !important;
+            padding: 1.5px 0 !important;
+          }
+          .detail-row .lbl, .info-k {
+            color: #4b5563 !important;
+            font-weight: 600 !important;
+          }
+          .detail-row .val, .info-v {
+            color: #111827 !important;
+            font-weight: 700 !important;
           }
           .ledger-kpi-grid {
             display: grid !important;
             grid-template-columns: 1fr 1fr 1fr !important;
-            gap: 8px !important;
+            gap: 6px !important;
             margin-bottom: 10px !important;
           }
           .kpi-box {
-            padding: 8px !important;
-            border-radius: 6px !important;
+            padding: 6px 8px !important;
+            border-radius: 4px !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             text-align: center !important;
-            border: 1px solid !important;
+            background: #ffffff !important;
+            border: 1.5px solid #1f2937 !important;
+            color: #111827 !important;
           }
-          .kpi-box.blue { background: #f0f9ff !important; border-color: #bae6fd !important; color: #0369a1 !important; }
-          .kpi-box.green { background: #f0fdf4 !important; border-color: #bbf7d0 !important; color: #15803d !important; }
-          .kpi-box.orange { background: #fff7ed !important; border-color: #fed7aa !important; color: #c2410c !important; }
-          .kpi-box.teal { background: #f0fdfa !important; border-color: #99f6e4 !important; color: #0f766e !important; }
-          .kpi-lbl { font-size: 8px !important; font-weight: 800 !important; text-transform: uppercase !important; }
-          .kpi-val { font-size: 13px !important; font-weight: 900 !important; margin-top: 2px !important; }
+          .kpi-lbl { font-size: 7.5px !important; font-weight: 800 !important; text-transform: uppercase !important; color: #4b5563 !important; }
+          .kpi-val { font-size: 12px !important; font-weight: 900 !important; margin-top: 1px !important; color: #111827 !important; }
           .ledger-section-heading {
-            font-size: 10px !important;
-            font-weight: 800 !important;
-            color: #0f172a !important;
+            font-size: 9.5px !important;
+            font-weight: 900 !important;
+            color: #111827 !important;
             text-transform: uppercase !important;
             letter-spacing: 0.5px !important;
-            margin: 8px 0 4px 0 !important;
+            margin: 10px 0 4px 0 !important;
+            padding-left: 4px !important;
+            border-left: 3px solid #1f2937 !important;
           }
-          .paid-tag.cleared { background: #dcfce7 !important; color: #15803d !important; border: 1px solid #86efac !important; }
-          .paid-tag.due { background: #fee2e2 !important; color: #dc2626 !important; border: 1px solid #fca5a5 !important; }
-          .paid-tag.neutral { background: #f1f5f9 !important; color: #64748b !important; border: 1px solid #cbd5e1 !important; }
-          .modern-table-container {
-            border: 1px solid #cbd5e1 !important;
-            border-radius: 6px !important;
-            overflow: hidden !important;
+          .receipt-table-wrapper, .modern-table-container {
             margin-bottom: 10px !important;
+            border: 1.5px solid #1f2937 !important;
+            border-radius: 4px !important;
+            overflow: hidden !important;
+            background: #ffffff !important;
           }
-          .modern-ledger-table {
+          .receipt-table, .modern-ledger-table {
             width: 100% !important;
             border-collapse: collapse !important;
-            font-size: 9.5px !important;
+            font-size: 9px !important;
           }
-          .modern-ledger-table thead tr {
-            background: #0f172a !important;
+          .receipt-table th, .modern-ledger-table th {
+            background: #1f2937 !important;
             color: #ffffff !important;
-          }
-          .modern-ledger-table th {
-            padding: 6px 9px !important;
             font-weight: 700 !important;
             text-align: left !important;
+            padding: 5px 8px !important;
           }
-          .modern-ledger-table td {
-            padding: 6px 9px !important;
-            border-bottom: 1px solid #f1f5f9 !important;
+          .receipt-table td, .modern-ledger-table td {
+            padding: 5px 8px !important;
+            border-bottom: 1px solid #e5e7eb !important;
+            color: #111827 !important;
           }
-          .modern-ledger-table tbody tr:nth-child(even) td {
-            background: #f8fafc !important;
+          .receipt-table tr:nth-child(even) td, .modern-ledger-table tbody tr:nth-child(even) td {
+            background: #f9fafb !important;
+          }
+          .text-right { text-align: right !important; }
+          .text-center { text-align: center !important; }
+          .text-green { color: #111827 !important; font-weight: 800 !important; }
+          .font-bold { font-weight: 800 !important; }
+          .paid-tag {
+            display: inline-block !important;
+            font-size: 7.5px !important;
+            font-weight: 800 !important;
+            padding: 1.5px 5px !important;
+            border-radius: 2px !important;
+          }
+          .paid-tag.cleared, .paid-tag {
+            background: #111827 !important;
+            color: #ffffff !important;
+            border: 1px solid #111827 !important;
+          }
+          .paid-tag.due {
+            background: #ffffff !important;
+            color: #111827 !important;
+            border: 1.5px solid #111827 !important;
+          }
+          .paid-tag.neutral {
+            background: #f3f4f6 !important;
+            color: #4b5563 !important;
+            border: 1px solid #9ca3af !important;
           }
           .receipt-mono-tag {
             font-family: monospace !important;
             font-weight: 700 !important;
-            color: #0284c7 !important;
-            background: #f0f9ff !important;
-            border: 1px solid #bae6fd !important;
-            border-radius: 3px !important;
+            color: #111827 !important;
+            background: #f3f4f6 !important;
+            border: 1px solid #9ca3af !important;
+            border-radius: 2px !important;
             padding: 1px 4px !important;
-            font-size: 8.5px !important;
+            font-size: 8px !important;
           }
           .channel-pill {
             display: inline-block !important;
             padding: 1px 5px !important;
-            border-radius: 3px !important;
-            font-size: 8px !important;
-            font-weight: 600 !important;
+            border-radius: 2px !important;
+            font-size: 7.5px !important;
+            font-weight: 700 !important;
+            background: #ffffff !important;
+            border: 1px solid #4b5563 !important;
+            color: #111827 !important;
           }
-          .channel-pill.bank { background: #e0f2fe !important; color: #0369a1 !important; border: 1px solid #bae6fd !important; }
-          .channel-pill.cash { background: #dcfce7 !important; color: #15803d !important; border: 1px solid #bbf7d0 !important; }
-          .ledger-footer-section {
+          .receipt-footer-section, .ledger-footer-section {
             display: flex !important;
             justify-content: space-between !important;
             align-items: center !important;
-            margin-top: 14px !important;
-            padding: 10px 12px !important;
-            background: #f8fafc !important;
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 6px !important;
+            padding-top: 8px !important;
+            border-top: 2px solid #1f2937 !important;
+            margin-top: 10px !important;
           }
-          .footer-auth-box {
+          .payment-mode-box, .footer-disclaimer-box {
+            font-size: 8.5px !important;
+            color: #4b5563 !important;
+          }
+          .pm-label { color: #4b5563 !important; margin-right: 4px !important; }
+          .pm-badge { font-weight: 700 !important; color: #111827 !important; }
+          .thank-you-msg { margin-top: 4px !important; font-size: 7.5px !important; color: #4b5563 !important; font-weight: 500 !important; }
+          .total-summary-card {
+            background: #f9fafb !important;
+            border: 1.5px solid #1f2937 !important;
+            border-radius: 4px !important;
+            padding: 6px 8px !important;
+          }
+          .grand-total-row {
+            display: flex !important;
+            justify-content: space-between !important;
+            font-size: 10px !important;
+            font-weight: 800 !important;
+            color: #111827 !important;
+            padding-bottom: 4px !important;
+            border-bottom: 1.5px solid #1f2937 !important;
+            margin-bottom: 4px !important;
+          }
+          .grand-total-val { color: #111827 !important; font-size: 11px !important; font-weight: 900 !important; }
+          .stamp-signature-grid, .footer-auth-box {
             display: flex !important;
             align-items: center !important;
             gap: 12px !important;
           }
-          .seal-stamp-circle {
-            width: 48px !important;
-            height: 48px !important;
-            border: 2px double #0284c7 !important;
+          .official-stamp-circle, .seal-stamp-circle {
+            width: 44px !important;
+            height: 44px !important;
+            border: 2px double #111827 !important;
             border-radius: 50% !important;
-            background: #f0f9ff !important;
+            background: #ffffff !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
             text-align: center !important;
           }
-          .seal-top { font-size: 6px !important; font-weight: 900 !important; color: #0369a1 !important; }
-          .seal-mid { font-size: 5px !important; font-weight: 700 !important; color: #0284c7 !important; }
-          .seal-bot { font-size: 5.5px !important; font-weight: 800 !important; color: #15803d !important; }
-          .signature-block { text-align: right !important; }
-          .signature-block .sig-rule { width: 80px !important; height: 1px !important; background: #334155 !important; margin-bottom: 2px !important; }
-          .signature-block .sig-title { font-size: 8px !important; font-weight: 700 !important; color: #334155 !important; }
+          .official-stamp-circle span, .seal-top, .seal-bot { font-size: 5px !important; font-weight: 900 !important; color: #111827 !important; }
+          .official-stamp-circle small, .seal-mid { font-size: 4px !important; font-weight: 800 !important; color: #374151 !important; }
+          .signature-line-box, .signature-block { text-align: right !important; }
+          .sig-line, .sig-rule { width: 75px !important; height: 1.5px !important; background: #111827 !important; margin-bottom: 2px !important; display: inline-block !important; }
+          .sig-label, .sig-title { font-size: 7.5px !important; color: #111827 !important; font-weight: 800 !important; }
         </style>
       </head>
       <body>

@@ -1,6 +1,6 @@
 /**
  * StudentFeeLedgerModal CSS — School Management System
- * Premium, High-Aesthetic Statement Card, Tables & Verification Stamp
+ * High-Contrast Official Monochrome Design (100% Black & White Printer Friendly)
  */
 
 .ledger-modal-card {
@@ -11,52 +11,137 @@
   max-width: 600px !important;
   width: 600px !important;
   background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 10px !important;
-  padding: 20px !important;
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08) !important;
+  border: 1.5px solid #1f2937 !important;
+  border-radius: 6px !important;
+  padding: 18px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+  color: #111827 !important;
 }
 
-/* 1. Header Banner Strip */
+/* 1. Header Top Stripe */
+.receipt-sheet-top-stripe {
+  height: 4px;
+  background: #1f2937;
+  margin: -18px -18px 14px -18px;
+  border-radius: 4px 4px 0 0;
+}
+
+/* 2. School Letterhead */
+.receipt-letterhead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #1f2937;
+  margin-bottom: 12px;
+}
+
+.letterhead-logo {
+  width: 48px;
+  height: 48px;
+  border: 2px solid #1f2937;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.school-cap-icon {
+  color: #111827;
+}
+
+.letterhead-content {
+  flex: 1;
+}
+
+.school-title {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #111827;
+  margin: 0 0 2px 0;
+  letter-spacing: -0.3px;
+  text-transform: uppercase;
+}
+
+.school-tagline {
+  font-size: 0.76rem;
+  color: #4b5563;
+  margin: 0 0 3px 0;
+  font-weight: 600;
+}
+
+.school-contact-line {
+  font-size: 0.72rem;
+  color: #374151;
+  margin: 0;
+}
+
+/* 3. Statement Header Strip */
 .statement-header-strip {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bae6fd;
-  border-radius: 8px;
-  padding: 10px 14px;
+  background: #f3f4f6;
+  border: 1.5px solid #1f2937;
+  border-radius: 6px;
+  padding: 8px 12px;
   margin-bottom: 12px;
   text-align: center;
 }
 
-.statement-header-strip.family {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border-color: #bfdbfe;
-}
-
 .statement-title {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 900;
-  color: #0369a1;
+  color: #111827;
   letter-spacing: 0.5px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   text-transform: uppercase;
 }
 
 .statement-meta-row {
   display: flex;
   justify-content: space-around;
-  font-size: 0.76rem;
-  color: #475569;
-  border-top: 1px dashed #93c5fd;
-  padding-top: 6px;
+  font-size: 0.75rem;
+  color: #374151;
+  border-top: 1px dashed #9ca3af;
+  padding-top: 5px;
 }
 
-/* 2. Family Siblings Box */
+/* 4. Student & Sibling Info Box */
+.receipt-info-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  background: #f9fafb;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.76rem;
+}
+
+.info-k {
+  color: #4b5563;
+  font-weight: 600;
+}
+
+.info-v {
+  color: #111827;
+  font-weight: 700;
+}
+
 .family-info-box {
-  background: #f8fafc !important;
-  border: 1.5px solid #e2e8f0 !important;
-  border-radius: 8px !important;
-  padding: 10px 14px !important;
-  margin-bottom: 12px !important;
+  display: block;
 }
 
 .family-siblings-header {
@@ -64,20 +149,20 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
-  border-bottom: 1px dashed #cbd5e1;
-  padding-bottom: 6px;
+  border-bottom: 1px dashed #9ca3af;
+  padding-bottom: 5px;
 }
 
 .family-siblings-title {
   font-weight: 800;
-  color: #1e293b;
-  font-size: 0.82rem;
+  color: #111827;
+  font-size: 0.8rem;
 }
 
 .family-combined-rate {
   font-weight: 800;
-  color: #0284c7;
-  font-size: 0.82rem;
+  color: #111827;
+  font-size: 0.8rem;
 }
 
 .family-siblings-grid {
@@ -88,141 +173,120 @@
 
 .sibling-pill-card {
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 0.78rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  border: 1px solid #6b7280;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 0.76rem;
 }
 
 .sibling-name {
-  color: #0f172a;
+  color: #111827;
   display: block;
 }
 
 .sibling-meta {
-  color: #64748b;
-  font-size: 0.72rem;
-  margin-top: 2px;
+  color: #4b5563;
+  font-size: 0.7rem;
+  margin-top: 1px;
 }
 
 .family-guardian-row {
   display: flex;
   justify-content: space-between;
   font-size: 0.75rem;
-  color: #475569;
+  color: #374151;
   margin-top: 8px;
-  border-top: 1px solid #e2e8f0;
-  padding-top: 6px;
+  border-top: 1px solid #d1d5db;
+  padding-top: 5px;
 }
 
-/* 3. KPI Summary Grid */
+/* 5. Executive KPI Summary */
 .ledger-kpi-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .kpi-box {
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  border: 1px solid;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-}
-
-.kpi-box.blue {
-  background: #f0f9ff;
-  border-color: #bae6fd;
-  color: #0369a1;
-}
-
-.kpi-box.green {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #15803d;
-}
-
-.kpi-box.orange {
-  background: #fff7ed;
-  border-color: #fed7aa;
-  color: #c2410c;
-}
-
-.kpi-box.teal {
-  background: #f0fdfa;
-  border-color: #99f6e4;
-  color: #0f766e;
+  background: #ffffff;
+  border: 1.5px solid #1f2937;
+  color: #111827;
 }
 
 .kpi-lbl {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.5px;
   text-transform: uppercase;
+  color: #4b5563;
 }
 
 .kpi-val {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 900;
-  margin-top: 3px;
+  margin-top: 2px;
+  color: #111827;
 }
 
-/* 4. Section Headings */
+/* 6. Section Headings */
 .ledger-section-heading {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 800;
-  color: #0f172a;
+  color: #111827;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin: 14px 0 6px 0;
-  padding-left: 8px;
-  border-left: 3px solid #0284c7;
+  margin: 12px 0 6px 0;
+  padding-left: 6px;
+  border-left: 3px solid #1f2937;
 }
 
-/* 5. Modern Table Design */
+/* 7. High-Contrast Monochrome Tables */
 .modern-table-container {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border: 1.5px solid #1f2937;
+  border-radius: 6px;
   overflow: hidden;
   margin-bottom: 12px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  background: #ffffff;
 }
 
 .modern-ledger-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   background: #ffffff;
 }
 
 .modern-ledger-table thead tr {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background: #1f2937;
   color: #ffffff;
 }
 
 .modern-ledger-table th {
-  padding: 8px 12px;
+  padding: 7px 10px;
   font-weight: 700;
   text-align: left;
   letter-spacing: 0.3px;
   border: none;
-  font-size: 0.75rem;
+  font-size: 0.74rem;
+  color: #ffffff;
 }
 
 .modern-ledger-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #1e293b;
+  padding: 7px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #111827;
   vertical-align: middle;
 }
 
 .modern-ledger-table tbody tr:nth-child(even) td {
-  background: #f8fafc;
+  background: #f9fafb;
 }
 
 .modern-ledger-table tbody tr:last-child td {
@@ -231,104 +295,93 @@
 
 .month-row-title {
   font-weight: 700;
-  color: #0f172a;
+  color: #111827;
 }
 
 .sibling-sub-breakdown {
-  font-size: 0.7rem;
-  color: #64748b;
-  margin-top: 3px;
-}
-
-.text-slate {
-  color: #334155;
+  font-size: 0.68rem;
+  color: #4b5563;
+  margin-top: 2px;
 }
 
 .receipt-mono-tag {
   display: inline-block;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-weight: 700;
-  color: #0284c7;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 4px;
+  color: #111827;
+  background: #f3f4f6;
+  border: 1px solid #9ca3af;
+  border-radius: 3px;
   padding: 2px 6px;
-  font-size: 0.75rem;
+  font-size: 0.74rem;
 }
 
 .payment-date-cell {
-  color: #334155;
+  color: #111827;
   font-weight: 500;
 }
 
 .channel-pill {
   display: inline-block;
-  padding: 2px 7px;
-  border-radius: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
   font-size: 0.72rem;
-  font-weight: 600;
-}
-
-.channel-pill.bank {
-  background: #e0f2fe;
-  color: #0369a1;
-  border: 1px solid #bae6fd;
-}
-
-.channel-pill.cash {
-  background: #dcfce7;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
+  font-weight: 700;
+  background: #ffffff;
+  border: 1px solid #4b5563;
+  color: #111827;
 }
 
 .amount-cell {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #111827;
 }
 
 .empty-ledger-msg {
-  padding: 20px;
-  color: #64748b;
+  padding: 16px;
+  color: #6b7280;
   font-style: italic;
 }
 
-/* 6. Status Pills */
+/* 8. Monochrome Status Badges */
 .paid-tag {
   display: inline-block;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  padding: 2px 8px;
-  border-radius: 4px;
-  letter-spacing: 0.4px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
 }
 
 .paid-tag.cleared {
-  background: #dcfce7;
-  color: #15803d;
-  border: 1px solid #86efac;
+  background: #111827;
+  color: #ffffff;
+  border: 1px solid #111827;
 }
 
 .paid-tag.due {
-  background: #fee2e2;
-  color: #dc2626;
-  border: 1px solid #fca5a5;
+  background: #ffffff;
+  color: #111827;
+  border: 1.5px solid #111827;
 }
 
 .paid-tag.neutral {
-  background: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #cbd5e1;
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #9ca3af;
 }
 
-/* 7. Official Seal & Sign Footer (Fixed overlapping) */
+/* 9. Official Verification Stamp & Signature */
 .ledger-footer-section {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 18px;
-  padding: 12px 14px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1.5px solid #1f2937;
+  border-radius: 6px;
 }
 
 .footer-disclaimer-box {
@@ -337,9 +390,10 @@
 }
 
 .footer-disclaimer-box .thank-you-msg {
-  font-size: 0.72rem;
-  color: #64748b;
+  font-size: 0.7rem;
+  color: #4b5563;
   line-height: 1.4;
+  font-weight: 500;
 }
 
 .footer-auth-box {
@@ -349,37 +403,36 @@
 }
 
 .seal-stamp-circle {
-  width: 58px;
-  height: 58px;
-  border: 2px double #0284c7;
+  width: 56px;
+  height: 56px;
+  border: 2px double #111827;
   border-radius: 50%;
-  background: #f0f9ff;
+  background: #ffffff;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.1);
 }
 
 .seal-top {
-  font-size: 0.55rem;
+  font-size: 0.52rem;
   font-weight: 900;
-  color: #0369a1;
+  color: #111827;
   letter-spacing: 0.3px;
 }
 
 .seal-mid {
-  font-size: 0.45rem;
-  font-weight: 700;
-  color: #0284c7;
+  font-size: 0.44rem;
+  font-weight: 800;
+  color: #374151;
   letter-spacing: 0.2px;
 }
 
 .seal-bot {
-  font-size: 0.52rem;
-  font-weight: 800;
-  color: #15803d;
+  font-size: 0.5rem;
+  font-weight: 900;
+  color: #111827;
   margin-top: 1px;
 }
 
@@ -388,20 +441,20 @@
 }
 
 .signature-block .sig-rule {
-  width: 95px;
+  width: 90px;
   height: 1.5px;
-  background: #334155;
+  background: #111827;
   margin-bottom: 3px;
   margin-left: auto;
 }
 
 .signature-block .sig-title {
   font-size: 0.72rem;
-  font-weight: 700;
-  color: #334155;
+  font-weight: 800;
+  color: #111827;
 }
 
-/* 8. Mobile Responsiveness */
+/* 10. Mobile & Responsive */
 @media (max-width: 640px) {
   .ledger-sheet {
     min-width: 580px !important;
