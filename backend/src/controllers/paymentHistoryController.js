@@ -181,21 +181,30 @@ async function getCollectionSummary(req, res) {
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const today = new Date().toISOString().split('T')[0];
-    const firstDayOfMonth = today.substring(0, 8) + '01';
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const thisMonthStr = new Date().toISOString().slice(0, 7);
+    const firstDayOfMonth = todayStr.substring(0, 8) + '01';
 
-    const [todayTotal, monthTotal, overall, daily, monthly] = await Promise.all([
+    const [todayStats, monthStats, overall, channelStats, daily, monthly] = await Promise.all([
       db.queryOne(
-        `SELECT COALESCE(SUM(\`amount\`), 0) as total, COUNT(*) as count
+        `SELECT 
+           COALESCE(SUM(\`amount\`), 0) as total, 
+           COUNT(*) as count,
+           COALESCE(SUM(CASE WHEN \`payment_mode\` = 'CASH' THEN \`amount\` ELSE 0 END), 0) as cash_total,
+           COALESCE(SUM(CASE WHEN \`payment_mode\` != 'CASH' THEN \`amount\` ELSE 0 END), 0) as bank_total
          FROM \`payments\`
-         WHERE DATE(\`payment_date\`) = ?`,
-        [today]
+         WHERE (DATE(\`payment_date\`) = CURDATE() OR DATE(\`payment_date\`) = ?)`,
+        [todayStr]
       ),
       db.queryOne(
-        `SELECT COALESCE(SUM(\`amount\`), 0) as total, COUNT(*) as count
+        `SELECT 
+           COALESCE(SUM(\`amount\`), 0) as total, 
+           COUNT(*) as count,
+           COALESCE(SUM(CASE WHEN \`payment_mode\` = 'CASH' THEN \`amount\` ELSE 0 END), 0) as cash_total,
+           COALESCE(SUM(CASE WHEN \`payment_mode\` != 'CASH' THEN \`amount\` ELSE 0 END), 0) as bank_total
          FROM \`payments\`
-         WHERE DATE(\`payment_date\`) >= ?`,
-        [firstDayOfMonth]
+         WHERE DATE(\`payment_date\`) >= ? OR DATE_FORMAT(\`payment_date\`, '%Y-%m') = ?`,
+        [firstDayOfMonth, thisMonthStr]
       ),
       db.queryOne(
         `SELECT COALESCE(SUM(\`amount\`), 0) as grand_total, COUNT(*) as total_count
@@ -203,37 +212,80 @@ async function getCollectionSummary(req, res) {
          ${whereClause}`,
         values
       ),
-      db.query(
-        `SELECT DATE(\`payment_date\`) as date, SUM(\`amount\`) as total_amount, COUNT(*) as count
+      db.queryOne(
+        `SELECT 
+           COALESCE(SUM(CASE WHEN \`payment_mode\` = 'CASH' THEN \`amount\` ELSE 0 END), 0) as cash_total,
+           COALESCE(SUM(CASE WHEN \`payment_mode\` != 'CASH' THEN \`amount\` ELSE 0 END), 0) as bank_total
          FROM \`payments\`
-         ${whereClause}
-         GROUP BY DATE(\`payment_date\`)
-         ORDER BY DATE(\`payment_date\`) DESC
-         LIMIT 7`,
+         ${whereClause}`,
         values
       ),
       db.query(
-        `SELECT DATE_FORMAT(\`payment_date\`, '%Y-%m') as month, SUM(\`amount\`) as total_amount, COUNT(*) as count
+        `SELECT DATE_FORMAT(\`payment_date\`, '%Y-%m-%d') as date, DATE_FORMAT(\`payment_date\`, '%Y-%m-%d') as date_str, SUM(\`amount\`) as total_amount, SUM(\`amount\`) as total, COUNT(*) as count
+         FROM \`payments\`
+         ${whereClause}
+         GROUP BY DATE_FORMAT(\`payment_date\`, '%Y-%m-%d')
+         ORDER BY date DESC
+         LIMIT 14`,
+        values
+      ),
+      db.query(
+        `SELECT DATE_FORMAT(\`payment_date\`, '%Y-%m') as month, DATE_FORMAT(\`payment_date\`, '%Y-%m') as month_str, SUM(\`amount\`) as total_amount, SUM(\`amount\`) as total, COUNT(*) as count
          FROM \`payments\`
          ${whereClause}
          GROUP BY DATE_FORMAT(\`payment_date\`, '%Y-%m')
          ORDER BY month DESC
-         LIMIT 6`,
+         LIMIT 12`,
         values
       ),
     ]);
 
+    const grandTotal = Number(overall?.grand_total || 0);
+    const totalCount = Number(overall?.total_count || 0);
+    const todayTotalVal = Number(todayStats?.total || 0);
+    const todayCountVal = Number(todayStats?.count || 0);
+    const monthTotalVal = Number(monthStats?.total || 0);
+    const monthCountVal = Number(monthStats?.count || 0);
+    const cashTotalVal = Number(channelStats?.cash_total || 0);
+    const bankTotalVal = Number(channelStats?.bank_total || 0);
+    const todayCashVal = Number(todayStats?.cash_total || 0);
+    const todayBankVal = Number(todayStats?.bank_total || 0);
+
+    const summaryObj = {
+      // Direct & legacy keys
+      today: todayTotalVal,
+      today_amount: todayTotalVal,
+      today_total: todayTotalVal,
+      today_count: todayCountVal,
+      today_cash: todayCashVal,
+      today_bank: todayBankVal,
+      this_month: monthTotalVal,
+      month_amount: monthTotalVal,
+      month_total: monthTotalVal,
+      month_count: monthCountVal,
+      total_collected: grandTotal,
+      grand_total: grandTotal,
+      total_amount: grandTotal,
+      total_count: totalCount,
+      total_records: totalCount,
+      cash_total: cashTotalVal,
+      cash_amount: cashTotalVal,
+      bank_total: bankTotalVal,
+      bank_amount: bankTotalVal,
+      daily: daily || [],
+      daily_trend: daily || [],
+      monthly: monthly || [],
+      monthly_trend: monthly || [],
+    };
+
     return res.json({
       success: true,
-      summary: {
-        today: Number(todayTotal?.total || 0),
-        today_count: Number(todayTotal?.count || 0),
-        this_month: Number(monthTotal?.total || 0),
-        month_count: Number(monthTotal?.count || 0),
-        total_collected: Number(overall?.grand_total || 0),
-        total_count: Number(overall?.total_count || 0),
-        daily_trend: daily || [],
-        monthly_trend: monthly || [],
+      summary: summaryObj,
+      daily,
+      monthly,
+      total: {
+        count: totalCount,
+        amount: grandTotal,
       },
     });
   } catch (err) {

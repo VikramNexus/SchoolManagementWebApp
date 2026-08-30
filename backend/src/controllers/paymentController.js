@@ -281,44 +281,80 @@ async function getPaymentSummary(req, res) {
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const thisMonthStr = new Date().toISOString().slice(0, 7);
+
     // Daily summary
     const dailySql = `
-      SELECT DATE(\`payment_date\`) as date, COUNT(*) as count, SUM(\`amount\`) as total
+      SELECT DATE_FORMAT(\`payment_date\`, '%Y-%m-%d') as date, DATE_FORMAT(\`payment_date\`, '%Y-%m-%d') as date_str, COUNT(*) as count, SUM(\`amount\`) as total, SUM(\`amount\`) as total_amount
       FROM \`payments\`
       ${whereClause}
-      GROUP BY DATE(\`payment_date\`)
-      ORDER BY DATE(\`payment_date\`) DESC
+      GROUP BY DATE_FORMAT(\`payment_date\`, '%Y-%m-%d')
+      ORDER BY date DESC
     `;
 
     // Monthly summary
     const monthlySql = `
-      SELECT DATE_FORMAT(\`payment_date\`, '%Y-%m') as month, COUNT(*) as count, SUM(\`amount\`) as total
+      SELECT DATE_FORMAT(\`payment_date\`, '%Y-%m') as month, DATE_FORMAT(\`payment_date\`, '%Y-%m') as month_str, COUNT(*) as count, SUM(\`amount\`) as total, SUM(\`amount\`) as total_amount
       FROM \`payments\`
       ${whereClause}
       GROUP BY DATE_FORMAT(\`payment_date\`, '%Y-%m')
       ORDER BY month DESC
     `;
 
-    // Overall total
-    const totalSql = `
-      SELECT COUNT(*) as count, SUM(\`amount\`) as total
+    // Overall total & channel breakdown
+    const statsSql = `
+      SELECT 
+        COUNT(*) as total_count,
+        COALESCE(SUM(\`amount\`), 0) as total_amount,
+        COALESCE(SUM(CASE WHEN \`payment_mode\` = 'CASH' THEN \`amount\` ELSE 0 END), 0) as cash_total,
+        COALESCE(SUM(CASE WHEN \`payment_mode\` != 'CASH' THEN \`amount\` ELSE 0 END), 0) as bank_total,
+        COALESCE(SUM(CASE WHEN (DATE(\`payment_date\`) = CURDATE() OR DATE_FORMAT(\`payment_date\`, '%Y-%m-%d') = ?) THEN \`amount\` ELSE 0 END), 0) as today_amount,
+        COUNT(CASE WHEN (DATE(\`payment_date\`) = CURDATE() OR DATE_FORMAT(\`payment_date\`, '%Y-%m-%d') = ?) THEN 1 END) as today_count,
+        COALESCE(SUM(CASE WHEN (DATE(\`payment_date\`) = CURDATE() OR DATE_FORMAT(\`payment_date\`, '%Y-%m-%d') = ?) AND \`payment_mode\` = 'CASH' THEN \`amount\` ELSE 0 END), 0) as today_cash,
+        COALESCE(SUM(CASE WHEN (DATE(\`payment_date\`) = CURDATE() OR DATE_FORMAT(\`payment_date\`, '%Y-%m-%d') = ?) AND \`payment_mode\` != 'CASH' THEN \`amount\` ELSE 0 END), 0) as today_bank,
+        COALESCE(SUM(CASE WHEN DATE_FORMAT(\`payment_date\`, '%Y-%m') = ? THEN \`amount\` ELSE 0 END), 0) as month_amount,
+        COUNT(CASE WHEN DATE_FORMAT(\`payment_date\`, '%Y-%m') = ? THEN 1 END) as month_count
       FROM \`payments\`
       ${whereClause}
     `;
 
-    const [daily, monthly, total] = await Promise.all([
+    const [daily, monthly, statsRow] = await Promise.all([
       db.query(dailySql, values),
       db.query(monthlySql, values),
-      db.queryOne(totalSql, values),
+      db.queryOne(statsSql, [todayStr, todayStr, todayStr, todayStr, thisMonthStr, thisMonthStr, ...values]),
     ]);
+
+    const stats = statsRow || {};
+    const summary = {
+      total_amount: Number(stats.total_amount || 0),
+      grand_total: Number(stats.total_amount || 0),
+      total_records: Number(stats.total_count || 0),
+      total_count: Number(stats.total_count || 0),
+      cash_total: Number(stats.cash_total || 0),
+      cash_amount: Number(stats.cash_total || 0),
+      bank_total: Number(stats.bank_total || 0),
+      bank_amount: Number(stats.bank_total || 0),
+      today_amount: Number(stats.today_amount || 0),
+      today_total: Number(stats.today_amount || 0),
+      today_count: Number(stats.today_count || 0),
+      today_cash: Number(stats.today_cash || 0),
+      today_bank: Number(stats.today_bank || 0),
+      month_amount: Number(stats.month_amount || 0),
+      month_total: Number(stats.month_amount || 0),
+      month_count: Number(stats.month_count || 0),
+      daily,
+      monthly,
+    };
 
     return res.json({
       success: true,
+      summary,
       daily,
       monthly,
       total: {
-        count: total.count,
-        amount: total.total || 0,
+        count: summary.total_count,
+        amount: summary.total_amount,
       },
     });
   } catch (err) {

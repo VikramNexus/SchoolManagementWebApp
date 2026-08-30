@@ -140,8 +140,10 @@ export default function Payments() {
         setTotalAmount(historyRes.data.summary?.total_amount || 0);
       }
 
-      if (summaryRes.data.success) {
-        setSummaryData(summaryRes.data.summary || null);
+      if (summaryRes?.data?.success) {
+        setSummaryData(summaryRes.data.summary || summaryRes.data || null);
+      } else if (historyRes?.data?.summary) {
+        setSummaryData(historyRes.data.summary);
       }
     } catch (err) {
       console.error('[Payments.fetchPayments]', err);
