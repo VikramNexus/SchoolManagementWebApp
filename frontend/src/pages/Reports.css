@@ -116,6 +116,12 @@
 }
 .btn-header-excel.red:hover { background: #b91c1c; transform: translateY(-1px); }
 
+.btn-header-excel.blue {
+  background: #2563eb;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+}
+.btn-header-excel.blue:hover { background: #1d4ed8; transform: translateY(-1px); }
+
 /* 2. Top 4-KPI Command Ribbon */
 .reports-kpi-ribbon {
   display: grid;
@@ -308,6 +314,8 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
+  min-width: 0;
+  width: 100%;
 }
 
 @media (max-width: 960px) {
@@ -322,6 +330,108 @@
   border: 1px solid #e2e8f0;
   padding: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* 2x2 Stats Grid for Payments & Reports matching Dues & Dashboard */
+.reports-2x2-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 960px) {
+  .reports-2x2-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .reports-2x2-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+}
+
+.summary-stat-card {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.summary-stat-card.card-green { border-left: 4px solid #16a34a; }
+.summary-stat-card.card-amber { border-left: 4px solid #d97706; }
+.summary-stat-card.card-blue { border-left: 4px solid #0284c7; }
+.summary-stat-card.card-purple { border-left: 4px solid #9333ea; }
+
+.stat-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-card-icon.green { background: #dcfce7; color: #16a34a; }
+.stat-card-icon.amber { background: #fef3c7; color: #d97706; }
+.stat-card-icon.blue { background: #e0f2fe; color: #0284c7; }
+.stat-card-icon.purple { background: #f3e8ff; color: #9333ea; }
+
+.stat-card-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.stat-card-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stat-card-val {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stat-card-val.text-green { color: #16a34a; }
+.stat-card-val.text-amber { color: #d97706; }
+.stat-card-val.text-blue { color: #0284c7; }
+.stat-card-val.text-purple { color: #9333ea; }
+
+.stat-card-sub {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .full-width-panel {
@@ -516,17 +626,82 @@
 
 /* Tables */
 .table-responsive {
-  overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
+  display: block;
+  box-sizing: border-box;
 }
 
 .clean-report-table {
   width: 100%;
-  min-width: 540px;
+  min-width: 580px;
   border-collapse: collapse;
   font-size: 13px;
   background: #ffffff;
+}
+
+.receipt-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0284c7;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.receipt-chip-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.report-pagination-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 8px;
+  background: #f8fafc;
+  border-radius: 0 0 10px 10px;
+}
+
+.btn-page-nav {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-page-nav:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.btn-page-nav:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-indicator-text {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .clean-report-table th {
