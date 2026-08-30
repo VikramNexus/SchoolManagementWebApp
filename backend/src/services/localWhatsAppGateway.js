@@ -7,7 +7,7 @@
  * Features:
  * - Mutex-locked single socket instance to prevent conflict errors (code 440)
  * - Cacheable Signal Key Store for session integrity
- * - Auto-reconnect on network interruptions
+ * - Auto-reconnect with intelligent backoff and stale-session auto-cleanup
  * - Direct Plaintext WhatsApp Message Dispatch (Payments, Dues, Admissions)
  */
 
@@ -22,6 +22,8 @@ let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'qr_re
 let linkedUserPhone = null;
 let isInitializing = false;
 let reconnectTimer = null;
+let consecutiveDisconnects = 0;
+let lastLoggedStatus = null;
 
 const AUTH_FOLDER = path.join(__dirname, '../../data/wpp_auth');
 
@@ -32,9 +34,6 @@ if (!fs.existsSync(AUTH_FOLDER)) {
 
 /**
  * Format raw phone number into standard WhatsApp JID
- * e.g., '9876543210' -> '919876543210@s.whatsapp.net'
- * e.g., '09876543210' -> '919876543210@s.whatsapp.net'
- * e.g., '+91 98765-43210' -> '919876543210@s.whatsapp.net'
  */
 function formatToJID(phone) {
   if (!phone) return null;
@@ -73,10 +72,23 @@ function destroySocket() {
 }
 
 /**
+ * Clear corrupted or stale auth session files
+ */
+function clearAuthFolder() {
+  try {
+    if (fs.existsSync(AUTH_FOLDER)) {
+      fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+    }
+    fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+  } catch (e) {
+    console.warn('[WhatsApp Gateway] Could not clear auth folder:', e.message);
+  }
+}
+
+/**
  * Initialize WhatsApp Gateway Socket with single-instance lock
  */
 async function initWhatsAppGateway() {
-  // If already connecting or already connected, do not spawn another socket
   if (isInitializing || connectionStatus === 'connected' || (sock && connectionStatus === 'qr_ready')) {
     return;
   }
@@ -135,6 +147,11 @@ async function initWhatsAppGateway() {
             color: { dark: '#090e17', light: '#ffffff' },
           });
           connectionStatus = 'qr_ready';
+          consecutiveDisconnects = 0;
+          if (lastLoggedStatus !== 'qr_ready') {
+            console.log('[WhatsApp Gateway] 📱 QR Code is ready for scanning in Settings -> Messaging.');
+            lastLoggedStatus = 'qr_ready';
+          }
         } catch (qrErr) {
           console.error('[WhatsApp Gateway] Error generating QR code image:', qrErr);
         }
@@ -142,58 +159,69 @@ async function initWhatsAppGateway() {
 
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401;
         const isReplaced = statusCode === DisconnectReason.connectionReplaced || statusCode === 440;
         const isBadSession = statusCode === DisconnectReason.badSession;
-
-        const shouldReconnect = !isLoggedOut && !isReplaced && !isBadSession;
 
         qrCodeDataUrl = null;
         linkedUserPhone = null;
         destroySocket();
 
         if (isLoggedOut || isBadSession) {
-          console.log(`[WhatsApp Gateway] Session terminated (code: ${statusCode}). Clearing auth files.`);
+          console.log(`[WhatsApp Gateway] Session terminated (code: ${statusCode}). Resetting session.`);
           connectionStatus = 'disconnected';
-          try {
-            fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-            fs.mkdirSync(AUTH_FOLDER, { recursive: true });
-          } catch (e) {}
-          // Re-init so fresh QR is immediately available
+          consecutiveDisconnects = 0;
+          clearAuthFolder();
           reconnectTimer = setTimeout(() => {
             isInitializing = false;
             initWhatsAppGateway();
           }, 3000);
         } else if (isReplaced) {
-          console.log(`[WhatsApp Gateway] Session active on another instance/device (code 440). Pausing auto-reconnect to avoid session conflict.`);
+          if (lastLoggedStatus !== 'replaced') {
+            console.log(`[WhatsApp Gateway] Session active on another device (code 440). Pausing auto-reconnect.`);
+            lastLoggedStatus = 'replaced';
+          }
           connectionStatus = 'disconnected';
-          // Relaxed backoff: do not loop aggressively
           reconnectTimer = setTimeout(() => {
             isInitializing = false;
             initWhatsAppGateway();
           }, 60000);
         } else {
-          console.log(`[WhatsApp Gateway] Disconnected (code: ${statusCode || 'unknown'}). Reconnecting in 5s...`);
-          connectionStatus = 'connecting';
-          if (shouldReconnect) {
+          consecutiveDisconnects++;
+          connectionStatus = 'disconnected';
+
+          // If disconnected repeatedly (e.g. stale partial auth keys causing code 428 loop), wipe auth to reset
+          if (consecutiveDisconnects >= 3) {
+            if (lastLoggedStatus !== 'auth_reset') {
+              console.log(`[WhatsApp Gateway] Refreshing stale connection session.`);
+              lastLoggedStatus = 'auth_reset';
+            }
+            clearAuthFolder();
+            consecutiveDisconnects = 0;
             reconnectTimer = setTimeout(() => {
               isInitializing = false;
               initWhatsAppGateway();
-            }, 5000);
+            }, 10000);
           } else {
-            connectionStatus = 'disconnected';
+            // Quiet reconnect without flooding the terminal
+            const backoffMs = Math.min(consecutiveDisconnects * 5000, 30000);
+            reconnectTimer = setTimeout(() => {
+              isInitializing = false;
+              initWhatsAppGateway();
+            }, backoffMs);
           }
         }
       } else if (connection === 'open') {
         connectionStatus = 'connected';
         qrCodeDataUrl = null;
+        consecutiveDisconnects = 0;
         const userJid = sock?.user?.id || '';
         linkedUserPhone = formatDisplayPhone(userJid);
         console.log(`[WhatsApp Gateway] ✅ WhatsApp Connected Successfully! Linked Phone: ${linkedUserPhone}`);
+        lastLoggedStatus = 'connected';
       }
     });
   } catch (err) {
-    console.error('[WhatsApp Gateway] Startup Error:', err);
     connectionStatus = 'disconnected';
     destroySocket();
   } finally {
@@ -216,7 +244,7 @@ function getStatus() {
 }
 
 /**
- * Send a direct WhatsApp text message in background (No PDF, 100% Text Message)
+ * Send a direct WhatsApp text message in background
  */
 async function sendTextMessage(toPhone, messageBody) {
   if (!sock || connectionStatus !== 'connected') {
@@ -285,11 +313,9 @@ async function disconnectGateway() {
   qrCodeDataUrl = null;
   connectionStatus = 'disconnected';
   linkedUserPhone = null;
+  consecutiveDisconnects = 0;
 
-  try {
-    fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-    fs.mkdirSync(AUTH_FOLDER, { recursive: true });
-  } catch (e) {}
+  clearAuthFolder();
 
   setTimeout(() => {
     isInitializing = false;
@@ -307,6 +333,8 @@ async function restartGateway() {
   connectionStatus = 'disconnected';
   qrCodeDataUrl = null;
   isInitializing = false;
+  consecutiveDisconnects = 0;
+  clearAuthFolder();
   await initWhatsAppGateway();
   return getStatus();
 }
