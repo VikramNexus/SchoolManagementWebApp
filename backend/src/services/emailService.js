@@ -122,6 +122,74 @@ async function sendPasswordResetOtpEmail(toEmail, otpCode, username) {
   return { success: true, mode: 'console_dev' };
 }
 
+/**
+ * Send Database Backup SQL Snapshot to Admin Cloud Email
+ */
+async function sendDatabaseBackupEmail(toEmail, filename, sqlContent) {
+  const transporter = getTransporter();
+  const senderEmail = process.env.GMAIL_USER || process.env.SMTP_USER || 'vy3052907@gmail.com';
+  const sizeKb = (Buffer.byteLength(sqlContent, 'utf8') / 1024).toFixed(1);
+  const dateStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+  const mailOptions = {
+    from: `"Aryavart Cloud Vault" <${senderEmail}>`,
+    to: toEmail,
+    replyTo: senderEmail,
+    subject: `🛡️ Database Backup Snapshot (${dateStr}) — Aryavart Portal`,
+    text: `Dear Administrator,\n\nPlease find attached the complete database backup snapshot generated on ${dateStr}.\n\nBackup File: ${filename}\nSize: ${sizeKb} KB\n\nKeep this file stored safely for disaster recovery.\n\nAryavart (P.S.G) Shikshan Sansthan`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 14px; border: 1px solid #1e293b;">
+        <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #1e293b; padding-bottom: 16px;">
+          <h2 style="color: #38bdf8; margin: 0; font-size: 20px; letter-spacing: -0.5px;">🏫 Aryavart (P.S.G) Shikshan Sansthan</h2>
+          <p style="color: #94a3b8; font-size: 13px; margin: 4px 0 0;">Cloud Database Backup &amp; Disaster Recovery Vault</p>
+        </div>
+
+        <div style="background: #1e293b; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+          <h3 style="margin: 0 0 12px; color: #38bdf8; font-size: 16px;">✓ System Snapshot Generated Successfully</h3>
+          <p style="font-size: 13px; color: #cbd5e1; margin: 0 0 16px; line-height: 1.5;">
+            An encrypted full SQL database backup has been dispatched to your email address. You can download and archive this attachment.
+          </p>
+
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 8px; overflow: hidden;">
+            <tr style="border-bottom: 1px solid #1e293b;">
+              <td style="padding: 10px 14px; color: #94a3b8; font-weight: 600;">Snapshot File:</td>
+              <td style="padding: 10px 14px; color: #f8fafc; font-family: monospace; font-weight: 700;">${filename}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #1e293b;">
+              <td style="padding: 10px 14px; color: #94a3b8; font-weight: 600;">File Size:</td>
+              <td style="padding: 10px 14px; color: #38bdf8; font-weight: 700;">${sizeKb} KB</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 14px; color: #94a3b8; font-weight: 600;">Generated At:</td>
+              <td style="padding: 10px 14px; color: #f8fafc;">${dateStr}</td>
+            </tr>
+          </table>
+        </div>
+
+        <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0; line-height: 1.5;">
+          This is an automated system dispatch from Aryavart Management Portal. Keep your backup attachments confidential.
+        </p>
+      </div>
+    `,
+    attachments: [
+      {
+        filename,
+        content: sqlContent,
+        contentType: 'application/sql',
+      },
+    ],
+  };
+
+  if (!transporter) {
+    throw new Error('SMTP Email configuration is missing in server environment.');
+  }
+
+  const info = await transporter.sendMail(mailOptions);
+  console.log(`[EmailService] Backup snapshot sent to ${toEmail}: ${info.messageId}`);
+  return { success: true, messageId: info.messageId };
+}
+
 module.exports = {
   sendPasswordResetOtpEmail,
+  sendDatabaseBackupEmail,
 };

@@ -16,6 +16,7 @@ const archiver = require('archiver');
 const nodemailer = require('nodemailer');
 const db = require('../config/db');
 const { generateStudentExcelWorkbook } = require('../services/studentExcelDossierService');
+const { sendDatabaseBackupEmail } = require('../services/emailService');
 
 // Backup directory inside backend/uploads/backups
 const BACKUP_DIR = path.resolve(__dirname, '../../uploads/backups');
@@ -599,52 +600,23 @@ async function sendCloudBackupEmail(req, res) {
       [filename, filepath, sqlDump.length, req.user?.id || null]
     );
 
-    // Audit log
-    await db.query(
-      `INSERT INTO \`backup_logs\` (\`type\`, \`file_name\`, \`file_size\`, \`performed_by\`, \`created_at\`)
-       VALUES ('cloud_email', ?, ?, ?, NOW())`,
-      [filename, sqlDump.length, req.user?.id || null]
-    );
-
-    // 2. Configure transporter
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER || '',
-        pass: process.env.SMTP_PASS || '',
-      },
-    });
-
-    // 3. Send email with attachment
-    const mailOptions = {
-      from: `"School System Cloud Vault" <${process.env.SMTP_USER || 'no-reply@school.edu'}>`,
-      to: emailTo,
-      subject: `🛡️ School Database Cloud Backup — ${new Date().toLocaleDateString('en-IN')}`,
-      text: `Dear Administrator,\n\nPlease find attached the full system database snapshot generated on ${new Date().toLocaleString('en-IN')}.\n\nFile: ${filename}\nSize: ${(sqlDump.length / 1024).toFixed(1)} KB\n\nKeep this file secure for disaster recovery.\n\nAryavart Shikshan Sansthan`,
-      attachments: [
-        {
-          filename,
-          content: sqlDump,
-          contentType: 'application/sql',
-        },
-      ],
-    };
-
-    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-      try {
-        await transporter.sendMail(mailOptions);
-      } catch (smtpErr) {
-        console.warn('[sendCloudBackupEmail] SMTP error (non-fatal):', smtpErr.message);
-      }
-    } else {
-      console.log(`[sendCloudBackupEmail] Mock dispatch: Backup ${filename} prepared for ${emailTo}`);
+    // Audit log (use 'export' type to match schema)
+    try {
+      await db.query(
+        `INSERT INTO \`backup_logs\` (\`type\`, \`file_name\`, \`file_size\`, \`performed_by\`, \`created_at\`)
+         VALUES ('export', ?, ?, ?, NOW())`,
+        [filename, sqlDump.length, req.user?.id || null]
+      );
+    } catch (logErr) {
+      console.warn('[sendCloudBackupEmail] Log insert warning:', logErr.message);
     }
+
+    // 2. Dispatch email with attachment using high-speed Gmail / SMTP pool
+    await sendDatabaseBackupEmail(emailTo, filename, sqlDump);
 
     return res.json({
       success: true,
-      message: `✓ Database snapshot successfully sent to ${emailTo}!`,
+      message: `✓ Database snapshot successfully dispatched to ${emailTo}!`,
       filename,
     });
   } catch (err) {
