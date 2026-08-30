@@ -493,17 +493,51 @@ export default function Reports() {
                                   <span className="mono-receipt-tag">{rcp.receipt_number || `RCP-${rcp.id}`}</span>
                                 </td>
                                 <td>
-                                  {rcp.is_family && (
-                                    <span className="family-pill-mini" title="Family payment for multiple siblings">
-                                      👨‍👧‍👦 Family ({rcp.sibling_count} Siblings)
-                                    </span>
+                                  {rcp.is_family ? (
+                                    <div className="family-cell-stack">
+                                      <span className="family-pill-mini" title="Family payment for multiple siblings">
+                                        👨‍👧‍👦 Family ({rcp.sibling_count || 2} Siblings)
+                                      </span>
+                                      <div className="sibling-names-list">
+                                        {rcp.raw_names ? rcp.raw_names.split(' & ').map((name, i) => (
+                                          <div key={i} className="sibling-name-entry">
+                                            <span className="bullet">•</span>
+                                            <strong
+                                              className="sibling-name-text"
+                                              onClick={() => navigate(`/students/${rcp.student_id}`)}
+                                              title={`View ${name}'s Profile`}
+                                            >
+                                              {name}
+                                            </strong>
+                                          </div>
+                                        )) : (
+                                          <strong className="student-click-link" onClick={() => navigate(`/students/${rcp.student_id}`)}>
+                                            {rcp.student_name}
+                                          </strong>
+                                        )}
+                                      </div>
+                                      <small className="student-adm-sub">({rcp.admission_no || 'N/A'})</small>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <strong className="student-click-link" onClick={() => navigate(`/students/${rcp.student_id}`)}>
+                                        {rcp.student_name}
+                                      </strong>
+                                      <small className="student-adm-sub">({rcp.admission_no || 'N/A'})</small>
+                                    </>
                                   )}
-                                  <strong className="student-click-link" onClick={() => navigate(`/students/${rcp.student_id}`)}>
-                                    {rcp.student_name}
-                                  </strong>
-                                  <small className="student-adm-sub">({rcp.admission_no || 'N/A'})</small>
                                 </td>
-                                <td>{rcp.class_name || 'Class'}</td>
+                                <td>
+                                  {rcp.is_family && rcp.class_name ? (
+                                    <div className="family-classes-stack">
+                                      {rcp.class_name.split(', ').map((cls, i) => (
+                                        <span key={i} className="class-badge-pill">{cls}</span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    rcp.class_name || 'Class'
+                                  )}
+                                </td>
                                 <td>
                                   <span className={`channel-pill ${rcp.payment_mode === 'IN_ACCOUNT' ? 'bank' : 'cash'}`}>
                                     {rcp.payment_mode === 'IN_ACCOUNT' ? '🏦 Bank/UPI' : '💵 Cash'}
@@ -815,14 +849,52 @@ export default function Reports() {
                           {pendingStudents.map((s) => (
                             <tr key={s.id}>
                               <td>
-                                <strong className="student-click-link" onClick={() => navigate(`/students/${s.id}`)}>
-                                  {s.full_name}
-                                </strong>
-                                <div className="student-parent-sub">Father: {s.father_name || s.parent_name || '—'}</div>
-                                <span className="mono-badge">Adm: {s.admission_no || 'N/A'}</span>
+                                {s.is_family ? (
+                                  <div className="family-cell-stack">
+                                    <span className="family-pill-mini">👨‍👧‍👦 Family Account ({s.sibling_count || 2} Siblings)</span>
+                                    <div className="sibling-names-list">
+                                      {s.siblings_detail && s.siblings_detail.length > 0 ? (
+                                        s.siblings_detail.map((sib, i) => (
+                                          <div key={i} className="sibling-name-entry">
+                                            <span className="bullet">•</span>
+                                            <strong
+                                              className="sibling-name-text"
+                                              onClick={() => navigate(`/students/${sib.student_id}`)}
+                                              title={`View ${sib.student_name}'s Profile`}
+                                            >
+                                              {sib.student_name}
+                                            </strong>
+                                            <span className="sibling-meta-chip">{sib.class_name} · {sib.admission_no}</span>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <strong className="student-click-link" onClick={() => navigate(`/students/${s.id}`)}>
+                                          {s.full_name}
+                                        </strong>
+                                      )}
+                                    </div>
+                                    <div className="student-parent-sub">Father: {s.father_name || s.parent_name || '—'}</div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <strong className="student-click-link" onClick={() => navigate(`/students/${s.id}`)}>
+                                      {s.full_name}
+                                    </strong>
+                                    <div className="student-parent-sub">Father: {s.father_name || s.parent_name || '—'}</div>
+                                    <span className="mono-badge">Adm: {s.admission_no || 'N/A'}</span>
+                                  </>
+                                )}
                               </td>
                               <td>
-                                <span className="class-badge-pill">{s.class_name} {s.section_name ? `(${s.section_name})` : ''}</span>
+                                {s.is_family && s.siblings_detail && s.siblings_detail.length > 0 ? (
+                                  <div className="family-classes-stack">
+                                    {s.siblings_detail.map((sib, i) => (
+                                      <span key={i} className="class-badge-pill">{sib.class_name}</span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="class-badge-pill">{s.class_name} {s.section_name ? `(${s.section_name})` : ''}</span>
+                                )}
                               </td>
                               <td>
                                 <span className="phone-text">{s.whatsapp_number || s.phone || '—'}</span>
