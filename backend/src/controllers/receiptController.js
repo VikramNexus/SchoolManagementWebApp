@@ -61,7 +61,8 @@ async function generateReceipt(req, res) {
 
 /**
  * GET /api/receipts/:paymentId
- * Get receipt information (for inline viewing)
+ * Get receipt information (for inline viewing, JPG modal, and print)
+ * Fully supports unified Multi-Student Family Receipts & single payments
  */
 async function getReceipt(req, res) {
   const { paymentId } = req.params;
@@ -69,7 +70,7 @@ async function getReceipt(req, res) {
   try {
     let payment = await db.queryOne(
       `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`generated_at\` as receipt_created_at,
-              s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`,
+              s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`, s.\`family_id\`,
               COALESCE(NULLIF(s.\`father_name\`, ''), NULLIF(s.\`parent_name\`, ''), (SELECT NULLIF(s2.\`father_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`father_name\` IS NOT NULL LIMIT 1), '—') as father_name,
               COALESCE(NULLIF(s.\`mother_name\`, ''), (SELECT NULLIF(s2.\`mother_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`mother_name\` IS NOT NULL LIMIT 1), '') as mother_name,
               COALESCE(NULLIF(s.\`parent_name\`, ''), NULLIF(s.\`father_name\`, ''), (SELECT COALESCE(NULLIF(s2.\`father_name\`, ''), NULLIF(s2.\`parent_name\`, '')) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND (s2.\`father_name\` IS NOT NULL OR s2.\`parent_name\` IS NOT NULL) LIMIT 1), '—') as parent_name,
@@ -98,7 +99,7 @@ async function getReceipt(req, res) {
         await generateAndSaveReceipt(actualPaymentId);
         payment = await db.queryOne(
           `SELECT p.*, r.\`id\` as receipt_id, r.\`receipt_number\`, r.\`file_path\`, r.\`generated_at\` as receipt_created_at,
-                  s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`,
+                  s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`, s.\`family_id\`,
                   COALESCE(NULLIF(s.\`father_name\`, ''), NULLIF(s.\`parent_name\`, ''), (SELECT NULLIF(s2.\`father_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`father_name\` IS NOT NULL LIMIT 1), '—') as father_name,
                   COALESCE(NULLIF(s.\`mother_name\`, ''), (SELECT NULLIF(s2.\`mother_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`mother_name\` IS NOT NULL LIMIT 1), '') as mother_name,
                   COALESCE(NULLIF(s.\`parent_name\`, ''), NULLIF(s.\`father_name\`, ''), (SELECT COALESCE(NULLIF(s2.\`father_name\`, ''), NULLIF(s2.\`parent_name\`, '')) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND (s2.\`father_name\` IS NOT NULL OR s2.\`parent_name\` IS NOT NULL) LIMIT 1), '—') as parent_name,
@@ -119,10 +120,7 @@ async function getReceipt(req, res) {
       }
     }
 
-    // Get allocations
-    const allocations = await getPaymentAllocations(actualPaymentId);
-
-    // Get school settings
+    // Get live school settings from database
     const school = await db.queryOne(
       `SELECT \`school_name\`, \`address\`, \`phone\`, \`email\`, \`logo_path\`, \`currency_symbol\`, \`academic_year\`
        FROM \`school_settings\` WHERE \`id\` = 1`
@@ -131,63 +129,169 @@ async function getReceipt(req, res) {
       address: 'Shastri Nagar, Ward no-07, Bara chakia, 845412, East Champaran, Bihar',
       phone: '+91-6201844773',
       email: 'Aryavartshikshansansthan@gmail.com',
-      academic_year: '2025-2026',
+      currency_symbol: '₹',
     };
 
-    // Get outstanding safely
-    let monthlyOutstanding = { total: 0 };
-    let additionalOutstanding = { total: 0 };
-    if (payment.student_id) {
-      monthlyOutstanding = await db.queryOne(
-        `SELECT COALESCE(SUM(\`due_amount\`), 0) as total
-         FROM \`monthly_fees\`
-         WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
-        [payment.student_id]
-      ) || { total: 0 };
-
-      additionalOutstanding = await db.queryOne(
-        `SELECT COALESCE(SUM(\`amount\`), 0) as total
-         FROM \`student_additional_fees\`
-         WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
-        [payment.student_id]
-      ) || { total: 0 };
+    // Check if this payment is part of a family multi-sibling group
+    let rootReceiptNumber = payment.receipt_number || `REC-${payment.id}`;
+    if (rootReceiptNumber.includes('-')) {
+      const parts = rootReceiptNumber.split('-');
+      if (parts[0] === 'FAM' && parts.length > 2) {
+        rootReceiptNumber = `${parts[0]}-${parts[1]}`;
+      }
     }
+
+    let isFamily = false;
+    let siblingPayments = [];
+    let allAllocations = [];
+    let totalPaid = Number(payment.amount || 0);
+    let totalRemainingDues = 0;
+
+    if (payment.family_id) {
+      siblingPayments = await db.query(
+        `SELECT p.*, r.\`receipt_number\` as r_receipt_no,
+                s.\`full_name\`, s.\`admission_no\`, s.\`class_id\`, s.\`section_id\`, s.\`category\`,
+                c.\`name\` as class_name, sec.\`name\` as section_name
+         FROM \`payments\` p
+         JOIN \`students\` s ON s.\`id\` = p.\`student_id\`
+         LEFT JOIN \`classes\` c ON c.\`id\` = s.\`class_id\`
+         LEFT JOIN \`sections\` sec ON sec.\`id\` = s.\`section_id\`
+         LEFT JOIN \`receipts\` r ON r.\`payment_id\` = p.\`id\`
+         WHERE p.\`family_id\` = ? AND (p.\`receipt_number\` LIKE ? OR p.\`notes\` LIKE ? OR DATE(p.\`payment_date\`) = DATE(?))
+         ORDER BY p.\`id\` ASC`,
+        [payment.family_id, `${rootReceiptNumber}%`, `%${rootReceiptNumber}%`, payment.payment_date]
+      );
+
+      if (siblingPayments.length > 1) {
+        isFamily = true;
+        totalPaid = siblingPayments.reduce((sum, sp) => sum + Number(sp.amount || 0), 0);
+
+        // Fetch allocations for all sibling payments in this batch
+        for (const sp of siblingPayments) {
+          const spAlloc = await getPaymentAllocations(sp.id);
+          if (spAlloc && spAlloc.length > 0) {
+            spAlloc.forEach(item => {
+              allAllocations.push({
+                ...item,
+                student_id: sp.student_id,
+                student_name: sp.full_name,
+                admission_no: sp.admission_no,
+                class_name: sp.class_name,
+                description: `${sp.full_name} (${sp.class_name || 'Class'}) — ${item.description || item.fee_type_name || (item.fee_month ? `${item.fee_month} Monthly Fee` : 'Tuition Fee')}`,
+              });
+            });
+          } else {
+            allAllocations.push({
+              student_id: sp.student_id,
+              student_name: sp.full_name,
+              admission_no: sp.admission_no,
+              class_name: sp.class_name,
+              description: `${sp.full_name} (${sp.class_name || 'Class'}) — Fee Payment`,
+              allocated_amount: Number(sp.amount),
+              fee_amount: Number(sp.amount),
+              paid_amount: Number(sp.amount),
+            });
+          }
+        }
+
+        // Calculate combined remaining dues for all siblings in the family
+        const sibStudentIds = siblingPayments.map(sp => sp.student_id);
+        const [mDues, aDues] = await Promise.all([
+          db.queryOne(
+            `SELECT COALESCE(SUM(\`due_amount\`), 0) as total FROM \`monthly_fees\` WHERE \`student_id\` IN (?) AND \`status\` IN ('DUE', 'PARTIAL')`,
+            [sibStudentIds]
+          ),
+          db.queryOne(
+            `SELECT COALESCE(SUM(\`amount\` - \`paid_amount\` - \`discount_amount\`), 0) as total FROM \`student_additional_fees\` WHERE \`student_id\` IN (?) AND \`status\` IN ('DUE', 'PARTIAL')`,
+            [sibStudentIds]
+          ),
+        ]);
+        totalRemainingDues = Number(mDues?.total || 0) + Number(aDues?.total || 0);
+      }
+    }
+
+    if (!isFamily) {
+      allAllocations = await getPaymentAllocations(actualPaymentId);
+
+      let monthlyOutstanding = { total: 0 };
+      let additionalOutstanding = { total: 0 };
+      if (payment.student_id) {
+        [monthlyOutstanding, additionalOutstanding] = await Promise.all([
+          db.queryOne(
+            `SELECT COALESCE(SUM(\`due_amount\`), 0) as total
+             FROM \`monthly_fees\`
+             WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
+            [payment.student_id]
+          ),
+          db.queryOne(
+            `SELECT COALESCE(SUM(\`amount\` - \`paid_amount\` - \`discount_amount\`), 0) as total
+             FROM \`student_additional_fees\`
+             WHERE \`student_id\` = ? AND \`status\` IN ('DUE', 'PARTIAL')`,
+            [payment.student_id]
+          ),
+        ]);
+      }
+      totalRemainingDues = Number(monthlyOutstanding?.total || 0) + Number(additionalOutstanding?.total || 0);
+    }
+
+    // Total assessed dues before this payment = Total Amount Paid + Remaining Balance
+    const totalAssessed = totalPaid + totalRemainingDues;
 
     return res.json({
       success: true,
+      is_family: isFamily,
+      family_id: payment.family_id || null,
+      siblings: isFamily ? siblingPayments.map(sp => ({
+        id: sp.student_id,
+        full_name: sp.full_name,
+        admission_no: sp.admission_no,
+        class_name: sp.class_name,
+        section_name: sp.section_name,
+        amount: Number(sp.amount),
+        receipt_number: sp.receipt_number || sp.r_receipt_no,
+      })) : [],
       receipt: {
         id: payment.receipt_id,
-        receipt_number: payment.receipt_number || `REC-${payment.id.toString().padStart(5, '0')}`,
+        receipt_number: isFamily ? rootReceiptNumber : (payment.receipt_number || `REC-${payment.id.toString().padStart(5, '0')}`),
         file_path: payment.file_path,
         created_at: payment.receipt_created_at,
       },
       payment: {
         id: payment.id,
-        amount: payment.amount,
+        amount: totalPaid,
         payment_date: payment.payment_date,
         payment_mode: payment.payment_mode,
         notes: payment.notes,
+        total_assessed: totalAssessed,
+        total_paid: totalPaid,
+        remaining_dues: totalRemainingDues,
       },
       student: {
         id: payment.student_id,
-        full_name: payment.full_name,
-        admission_no: payment.admission_no,
+        full_name: isFamily ? siblingPayments.map(sp => sp.full_name).join(' & ') : payment.full_name,
+        admission_no: isFamily ? siblingPayments.map(sp => sp.admission_no).join(', ') : payment.admission_no,
         father_name: payment.father_name || payment.parent_name || '—',
         mother_name: payment.mother_name || null,
         parent_name: payment.parent_name || payment.father_name || '—',
-        class_name: payment.class_name,
+        class_name: isFamily ? siblingPayments.map(sp => sp.class_name).filter(Boolean).join(', ') : payment.class_name,
         section_name: payment.section_name,
         category: payment.category,
         phone: payment.phone,
         whatsapp_number: payment.whatsapp_number,
-        address: payment.address,
+        address: school.address || payment.address,
       },
-      allocations,
+      allocations: allAllocations,
       school,
+      financial_summary: {
+        total_assessed: totalAssessed,
+        total_paid: totalPaid,
+        remaining_dues: totalRemainingDues,
+        is_cleared: totalRemainingDues <= 0,
+      },
       outstanding: {
-        monthly: Number(monthlyOutstanding?.total || 0),
-        additional: Number(additionalOutstanding?.total || 0),
-        total: Number(monthlyOutstanding?.total || 0) + Number(additionalOutstanding?.total || 0),
+        monthly: totalRemainingDues,
+        additional: 0,
+        total: totalRemainingDues,
       },
     });
   } catch (err) {
@@ -311,6 +415,8 @@ async function listReceipts(req, res) {
         p.\`payment_mode\`,
         p.\`payment_category\`,
         p.\`notes\`,
+        s.\`family_id\`,
+        p.\`family_id\` as payment_family_id,
         s.\`full_name\`,
         s.\`full_name\` as student_name,
         s.\`admission_no\`,
@@ -318,13 +424,6 @@ async function listReceipts(req, res) {
         COALESCE(NULLIF(s.\`mother_name\`, ''), (SELECT NULLIF(s2.\`mother_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`mother_name\` IS NOT NULL LIMIT 1), '') as mother_name,
         COALESCE(NULLIF(s.\`parent_name\`, ''), NULLIF(s.\`father_name\`, ''), (SELECT COALESCE(NULLIF(s2.\`father_name\`, ''), NULLIF(s2.\`parent_name\`, '')) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND (s2.\`father_name\` IS NOT NULL OR s2.\`parent_name\` IS NOT NULL) LIMIT 1), '—') as parent_name,
         s.\`category\` as student_category,
-        s.\`family_id\`,
-        (s.\`family_id\` IS NOT NULL AND (SELECT COUNT(*) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\`) > 1) as is_family,
-        (SELECT COUNT(*) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s.\`family_id\` IS NOT NULL) as sibling_count,
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT('student_id', s2.\`id\`, 'student_name', s2.\`full_name\`, 'admission_no', s2.\`admission_no\`, 'class_name', c2.\`name\`))
-         FROM \`students\` s2
-         LEFT JOIN \`classes\` c2 ON c2.\`id\` = s2.\`class_id\`
-         WHERE s2.\`family_id\` = s.\`family_id\` AND s.\`family_id\` IS NOT NULL AND s2.\`id\` != s.\`id\`) as siblings_detail,
         COALESCE(NULLIF(s.\`phone\`, ''), NULLIF(s.\`whatsapp_number\`, ''), (SELECT NULLIF(s2.\`phone\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`phone\` IS NOT NULL LIMIT 1), '') as phone,
         COALESCE(NULLIF(s.\`whatsapp_number\`, ''), NULLIF(s.\`phone\`, ''), (SELECT NULLIF(s2.\`whatsapp_number\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`whatsapp_number\` IS NOT NULL LIMIT 1), '') as whatsapp_number,
         COALESCE(NULLIF(s.\`address\`, ''), (SELECT NULLIF(s2.\`address\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`address\` IS NOT NULL LIMIT 1), '—') as address,
@@ -354,9 +453,6 @@ async function listReceipts(req, res) {
         student_name: r.full_name || r.student_name || '—',
         admission_no: r.admission_no || '—',
         receipt_number: r.receipt_number || `RCP-${r.payment_id || r.id}`,
-        is_family: Boolean(r.is_family || (r.siblings_detail && (typeof r.siblings_detail === 'string' ? JSON.parse(r.siblings_detail) : r.siblings_detail).length > 0)),
-        sibling_count: Number(r.sibling_count || 1),
-        siblings_detail: Array.isArray(r.siblings_detail) ? r.siblings_detail : (typeof r.siblings_detail === 'string' ? JSON.parse(r.siblings_detail || '[]') : []),
       })),
       pagination: {
         page: pageNum,

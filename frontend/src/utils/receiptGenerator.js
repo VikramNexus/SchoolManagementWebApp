@@ -410,7 +410,36 @@ export function printReceiptElement(element, title = 'Official Fee Receipt') {
           }
           .pm-label { color: #4b5563 !important; margin-right: 4px !important; }
           .pm-badge { font-weight: 700 !important; color: #111827 !important; }
-          .thank-you-msg { margin-top: 4px !important; font-size: 7.5px !important; color: #4b5563 !important; font-weight: 500 !important; }
+          .receipt-financial-grid {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr 1fr !important;
+            gap: 6px !important;
+            margin: 8px 0 !important;
+          }
+          .fin-box {
+            background: #f9fafb !important;
+            border: 1.5px solid #1f2937 !important;
+            border-radius: 4px !important;
+            padding: 4px 6px !important;
+            text-align: center !important;
+          }
+          .fin-box-lbl {
+            font-size: 7px !important;
+            font-weight: 800 !important;
+            color: #4b5563 !important;
+            text-transform: uppercase !important;
+            display: block !important;
+          }
+          .fin-box-val {
+            font-size: 10px !important;
+            font-weight: 900 !important;
+            color: #111827 !important;
+            display: block !important;
+          }
+          .fin-box-val.text-green { color: #15803d !important; }
+          .fin-box-val.text-red { color: #b91c1c !important; }
+          .fin-box.fin-remaining.due { background: #fef2f2 !important; border-color: #b91c1c !important; }
+          .fin-box.fin-remaining.cleared { background: #f0fdf4 !important; border-color: #15803d !important; }
           .total-summary-card {
             background: #f9fafb !important;
             border: 1.5px solid #1f2937 !important;

@@ -7,7 +7,7 @@
  * and reversible payment deletion with student ledger balance restoration.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -282,6 +282,82 @@ export default function Payments() {
     }
   };
 
+  // Sibling / Family Unified Grouping for Payments Desk
+  const groupedPayments = useMemo(() => {
+    const familyGroupMap = new Map();
+    const result = [];
+
+    (payments || []).forEach(p => {
+      let rootReceipt = p.receipt_number || `RCP-${p.id}`;
+      if (rootReceipt.includes('-')) {
+        const parts = rootReceipt.split('-');
+        if (parts[0] === 'FAM' && parts.length > 2) {
+          rootReceipt = `${parts[0]}-${parts[1]}`;
+        }
+      }
+
+      const isFam = Boolean(
+        p.is_family ||
+        p.family_id ||
+        (p.receipt_number && p.receipt_number.startsWith('FAM-')) ||
+        (p.notes && p.notes.includes('Family Receipt'))
+      );
+
+      if (isFam && p.family_id) {
+        const groupKey = `${p.family_id}_${p.payment_date ? p.payment_date.slice(0, 10) : ''}_${rootReceipt}`;
+        if (!familyGroupMap.has(groupKey)) {
+          familyGroupMap.set(groupKey, []);
+        }
+        familyGroupMap.get(groupKey).push(p);
+      } else {
+        result.push(p);
+      }
+    });
+
+    familyGroupMap.forEach((groupItems) => {
+      if (groupItems.length > 1) {
+        const first = groupItems[0];
+        let rootReceipt = first.receipt_number || `FAM-${first.id}`;
+        if (rootReceipt.includes('-')) {
+          const parts = rootReceipt.split('-');
+          if (parts[0] === 'FAM' && parts.length > 2) {
+            rootReceipt = `${parts[0]}-${parts[1]}`;
+          }
+        }
+        const totalAmount = groupItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        const combinedNames = groupItems.map(i => i.full_name || i.student_name).join(' & ');
+        const combinedAdm = groupItems.map(i => i.admission_no || i.student_admission_no).join(', ');
+
+        result.push({
+          ...first,
+          id: `FAM-${first.family_id}-${first.id}`,
+          payment_id: first.id,
+          receipt_number: rootReceipt,
+          is_family: true,
+          full_name: combinedNames,
+          student_name: combinedNames,
+          admission_no: combinedAdm,
+          amount: totalAmount,
+          sibling_count: groupItems.length,
+          siblings_detail: groupItems.map(item => ({
+            id: item.student_id,
+            student_id: item.student_id,
+            student_name: item.full_name || item.student_name,
+            admission_no: item.admission_no || item.student_admission_no,
+            class_name: item.class_name,
+            amount: Number(item.amount),
+            payment_id: item.id,
+            receipt_number: item.receipt_number,
+          })),
+        });
+      } else if (groupItems.length === 1) {
+        result.push(groupItems[0]);
+      }
+    });
+
+    return result.sort((a, b) => new Date(b.payment_date || b.created_at) - new Date(a.payment_date || a.created_at));
+  }, [payments]);
+
   return (
     <div className="payments-page">
       {/* Header Banner */}
@@ -462,7 +538,7 @@ export default function Payments() {
               Retry
             </button>
           </div>
-        ) : payments.length === 0 ? (
+        ) : groupedPayments.length === 0 ? (
           <div className="payments-empty-state">
             <div className="empty-icon-wrap">
               {activeTab === 'admissions' ? <GraduationCap size={48} /> : <IndianRupee size={48} />}
@@ -510,7 +586,7 @@ export default function Payments() {
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((p) => {
+                  {groupedPayments.map((p) => {
                     const receiptNum = p.receipt_number || `RCP-${String(p.id).padStart(6, '0')}`;
                     const modeStr = (p.payment_mode || p.mode || 'CASH').toLowerCase();
                     const remDues = Number(p.remaining_dues || 0);
@@ -538,53 +614,41 @@ export default function Payments() {
                           </button>
                         </td>
                         <td className="student-cell">
-                          {(p.is_family || (p.siblings_detail && p.siblings_detail.length > 0) || p.receipt_number?.startsWith('FAM') || (p.notes && p.notes.includes('Family Receipt'))) ? (
+                          {p.is_family ? (
                             <div className="family-student-cell-stack">
                               <div className="family-badge-toggle-row">
-                                <span className="family-pill-mini" title="Combined Family Account for all siblings">
-                                  <Users size={12} /> Family ({p.sibling_count || (p.siblings_detail ? p.siblings_detail.length + 1 : 2)} Siblings)
+                                <span className="family-account-badge" title="Combined Family Payment for all siblings">
+                                  <Users size={12} /> Family ({p.sibling_count || 2} Siblings)
                                 </span>
                                 <button
                                   type="button"
                                   className="btn-sibling-toggle"
                                   onClick={() => setExpandedPayments(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
-                                  title={expandedPayments[p.id] ? 'Hide siblings' : 'View all siblings'}
+                                  title={expandedPayments[p.id] ? 'Hide sibling breakdown' : 'View individual siblings'}
                                 >
                                   {expandedPayments[p.id] ? 'Hide' : '👁️ View'}
                                 </button>
                               </div>
-                              <button
-                                type="button"
-                                className="student-name-link font-bold"
-                                onClick={() => navigate(`/students/${p.student_id}`)}
-                                title="View student full profile & ledger"
-                              >
-                                {p.full_name || '—'}
-                              </button>
+                              <div className="family-main-name font-bold">
+                                {p.full_name}
+                              </div>
                               <span className="student-adm-no font-mono">{p.admission_no || '—'}</span>
-                              {expandedPayments[p.id] && (
+                              {expandedPayments[p.id] && p.siblings_detail && (
                                 <div className="sibling-drawer-content">
-                                  {p.siblings_detail && p.siblings_detail.length > 0 ? (
-                                    p.siblings_detail.map((sib, i) => (
-                                      <div key={i} className="sibling-drawer-item">
-                                        <span className="bullet">•</span>
-                                        <button
-                                          type="button"
-                                          className="sibling-drawer-name font-bold"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            navigate(`/students/${sib.student_id}`);
-                                          }}
-                                          title={`Open ${sib.student_name}'s Profile`}
-                                        >
-                                          {sib.student_name}
-                                        </button>
-                                        <span className="sibling-meta-chip">{sib.class_name || 'Class'} · {sib.admission_no}</span>
-                                      </div>
-                                    ))
-                                  ) : p.notes ? (
-                                    <span className="sibling-meta-chip">{p.notes}</span>
-                                  ) : null}
+                                  {p.siblings_detail.map((sib, i) => (
+                                    <div key={i} className="sibling-drawer-item">
+                                      <span className="bullet">•</span>
+                                      <button
+                                        type="button"
+                                        className="sibling-drawer-name font-bold"
+                                        onClick={() => navigate(`/students/${sib.student_id}`)}
+                                        title={`Open ${sib.student_name}'s Profile`}
+                                      >
+                                        {sib.student_name}
+                                      </button>
+                                      <span className="sibling-meta-chip">{sib.class_name} · ₹{Number(sib.amount).toLocaleString('en-IN')}</span>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                             </div>
@@ -603,9 +667,17 @@ export default function Payments() {
                           )}
                         </td>
                         <td className="class-cell">
-                          <span className="class-badge">
-                            {p.class_name ? `${p.class_name}${p.section_name ? `-${p.section_name}` : ''}` : '—'}
-                          </span>
+                          {p.is_family && p.siblings_detail && p.siblings_detail.length > 0 ? (
+                            <div className="family-classes-stack">
+                              {p.siblings_detail.map((sib, i) => (
+                                <span key={i} className="class-badge mini">{sib.class_name}</span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="class-badge">
+                              {p.class_name ? `${p.class_name}${p.section_name ? `-${p.section_name}` : ''}` : '—'}
+                            </span>
+                          )}
                         </td>
                         {activeTab === 'admissions' && (
                           <td className="assessed-cell">
@@ -643,7 +715,7 @@ export default function Payments() {
                             <button
                               type="button"
                               className="btn-action profile-btn"
-                              onClick={() => navigate(`/students/${p.student_id}`)}
+                              onClick={() => navigate(p.is_family ? `/students/${p.siblings_detail?.[0]?.student_id || p.student_id}` : `/students/${p.student_id}`)}
                               title="View Student Profile & Dues Ledger"
                             >
                               <User size={13} />
@@ -662,7 +734,7 @@ export default function Payments() {
                             <WhatsAppDirectButton
                               compact
                               size="sm"
-                              onSend={() => api.post(`/receipts/send-whatsapp/${p.id}`)}
+                              onSend={() => api.post(`/receipts/send-whatsapp/${p.payment_id || p.id}`)}
                               onOpenJpg={() => handleViewReceipt(p)}
                               phone={p.phone || p.whatsapp_number}
                               itemTitle="Receipt"

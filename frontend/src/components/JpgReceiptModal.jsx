@@ -37,35 +37,59 @@ export default function JpgReceiptModal({
   const [sendingWa, setSendingWa] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [scale, setScale] = useState(1);
-  const [liveSchool, setLiveSchool] = useState(data?.school || null);
-
-  useEffect(() => {
-    if (data?.school && data.school.address && !data.school.address.includes('Knowledge') && !data.school.address.includes('Main Campus')) {
-      setLiveSchool(data.school);
-      return;
-    }
-    api.get('/settings/school')
-      .then(res => {
-        if (res.data?.school) {
-          setLiveSchool(res.data.school);
-        }
-      })
-      .catch(() => {});
-  }, [data?.school]);
+  const [liveSchool, setLiveSchool] = useState(null);
+  const [scaledHeight, setScaledHeight] = useState('auto');
 
   const {
+    school = {
+      school_name: 'Aryavart (P.S.G) Shikshan Sansthan',
+      address: 'Shastri Nagar, Ward no-07, Bara chakia, 845412, East Champaran, Bihar',
+      phone: '+91-6201844773',
+      email: 'Aryavartshikshansansthan@gmail.com',
+    },
     student = {},
     payment = {},
     receipt = {},
     allocations = [],
     summary = {},
+    financial_summary = {},
   } = data || {};
 
-  const effectiveSchool = liveSchool || data?.school || {};
-  const schoolName = effectiveSchool?.school_name || data?.school_name || 'Aryavart (P.S.G) Shikshan Sansthan';
-  const schoolAddress = effectiveSchool?.address || data?.address || 'Shastri Nagar, Ward no-07, Bara chakia, 845412, East Champaran, Bihar';
-  const schoolPhone = effectiveSchool?.phone || data?.phone || '+91-6201844773';
-  const schoolLogoUrl = effectiveSchool?.logo_path || effectiveSchool?.logo_url || data?.logo_url;
+  // Fetch updated school settings from database if not already present
+  useEffect(() => {
+    if (!isOpen) return;
+    api.get('/settings/school')
+      .then(res => {
+        if (res.data?.success && res.data?.settings) {
+          setLiveSchool(res.data.settings);
+        }
+      })
+      .catch(err => console.warn('[JpgReceiptModal] school settings fallback:', err.message));
+  }, [isOpen]);
+
+  const activeSchool = liveSchool || school;
+  const schoolName = activeSchool?.school_name || school?.school_name || data?.school_name || 'Aryavart (P.S.G) Shikshan Sansthan';
+  const schoolAddress = activeSchool?.address || school?.address || data?.address || 'Shastri Nagar, Ward no-07, Bara chakia, 845412, East Champaran, Bihar';
+  const schoolPhone = activeSchool?.phone || school?.phone || data?.phone || '+91-6201844773';
+  const schoolEmail = activeSchool?.email || school?.email || data?.email || 'Aryavartshikshansansthan@gmail.com';
+  const schoolLogoUrl = activeSchool?.logo_path || school?.logo_url || data?.logo_url;
+
+  // Calculate 3-Box Financial Breakdown
+  const totalPaid = Number(payment?.total_paid ?? payment?.amount ?? summary?.total_amount ?? data?.amount ?? 0);
+  const remainingDue = Number(
+    payment?.remaining_dues ??
+    financial_summary?.remaining_dues ??
+    data?.financial_summary?.remaining_dues ??
+    data?.outstanding?.total ??
+    data?.outstanding_dues ??
+    0
+  );
+  const totalAssessed = Number(
+    payment?.total_assessed ??
+    financial_summary?.total_assessed ??
+    data?.financial_summary?.total_assessed ??
+    (totalPaid + remainingDue)
+  );
 
   // Auto-calculate scale on window resize or when modal opens to fit narrow screens with zero clipping
   useEffect(() => {
@@ -419,6 +443,24 @@ export default function JpgReceiptModal({
                 </table>
               </div>
 
+              {/* 3-Box Financial Balance Statement Grid */}
+              <div className="receipt-financial-grid">
+                <div className="fin-box fin-assessed">
+                  <span className="fin-box-lbl">Total Assessed / Due</span>
+                  <strong className="fin-box-val">₹{totalAssessed.toLocaleString('en-IN')}</strong>
+                </div>
+                <div className="fin-box fin-paid">
+                  <span className="fin-box-lbl">Amount Paid</span>
+                  <strong className="fin-box-val text-green">₹{totalPaid.toLocaleString('en-IN')}</strong>
+                </div>
+                <div className={`fin-box fin-remaining ${remainingDue > 0 ? 'due' : 'cleared'}`}>
+                  <span className="fin-box-lbl">Remaining Balance</span>
+                  <strong className={`fin-box-val ${remainingDue > 0 ? 'text-red' : 'text-green'}`}>
+                    {remainingDue > 0 ? `₹${remainingDue.toLocaleString('en-IN')}` : '₹0 (Cleared)'}
+                  </strong>
+                </div>
+              </div>
+
               {/* Payment Summary & Stamp Section */}
               <div className="receipt-footer-section">
                 <div className="payment-mode-box">
@@ -442,7 +484,7 @@ export default function JpgReceiptModal({
                 <div className="total-summary-card">
                   <div className="grand-total-row">
                     <span>Grand Total Paid:</span>
-                    <strong className="grand-total-val">₹{Number(totalAmount).toLocaleString('en-IN')}</strong>
+                    <strong className="grand-total-val">₹{totalPaid.toLocaleString('en-IN')}</strong>
                   </div>
 
                   <div className="stamp-signature-grid">

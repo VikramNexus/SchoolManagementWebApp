@@ -62,7 +62,7 @@ async function getSchoolSettings() {
 
   return settings || {
     school_name: 'Aryavart (P.S.G) Shikshan Sansthan',
-    address: 'Shastri Nagar, Ward no-07, Bara chakia, 845412, East Champaran, Bihar',
+    address: 'Shastri Nagar, Ward no-07, Bara chakia, East Champaran, Bihar',
     phone: '+91-6201844773',
     email: 'Aryavartshikshansansthan@gmail.com',
     academic_year: '2025-2026',

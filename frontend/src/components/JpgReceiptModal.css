@@ -395,6 +395,60 @@
   font-weight: 500;
 }
 
+/* 3-Box Financial Balance Statement Grid */
+.receipt-financial-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 10px 0 10px 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fin-box {
+  background: #f9fafb;
+  border: 1.5px solid #1f2937;
+  border-radius: 5px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.fin-box-lbl {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #4b5563;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.fin-box-val {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #111827;
+}
+
+.fin-box-val.text-green {
+  color: #15803d !important;
+}
+
+.fin-box-val.text-red {
+  color: #b91c1c !important;
+}
+
+.fin-box.fin-remaining.due {
+  background: #fef2f2;
+  border-color: #b91c1c;
+}
+
+.fin-box.fin-remaining.cleared {
+  background: #f0fdf4;
+  border-color: #15803d;
+}
+
 .total-summary-card {
   background: #f9fafb;
   border: 1.5px solid #1f2937;

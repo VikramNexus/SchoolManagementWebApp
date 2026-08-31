@@ -6,7 +6,7 @@
  * column sorting, inline JPG/PDF preview, and background WhatsApp direct messaging.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -253,6 +253,85 @@ export default function Receipts() {
     }
   };
 
+  // Sibling / Family Unified Grouping for Receipts Desk
+  const groupedReceipts = useMemo(() => {
+    const familyGroupMap = new Map();
+    const result = [];
+
+    (receipts || []).forEach(r => {
+      let rootReceipt = r.receipt_number || `RCP-${r.payment_id || r.id}`;
+      if (rootReceipt.includes('-')) {
+        const parts = rootReceipt.split('-');
+        if (parts[0] === 'FAM' && parts.length > 2) {
+          rootReceipt = `${parts[0]}-${parts[1]}`;
+        }
+      }
+
+      const isFam = Boolean(
+        r.is_family ||
+        r.family_id ||
+        r.payment_family_id ||
+        (r.receipt_number && r.receipt_number.startsWith('FAM-')) ||
+        (r.notes && r.notes.includes('Family Receipt'))
+      );
+
+      const famId = r.family_id || r.payment_family_id;
+
+      if (isFam && famId) {
+        const groupKey = `${famId}_${r.payment_date ? r.payment_date.slice(0, 10) : ''}_${rootReceipt}`;
+        if (!familyGroupMap.has(groupKey)) {
+          familyGroupMap.set(groupKey, []);
+        }
+        familyGroupMap.get(groupKey).push(r);
+      } else {
+        result.push(r);
+      }
+    });
+
+    familyGroupMap.forEach((groupItems) => {
+      if (groupItems.length > 1) {
+        const first = groupItems[0];
+        let rootReceipt = first.receipt_number || `FAM-${first.payment_id || first.id}`;
+        if (rootReceipt.includes('-')) {
+          const parts = rootReceipt.split('-');
+          if (parts[0] === 'FAM' && parts.length > 2) {
+            rootReceipt = `${parts[0]}-${parts[1]}`;
+          }
+        }
+        const totalAmount = groupItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        const combinedNames = groupItems.map(i => i.full_name || i.student_name).join(' & ');
+        const combinedAdm = groupItems.map(i => i.admission_no).join(', ');
+
+        result.push({
+          ...first,
+          id: `FAM-${first.family_id || first.payment_family_id}-${first.id}`,
+          payment_id: first.payment_id || first.id,
+          receipt_number: rootReceipt,
+          is_family: true,
+          full_name: combinedNames,
+          student_name: combinedNames,
+          admission_no: combinedAdm,
+          amount: totalAmount,
+          sibling_count: groupItems.length,
+          siblings_detail: groupItems.map(item => ({
+            id: item.student_id || item.id,
+            student_id: item.student_id || item.id,
+            student_name: item.full_name || item.student_name,
+            admission_no: item.admission_no,
+            class_name: item.class_name,
+            amount: Number(item.amount),
+            payment_id: item.payment_id || item.id,
+            receipt_number: item.receipt_number,
+          })),
+        });
+      } else if (groupItems.length === 1) {
+        result.push(groupItems[0]);
+      }
+    });
+
+    return result.sort((a, b) => new Date(b.payment_date || b.created_at) - new Date(a.payment_date || a.created_at));
+  }, [receipts]);
+
   return (
     <div className="receipts-page">
       {/* Header Banner Card */}
@@ -431,7 +510,7 @@ export default function Receipts() {
               Retry
             </button>
           </div>
-        ) : receipts.length === 0 ? (
+        ) : groupedReceipts.length === 0 ? (
           <div className="receipts-empty-state">
             <div className="empty-icon-wrap">
               {activeTab === 'admissions' ? <GraduationCap size={48} /> : <Receipt size={48} />}
@@ -478,7 +557,7 @@ export default function Receipts() {
                   </tr>
                 </thead>
                 <tbody>
-                  {receipts.map((r) => {
+                  {groupedReceipts.map((r) => {
                     const paymentId = r.payment_id || r.id;
                     const rNo = r.receipt_number || `RCP-${String(paymentId).padStart(6, '0')}`;
                     const modeStr = (r.payment_mode || 'CASH').toLowerCase();
@@ -507,74 +586,58 @@ export default function Receipts() {
                           </button>
                         </td>
                         <td className="student-cell">
-                          {(r.is_family || (r.siblings_detail && r.siblings_detail.length > 0) || rNo.startsWith('FAM') || (r.notes && r.notes.includes('Family Receipt'))) ? (
+                          {r.is_family ? (
                             <div className="family-student-cell-stack">
                               <div className="family-badge-toggle-row">
-                                <span className="family-pill-mini" title="Combined Family Account for all siblings">
-                                  <Users size={12} /> Family ({r.sibling_count || (r.siblings_detail ? r.siblings_detail.length + 1 : 2)} Siblings)
+                                <span className="family-account-badge" title="Combined Family Receipt for all siblings">
+                                  <Users size={12} /> Family ({r.sibling_count || 2} Siblings)
                                 </span>
                                 <button
                                   type="button"
                                   className="btn-sibling-toggle"
                                   onClick={() => setExpandedReceipts(prev => ({ ...prev, [r.id]: !prev[r.id] }))}
-                                  title={expandedReceipts[r.id] ? 'Hide siblings' : 'View all siblings'}
+                                  title={expandedReceipts[r.id] ? 'Hide sibling breakdown' : 'View individual siblings'}
                                 >
                                   {expandedReceipts[r.id] ? 'Hide' : '👁️ View'}
                                 </button>
                               </div>
-                              <button
-                                type="button"
-                                className="student-name-link font-bold"
-                                onClick={() => navigate(`/students/${r.student_id}`)}
-                                title="View student full profile & ledger"
-                              >
+                              <div className="family-main-name font-bold">
                                 {r.full_name || r.student_name || '—'}
-                              </button>
+                              </div>
                               <span className="student-adm-no font-mono">{r.admission_no || '—'}</span>
-                              {expandedReceipts[r.id] && (
+                              {expandedReceipts[r.id] && r.siblings_detail && (
                                 <div className="sibling-drawer-content">
-                                  {r.siblings_detail && r.siblings_detail.length > 0 ? (
-                                    r.siblings_detail.map((sib, i) => (
-                                      <div key={i} className="sibling-drawer-item">
-                                        <span className="bullet">•</span>
-                                        <button
-                                          type="button"
-                                          className="sibling-drawer-name font-bold"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            navigate(`/students/${sib.student_id}`);
-                                          }}
-                                          title={`Open ${sib.student_name}'s Profile`}
-                                        >
-                                          {sib.student_name}
-                                        </button>
-                                        <span className="sibling-meta-chip">{sib.class_name || 'Class'} · {sib.admission_no}</span>
-                                      </div>
-                                    ))
-                                  ) : r.notes ? (
-                                    <span className="sibling-meta-chip">{r.notes}</span>
-                                  ) : null}
+                                  {r.siblings_detail.map((sib, i) => (
+                                    <div key={i} className="sibling-drawer-item">
+                                      <span className="bullet">•</span>
+                                      <span className="sibling-drawer-name font-bold">
+                                        {sib.student_name}
+                                      </span>
+                                      <span className="sibling-meta-chip">{sib.class_name} · ₹{Number(sib.amount).toLocaleString('en-IN')}</span>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                             </div>
                           ) : (
                             <div className="student-name-block">
-                              <button
-                                type="button"
-                                className="student-name-link font-bold"
-                                onClick={() => navigate(`/students/${r.student_id}`)}
-                                title="View student full profile & ledger"
-                              >
-                                {r.full_name || r.student_name || '—'}
-                              </button>
+                              <span className="student-name font-bold">{r.full_name || r.student_name || '—'}</span>
                               <span className="student-adm-no font-mono">{r.admission_no || '—'}</span>
                             </div>
                           )}
                         </td>
                         <td className="class-cell">
-                          <span className="class-badge">
-                            {r.class_name ? `${r.class_name}${r.section_name ? `-${r.section_name}` : ''}` : '—'}
-                          </span>
+                          {r.is_family && r.siblings_detail && r.siblings_detail.length > 0 ? (
+                            <div className="family-classes-stack">
+                              {r.siblings_detail.map((sib, i) => (
+                                <span key={i} className="class-badge mini">{sib.class_name}</span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="class-badge">
+                              {r.class_name ? `${r.class_name}${r.section_name ? `-${r.section_name}` : ''}` : '—'}
+                            </span>
+                          )}
                         </td>
                         <td className="type-cell">
                           {isAdmission ? (

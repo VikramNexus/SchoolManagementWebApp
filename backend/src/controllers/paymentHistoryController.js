@@ -103,6 +103,7 @@ async function getPaymentHistory(req, res) {
         s.\`full_name\` as student_name,
         s.\`admission_no\`,
         s.\`admission_no\` as student_admission_no,
+        s.\`family_id\`,
         s.\`father_name\`,
         s.\`mother_name\`,
         s.\`parent_name\`,
@@ -111,13 +112,6 @@ async function getPaymentHistory(req, res) {
         s.\`address\`,
         s.\`category\`,
         s.\`category\` as student_category,
-        s.\`family_id\`,
-        (s.\`family_id\` IS NOT NULL AND (SELECT COUNT(*) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\`) > 1) as is_family,
-        (SELECT COUNT(*) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s.\`family_id\` IS NOT NULL) as sibling_count,
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT('student_id', s2.\`id\`, 'student_name', s2.\`full_name\`, 'admission_no', s2.\`admission_no\`, 'class_name', c2.\`name\`))
-         FROM \`students\` s2
-         LEFT JOIN \`classes\` c2 ON c2.\`id\` = s2.\`class_id\`
-         WHERE s2.\`family_id\` = s.\`family_id\` AND s.\`family_id\` IS NOT NULL AND s2.\`id\` != s.\`id\`) as siblings_detail,
         c.\`name\` as class_name,
         sec.\`name\` as section_name,
         u.\`full_name\` as recorder_name,
@@ -149,9 +143,6 @@ async function getPaymentHistory(req, res) {
         father_name: p.father_name || p.parent_name || '—',
         parent_name: p.parent_name || p.father_name || '—',
         receipt_number: p.receipt_number || p.receipt_no || `RCP-${p.id}`,
-        is_family: Boolean(p.is_family || (p.siblings_detail && p.siblings_detail.length > 0)),
-        sibling_count: Number(p.sibling_count || (p.siblings_detail?.length ? p.siblings_detail.length + 1 : 1)),
-        siblings_detail: Array.isArray(p.siblings_detail) ? p.siblings_detail : (typeof p.siblings_detail === 'string' ? JSON.parse(p.siblings_detail || '[]') : []),
       })),
       summary: {
         total_records: summaryResult ? summaryResult.total : 0,
