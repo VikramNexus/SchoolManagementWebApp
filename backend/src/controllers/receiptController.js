@@ -124,9 +124,15 @@ async function getReceipt(req, res) {
 
     // Get school settings
     const school = await db.queryOne(
-      `SELECT \`school_name\`, \`address\`, \`phone\`, \`email\`, \`logo_path\`, \`currency_symbol\`
+      `SELECT \`school_name\`, \`address\`, \`phone\`, \`email\`, \`logo_path\`, \`currency_symbol\`, \`academic_year\`
        FROM \`school_settings\` WHERE \`id\` = 1`
-    ) || { school_name: 'Aryavart Public School' };
+    ) || {
+      school_name: 'Aryavart (P.S.G) Shikshan Sansthan',
+      address: 'Shastri Nagar, Ward no-07, Bara chakia, 845412, East Champaran, Bihar',
+      phone: '+91-6201844773',
+      email: 'Aryavartshikshansansthan@gmail.com',
+      academic_year: '2025-2026',
+    };
 
     // Get outstanding safely
     let monthlyOutstanding = { total: 0 };
@@ -312,6 +318,13 @@ async function listReceipts(req, res) {
         COALESCE(NULLIF(s.\`mother_name\`, ''), (SELECT NULLIF(s2.\`mother_name\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`mother_name\` IS NOT NULL LIMIT 1), '') as mother_name,
         COALESCE(NULLIF(s.\`parent_name\`, ''), NULLIF(s.\`father_name\`, ''), (SELECT COALESCE(NULLIF(s2.\`father_name\`, ''), NULLIF(s2.\`parent_name\`, '')) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND (s2.\`father_name\` IS NOT NULL OR s2.\`parent_name\` IS NOT NULL) LIMIT 1), '—') as parent_name,
         s.\`category\` as student_category,
+        s.\`family_id\`,
+        (s.\`family_id\` IS NOT NULL AND (SELECT COUNT(*) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\`) > 1) as is_family,
+        (SELECT COUNT(*) FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s.\`family_id\` IS NOT NULL) as sibling_count,
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('student_id', s2.\`id\`, 'student_name', s2.\`full_name\`, 'admission_no', s2.\`admission_no\`, 'class_name', c2.\`name\`))
+         FROM \`students\` s2
+         LEFT JOIN \`classes\` c2 ON c2.\`id\` = s2.\`class_id\`
+         WHERE s2.\`family_id\` = s.\`family_id\` AND s.\`family_id\` IS NOT NULL AND s2.\`id\` != s.\`id\`) as siblings_detail,
         COALESCE(NULLIF(s.\`phone\`, ''), NULLIF(s.\`whatsapp_number\`, ''), (SELECT NULLIF(s2.\`phone\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`phone\` IS NOT NULL LIMIT 1), '') as phone,
         COALESCE(NULLIF(s.\`whatsapp_number\`, ''), NULLIF(s.\`phone\`, ''), (SELECT NULLIF(s2.\`whatsapp_number\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`whatsapp_number\` IS NOT NULL LIMIT 1), '') as whatsapp_number,
         COALESCE(NULLIF(s.\`address\`, ''), (SELECT NULLIF(s2.\`address\`, '') FROM \`students\` s2 WHERE s2.\`family_id\` = s.\`family_id\` AND s2.\`address\` IS NOT NULL LIMIT 1), '—') as address,
@@ -341,6 +354,9 @@ async function listReceipts(req, res) {
         student_name: r.full_name || r.student_name || '—',
         admission_no: r.admission_no || '—',
         receipt_number: r.receipt_number || `RCP-${r.payment_id || r.id}`,
+        is_family: Boolean(r.is_family || (r.siblings_detail && (typeof r.siblings_detail === 'string' ? JSON.parse(r.siblings_detail) : r.siblings_detail).length > 0)),
+        sibling_count: Number(r.sibling_count || 1),
+        siblings_detail: Array.isArray(r.siblings_detail) ? r.siblings_detail : (typeof r.siblings_detail === 'string' ? JSON.parse(r.siblings_detail || '[]') : []),
       })),
       pagination: {
         page: pageNum,

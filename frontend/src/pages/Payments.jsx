@@ -33,6 +33,7 @@ import {
   Sparkles,
   Printer,
   User,
+  Users,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -537,20 +538,20 @@ export default function Payments() {
                           </button>
                         </td>
                         <td className="student-cell">
-                          {(p.is_family || p.receipt_number?.startsWith('FAM') || (p.notes && p.notes.includes('Family Receipt'))) ? (
+                          {(p.is_family || (p.siblings_detail && p.siblings_detail.length > 0) || p.receipt_number?.startsWith('FAM') || (p.notes && p.notes.includes('Family Receipt'))) ? (
                             <div className="family-student-cell-stack">
                               <div className="family-badge-toggle-row">
-                                <span className="family-pill-mini">👨‍👧‍👦 Family Payment</span>
-                                {p.notes && (
-                                  <button
-                                    type="button"
-                                    className="btn-sibling-toggle"
-                                    onClick={() => setExpandedPayments(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
-                                    title={expandedPayments[p.id] ? 'Hide note' : 'View receipt note'}
-                                  >
-                                    {expandedPayments[p.id] ? 'Hide' : '👁️ View'}
-                                  </button>
-                                )}
+                                <span className="family-pill-mini" title="Combined Family Account for all siblings">
+                                  <Users size={12} /> Family ({p.sibling_count || (p.siblings_detail ? p.siblings_detail.length + 1 : 2)} Siblings)
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn-sibling-toggle"
+                                  onClick={() => setExpandedPayments(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                                  title={expandedPayments[p.id] ? 'Hide siblings' : 'View all siblings'}
+                                >
+                                  {expandedPayments[p.id] ? 'Hide' : '👁️ View'}
+                                </button>
                               </div>
                               <button
                                 type="button"
@@ -561,9 +562,29 @@ export default function Payments() {
                                 {p.full_name || '—'}
                               </button>
                               <span className="student-adm-no font-mono">{p.admission_no || '—'}</span>
-                              {expandedPayments[p.id] && p.notes && (
+                              {expandedPayments[p.id] && (
                                 <div className="sibling-drawer-content">
-                                  <span className="sibling-meta-chip">{p.notes}</span>
+                                  {p.siblings_detail && p.siblings_detail.length > 0 ? (
+                                    p.siblings_detail.map((sib, i) => (
+                                      <div key={i} className="sibling-drawer-item">
+                                        <span className="bullet">•</span>
+                                        <button
+                                          type="button"
+                                          className="sibling-drawer-name font-bold"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate(`/students/${sib.student_id}`);
+                                          }}
+                                          title={`Open ${sib.student_name}'s Profile`}
+                                        >
+                                          {sib.student_name}
+                                        </button>
+                                        <span className="sibling-meta-chip">{sib.class_name || 'Class'} · {sib.admission_no}</span>
+                                      </div>
+                                    ))
+                                  ) : p.notes ? (
+                                    <span className="sibling-meta-chip">{p.notes}</span>
+                                  ) : null}
                                 </div>
                               )}
                             </div>

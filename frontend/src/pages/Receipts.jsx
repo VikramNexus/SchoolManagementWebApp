@@ -31,6 +31,7 @@ import {
   Clock,
   Sparkles,
   GraduationCap,
+  Users,
 } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -506,32 +507,66 @@ export default function Receipts() {
                           </button>
                         </td>
                         <td className="student-cell">
-                          {(r.is_family || rNo.startsWith('FAM') || (r.notes && r.notes.includes('Family Receipt'))) ? (
+                          {(r.is_family || (r.siblings_detail && r.siblings_detail.length > 0) || rNo.startsWith('FAM') || (r.notes && r.notes.includes('Family Receipt'))) ? (
                             <div className="family-student-cell-stack">
                               <div className="family-badge-toggle-row">
-                                <span className="family-pill-mini">👨‍👧‍👦 Family Receipt</span>
-                                {r.notes && (
-                                  <button
-                                    type="button"
-                                    className="btn-sibling-toggle"
-                                    onClick={() => setExpandedReceipts(prev => ({ ...prev, [r.id]: !prev[r.id] }))}
-                                    title={expandedReceipts[r.id] ? 'Hide note' : 'View receipt details'}
-                                  >
-                                    {expandedReceipts[r.id] ? 'Hide' : '👁️ View'}
-                                  </button>
-                                )}
+                                <span className="family-pill-mini" title="Combined Family Account for all siblings">
+                                  <Users size={12} /> Family ({r.sibling_count || (r.siblings_detail ? r.siblings_detail.length + 1 : 2)} Siblings)
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn-sibling-toggle"
+                                  onClick={() => setExpandedReceipts(prev => ({ ...prev, [r.id]: !prev[r.id] }))}
+                                  title={expandedReceipts[r.id] ? 'Hide siblings' : 'View all siblings'}
+                                >
+                                  {expandedReceipts[r.id] ? 'Hide' : '👁️ View'}
+                                </button>
                               </div>
-                              <span className="student-name font-bold">{r.full_name || r.student_name || '—'}</span>
+                              <button
+                                type="button"
+                                className="student-name-link font-bold"
+                                onClick={() => navigate(`/students/${r.student_id}`)}
+                                title="View student full profile & ledger"
+                              >
+                                {r.full_name || r.student_name || '—'}
+                              </button>
                               <span className="student-adm-no font-mono">{r.admission_no || '—'}</span>
-                              {expandedReceipts[r.id] && r.notes && (
+                              {expandedReceipts[r.id] && (
                                 <div className="sibling-drawer-content">
-                                  <span className="sibling-meta-chip">{r.notes}</span>
+                                  {r.siblings_detail && r.siblings_detail.length > 0 ? (
+                                    r.siblings_detail.map((sib, i) => (
+                                      <div key={i} className="sibling-drawer-item">
+                                        <span className="bullet">•</span>
+                                        <button
+                                          type="button"
+                                          className="sibling-drawer-name font-bold"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate(`/students/${sib.student_id}`);
+                                          }}
+                                          title={`Open ${sib.student_name}'s Profile`}
+                                        >
+                                          {sib.student_name}
+                                        </button>
+                                        <span className="sibling-meta-chip">{sib.class_name || 'Class'} · {sib.admission_no}</span>
+                                      </div>
+                                    ))
+                                  ) : r.notes ? (
+                                    <span className="sibling-meta-chip">{r.notes}</span>
+                                  ) : null}
                                 </div>
                               )}
                             </div>
                           ) : (
                             <div className="student-name-block">
-                              <span className="student-name font-bold">{r.full_name || r.student_name || '—'}</span>
+                              <button
+                                type="button"
+                                className="student-name-link font-bold"
+                                onClick={() => navigate(`/students/${r.student_id}`)}
+                                title="View student full profile & ledger"
+                              >
+                                {r.full_name || r.student_name || '—'}
+                              </button>
                               <span className="student-adm-no font-mono">{r.admission_no || '—'}</span>
                             </div>
                           )}

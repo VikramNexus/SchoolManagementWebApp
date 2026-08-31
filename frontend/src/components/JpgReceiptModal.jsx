@@ -37,15 +37,23 @@ export default function JpgReceiptModal({
   const [sendingWa, setSendingWa] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [scale, setScale] = useState(1);
-  const [scaledHeight, setScaledHeight] = useState('auto');
+  const [liveSchool, setLiveSchool] = useState(data?.school || null);
+
+  useEffect(() => {
+    if (data?.school && data.school.address && !data.school.address.includes('Knowledge') && !data.school.address.includes('Main Campus')) {
+      setLiveSchool(data.school);
+      return;
+    }
+    api.get('/settings/school')
+      .then(res => {
+        if (res.data?.school) {
+          setLiveSchool(res.data.school);
+        }
+      })
+      .catch(() => {});
+  }, [data?.school]);
 
   const {
-    school = {
-      school_name: 'Aryavart Shikshan Sansthan',
-      address: 'Near Knowledge Hub, Main Campus',
-      phone: '+91-9876543210',
-      email: 'info@aryavart.edu.in',
-    },
     student = {},
     payment = {},
     receipt = {},
@@ -53,10 +61,11 @@ export default function JpgReceiptModal({
     summary = {},
   } = data || {};
 
-  const schoolName = school?.school_name || data?.school_name || 'Aryavart (P.S.G) Shikshan Sansthan';
-  const schoolAddress = school?.address || data?.address || 'Shastri Nagar, Ward no-07, Bara chakia, East Champaran, Bihar';
-  const schoolPhone = school?.phone || data?.phone || '+91-6201844773';
-  const schoolLogoUrl = school?.logo_url || data?.logo_url;
+  const effectiveSchool = liveSchool || data?.school || {};
+  const schoolName = effectiveSchool?.school_name || data?.school_name || 'Aryavart (P.S.G) Shikshan Sansthan';
+  const schoolAddress = effectiveSchool?.address || data?.address || 'Shastri Nagar, Ward no-07, Bara chakia, 845412, East Champaran, Bihar';
+  const schoolPhone = effectiveSchool?.phone || data?.phone || '+91-6201844773';
+  const schoolLogoUrl = effectiveSchool?.logo_path || effectiveSchool?.logo_url || data?.logo_url;
 
   // Auto-calculate scale on window resize or when modal opens to fit narrow screens with zero clipping
   useEffect(() => {
